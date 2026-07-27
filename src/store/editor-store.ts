@@ -9,6 +9,7 @@ import type {
   EditorProject,
   PanelId,
   PhotoSlotObject,
+  SlotPhoto,
   ToolId,
 } from "@/types/editor";
 
@@ -97,6 +98,9 @@ export interface EditorState {
   updateObjects: (updates: ObjectUpdate[]) => void;
   addObject: (object: CanvasObject) => void;
   replaceSlots: (slots: PhotoSlotObject[]) => void;
+  setSlotPhoto: (slotId: string, photo: SlotPhoto | null) => void;
+  /** Fills the first empty slot on the page; returns its id, or null if full. */
+  fillNextEmptySlot: (src: string) => string | null;
   moveObject: (id: string, toIndex: number) => void;
   reorderSelection: (mode: ReorderMode) => void;
   removeSelected: () => void;
@@ -334,6 +338,24 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       ),
       selectedIds: [],
     })),
+
+  setSlotPhoto: (slotId, photo) => get().updateObject(slotId, { photo }),
+
+  fillNextEmptySlot: (src) => {
+    const state = get();
+    const page = state.project.pages.find(
+      (candidate) => candidate.id === state.activePageId,
+    );
+
+    const slot = page?.objects.find(
+      (object): object is PhotoSlotObject =>
+        object.kind === "slot" && !object.photo,
+    );
+    if (!slot) return null;
+
+    state.setSlotPhoto(slot.id, { src, offsetX: 0, offsetY: 0, scale: 1 });
+    return slot.id;
+  },
 
   /** Moves one object to an absolute index in the page's object list. */
   moveObject: (id, toIndex) =>

@@ -20,6 +20,9 @@ const DEBOUNCE_MS = 800;
  */
 export function useAutosave() {
   useEffect(() => {
+    // The store outlives client-side navigation, so a second screen mounting
+    // this hook must not re-read storage and clobber in-memory edits.
+    if (useEditorStore.getState().hydrated) return;
     useEditorStore.getState().hydrateProject(loadStoredProject());
   }, []);
 
@@ -61,6 +64,9 @@ export function useAutosave() {
     return () => {
       unsubscribe();
       window.removeEventListener("pagehide", onPageHide);
+      // Navigating between editor screens unmounts this hook without a
+      // `pagehide`, so an edit still inside the debounce is written here.
+      flush();
       clearTimeout(timer);
     };
   }, []);
