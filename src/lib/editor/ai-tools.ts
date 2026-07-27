@@ -23,6 +23,8 @@ export interface AiTool {
   target: AiToolTarget;
   /** Rough wall-clock cost, shown so long jobs are not a surprise. */
   estimatedSeconds: number;
+  /** Tools with a strength dial expose a slider before running. */
+  hasIntensity?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export const AI_TOOLS: AiTool[] = [
     icon: Smile,
     target: "photo",
     estimatedSeconds: 6,
+    hasIntensity: true,
   },
   {
     id: "color-correct",

@@ -1,17 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Check, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { useAiJob } from "@/hooks/use-ai-job";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { AI_TOOLS, type AiTool } from "@/lib/editor/ai-tools";
 import { removeBackgroundApprox } from "@/lib/editor/background-removal";
+import { enhanceFaceApprox } from "@/lib/editor/image-adjust";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PhotoSlotObject } from "@/types/editor";
+
+/** Starting strength for tools with an intensity dial. */
+const DEFAULT_INTENSITY = 0.6;
 
 /** What the tools will act on, and whether that is currently possible. */
 function TargetSummary({ slot }: { slot: PhotoSlotObject | null }) {
@@ -54,12 +60,16 @@ function ToolRow({
   disabled,
   active,
   progress,
+  intensity,
+  onIntensityChange,
   onRun,
 }: {
   tool: AiTool;
   disabled: boolean;
   active: boolean;
   progress: number;
+  intensity: number;
+  onIntensityChange: (value: number) => void;
   onRun: () => void;
 }) {
   const reduceMotion = useReducedMotion();
@@ -95,15 +105,38 @@ function ToolRow({
           </p>
         </div>
       ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          disabled={disabled}
-          onClick={onRun}
-        >
-          Jalankan · ±{tool.estimatedSeconds}s
-        </Button>
+        <>
+          {tool.hasIntensity && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-[11px]">
+                  Intensitas
+                </span>
+                <span className="text-muted-foreground text-[11px] tabular-nums">
+                  {Math.round(intensity * 100)}%
+                </span>
+              </div>
+              <Slider
+                value={[Math.round(intensity * 100)]}
+                min={0}
+                max={100}
+                step={5}
+                disabled={disabled}
+                onValueChange={([value]) => onIntensityChange(value / 100)}
+                aria-label={`Intensitas ${tool.label}`}
+              />
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={disabled}
+            onClick={onRun}
+          >
+            Jalankan · ±{tool.estimatedSeconds}s
+          </Button>
+        </>
       )}
     </li>
   );
@@ -120,6 +153,8 @@ function ToolRow({
 export function AiPanel() {
   const { job, run, reset } = useAiJob();
   const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
+  // Per-tool strength, remembered across runs within the session.
+  const [intensities, setIntensities] = useState<Record<string, number>>({});
 
   const slot =
     useSelectedObjects().find(
@@ -140,6 +175,19 @@ export function AiPanel() {
           ...photo,
           src: cutout,
           // Keep the first original across repeated runs.
+          originalSrc: photo.originalSrc ?? photo.src,
+        });
+      };
+    }
+
+    if (tool.id === "enhance-face" && slot?.photo) {
+      const photo = slot.photo;
+      const strength = intensities[tool.id] ?? DEFAULT_INTENSITY;
+      return async () => {
+        const enhanced = await enhanceFaceApprox(photo.src, strength);
+        setSlotPhoto(slot.id, {
+          ...photo,
+          src: enhanced,
           originalSrc: photo.originalSrc ?? photo.src,
         });
       };
@@ -197,6 +245,10 @@ export function AiPanel() {
               disabled={busy || (needsPhoto && !slot)}
               active={active}
               progress={active ? job.progress : 0}
+              intensity={intensities[tool.id] ?? DEFAULT_INTENSITY}
+              onIntensityChange={(value) =>
+                setIntensities((current) => ({ ...current, [tool.id]: value }))
+              }
               onRun={() => run(tool.id, tool.estimatedSeconds, applyTool(tool))}
             />
           );
