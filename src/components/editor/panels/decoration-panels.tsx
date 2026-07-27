@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Plus, Spline } from "lucide-react";
+import { Check, Plus, Spline } from "lucide-react";
 
 import {
   ALL_CATEGORY,
@@ -22,12 +22,14 @@ import {
   type TextStyleItem,
 } from "@/lib/editor/decorations";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { useRecentStickers } from "@/hooks/use-recent-stickers";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
 import { getPattern, patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import { arcHeight } from "@/lib/editor/text-path";
+import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PageBackground, TextObject } from "@/types/editor";
 
@@ -167,9 +169,134 @@ export function StickerPanel() {
   );
 }
 
+/** Structural equality, so the applied preset can be highlighted. */
+function sameBackground(a: PageBackground, b: PageBackground): boolean {
+  if (a.type !== b.type) return false;
+
+  switch (a.type) {
+    case "solid":
+      return a.color === (b as typeof a).color;
+    case "gradient": {
+      const other = b as typeof a;
+      return (
+        a.from === other.from && a.to === other.to && a.angle === other.angle
+      );
+    }
+    case "pattern": {
+      const other = b as typeof a;
+      return (
+        a.pattern === other.pattern &&
+        a.foreground === other.foreground &&
+        a.background === other.background &&
+        a.scale === other.scale
+      );
+    }
+    case "image":
+      return a.src === (b as typeof a).src;
+  }
+}
+
+/** Fine-tuning for whatever background the page currently has. */
+function BackgroundControls() {
+  const page = useActivePage();
+  const setPageBackground = useEditorStore((state) => state.setPageBackground);
+  const background = page.background;
+
+  if (background.type === "gradient") {
+    return (
+      <div className="border-editor-border flex flex-col gap-2.5 rounded-lg border p-3">
+        <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+          Atur gradasi
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={background.from}
+            onChange={(event) =>
+              setPageBackground({ ...background, from: event.target.value })
+            }
+            aria-label="Warna awal gradasi"
+            className="border-input size-8 cursor-pointer rounded border bg-transparent"
+          />
+          <input
+            type="color"
+            value={background.to}
+            onChange={(event) =>
+              setPageBackground({ ...background, to: event.target.value })
+            }
+            aria-label="Warna akhir gradasi"
+            className="border-input size-8 cursor-pointer rounded border bg-transparent"
+          />
+          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
+            {Math.round(background.angle)}°
+          </span>
+        </div>
+        <Slider
+          value={[background.angle]}
+          min={0}
+          max={360}
+          step={5}
+          onValueChange={([angle]) => setPageBackground({ ...background, angle })}
+          aria-label="Sudut gradasi"
+        />
+      </div>
+    );
+  }
+
+  if (background.type === "pattern") {
+    return (
+      <div className="border-editor-border flex flex-col gap-2.5 rounded-lg border p-3">
+        <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+          Atur pola
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={background.foreground}
+            onChange={(event) =>
+              setPageBackground({
+                ...background,
+                foreground: event.target.value,
+              })
+            }
+            aria-label="Warna motif"
+            className="border-input size-8 cursor-pointer rounded border bg-transparent"
+          />
+          <input
+            type="color"
+            value={background.background}
+            onChange={(event) =>
+              setPageBackground({
+                ...background,
+                background: event.target.value,
+              })
+            }
+            aria-label="Warna dasar pola"
+            className="border-input size-8 cursor-pointer rounded border bg-transparent"
+          />
+          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
+            {background.scale.toFixed(1)}×
+          </span>
+        </div>
+        <Slider
+          value={[background.scale]}
+          min={0.5}
+          max={4}
+          step={0.1}
+          onValueChange={([scale]) => setPageBackground({ ...background, scale })}
+          aria-label="Ukuran pola"
+        />
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function BackgroundPanel() {
   const { search, setSearch, category, setCategory, results } =
     useLibrary(BACKGROUNDS);
+  const page = useActivePage();
   const setPageBackground = useEditorStore((state) => state.setPageBackground);
   const [customColor, setCustomColor] = useState("#ffffff");
 
@@ -183,35 +310,59 @@ export function BackgroundPanel() {
       onCategoryChange={setCategory}
       resultCount={results.length}
       footer={
-        <label className="border-editor-border flex items-center justify-between gap-2 rounded-lg border p-2.5">
-          <span className="text-xs font-medium">Warna kustom</span>
-          <input
-            type="color"
-            value={customColor}
-            onChange={(event) => {
-              setCustomColor(event.target.value);
-              setPageBackground({ type: "solid", color: event.target.value });
-            }}
-            aria-label="Pilih warna latar kustom"
-            className="border-editor-border size-8 cursor-pointer rounded border bg-transparent"
-          />
-        </label>
+        <div className="flex flex-col gap-3">
+          <BackgroundControls />
+
+          <label className="border-editor-border flex items-center justify-between gap-2 rounded-lg border p-2.5">
+            <span className="text-xs font-medium">Warna kustom</span>
+            <input
+              type="color"
+              value={customColor}
+              onChange={(event) => {
+                setCustomColor(event.target.value);
+                setPageBackground({ type: "solid", color: event.target.value });
+              }}
+              aria-label="Pilih warna latar kustom"
+              className="border-editor-border size-8 cursor-pointer rounded border bg-transparent"
+            />
+          </label>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPageBackground({ type: "solid", color: "#ffffff" })}
+          >
+            Kembalikan ke putih polos
+          </Button>
+        </div>
       }
     >
       <LibraryGrid columns={3}>
-        {results.map((item) => (
-          <LibraryTile
-            key={item.id}
-            label={item.label}
-            onClick={() => setPageBackground(item.background)}
-            className="p-0"
-          >
-            <span
-              className="size-full"
-              style={backgroundStyle(item.background)}
-            />
-          </LibraryTile>
-        ))}
+        {results.map((item) => {
+          const active = sameBackground(page.background, item.background);
+
+          return (
+            <LibraryTile
+              key={item.id}
+              label={item.label}
+              onClick={() => setPageBackground(item.background)}
+              className={cn(
+                "relative p-0",
+                active && "border-primary ring-primary/40 ring-2",
+              )}
+            >
+              <span
+                className="size-full"
+                style={backgroundStyle(item.background)}
+              />
+              {active && (
+                <span className="bg-primary text-primary-foreground absolute right-1 top-1 flex size-4 items-center justify-center rounded-full">
+                  <Check className="size-2.5" />
+                </span>
+              )}
+            </LibraryTile>
+          );
+        })}
       </LibraryGrid>
     </LibraryPanel>
   );
