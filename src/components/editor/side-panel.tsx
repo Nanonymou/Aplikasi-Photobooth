@@ -1,6 +1,7 @@
 "use client";
 
-import { X } from "lucide-react";
+import Link from "next/link";
+import { Camera, X } from "lucide-react";
 
 import { FramePanel } from "@/components/editor/panels/frame-panel";
 import { LayersPanel } from "@/components/editor/panels/layers-panel";
@@ -46,10 +47,18 @@ function PanelBody({ panel }: { panel: PanelId }) {
 
     case "photo":
       return (
-        <PanelPlaceholder>
-          Kamera webcam (countdown, mirror, flash, retake) dan unggah dari
-          perangkat dipasang pada halaman <em>Kamera &amp; Unggah Live</em>.
-        </PanelPlaceholder>
+        <>
+          <Button asChild className="w-full">
+            <Link href="/kamera">
+              <Camera />
+              Buka sesi foto
+            </Link>
+          </Button>
+          <PanelPlaceholder>
+            Countdown, mirror, flash, retake, dan unggah dari perangkat menyusul
+            di halaman <em>Kamera &amp; Unggah Live</em>.
+          </PanelPlaceholder>
+        </>
       );
 
     case "text":
