@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { FilterX, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,11 +43,38 @@ export function LibraryPanel({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const searchRef = useRef<HTMLInputElement>(null);
+  const filtered = search.trim().length > 0 || activeCategory !== ALL_CATEGORY.id;
+
+  // "/" jumps to the search box, the convention in catalogue-heavy UIs.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey) return;
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
         <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
         <Input
+          ref={searchRef}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder={searchPlaceholder}
@@ -97,10 +125,32 @@ export function LibraryPanel({
         </div>
       )}
 
+      {filtered && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-[11px] tabular-nums">
+            {resultCount} hasil
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => {
+              onSearchChange("");
+              onCategoryChange(ALL_CATEGORY.id);
+            }}
+          >
+            <FilterX className="size-3" />
+            Hapus filter
+          </Button>
+        </div>
+      )}
+
       {resultCount === 0 ? (
         <p className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-4 text-xs leading-relaxed">
-          Tidak ada hasil{search ? ` untuk “${search}”` : ""}. Coba kata kunci
-          atau kategori lain.
+          Tidak ada hasil{search ? ` untuk “${search}”` : ""}
+          {activeCategory !== ALL_CATEGORY.id
+            ? " di kategori ini"
+            : ""}. Coba kata kunci lain, atau hapus filter di atas.
         </p>
       ) : (
         children

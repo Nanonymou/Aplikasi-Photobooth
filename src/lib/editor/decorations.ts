@@ -345,12 +345,30 @@ export const TEXT_STYLES: TextStyleItem[] = [
   },
 ];
 
-/** Case-insensitive match across label, category and keywords. */
-export function matchesSearch(item: LibraryItem, search: string): boolean {
-  const query = search.trim().toLowerCase();
-  if (!query) return true;
+/**
+ * Folds case and strips diacritics, so "Émas" and "emas" are the same query.
+ */
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
-  return [item.label, item.category, ...(item.keywords ?? [])].some((term) =>
-    term.toLowerCase().includes(query),
+/**
+ * Matches a library item against a free-text query.
+ *
+ * Every whitespace-separated term must appear somewhere in the item's label,
+ * category or keywords — so "hati pink" narrows rather than widening, which is
+ * what people expect as they keep typing.
+ */
+export function matchesSearch(item: LibraryItem, search: string): boolean {
+  const terms = normalize(search).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+
+  const haystack = normalize(
+    [item.label, item.category, ...(item.keywords ?? [])].join(" "),
   );
+
+  return terms.every((term) => haystack.includes(term));
 }
