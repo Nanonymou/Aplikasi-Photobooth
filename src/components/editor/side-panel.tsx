@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { Camera, X } from "lucide-react";
 
+import {
+  BackgroundPanel,
+  StickerPanel,
+  TextPanel,
+} from "@/components/editor/panels/decoration-panels";
 import { FramePanel } from "@/components/editor/panels/frame-panel";
 import { LayersPanel } from "@/components/editor/panels/layers-panel";
 import { Button } from "@/components/ui/button";
@@ -21,21 +26,6 @@ function PanelPlaceholder({ children }: { children: React.ReactNode }) {
   return (
     <div className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-4 text-xs leading-relaxed">
       {children}
-    </div>
-  );
-}
-
-function PanelGrid({ items }: { items: string[] }) {
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {items.map((item) => (
-        <div
-          key={item}
-          className="bg-editor-surface border-editor-border text-muted-foreground flex aspect-square items-center justify-center rounded-lg border text-2xl"
-        >
-          {item}
-        </div>
-      ))}
     </div>
   );
 }
@@ -62,31 +52,13 @@ function PanelBody({ panel }: { panel: PanelId }) {
       );
 
     case "text":
-      return (
-        <PanelPlaceholder>
-          Gaya teks artistik — gradasi, bayangan, outline, lengkung — dipasang pada
-          halaman <em>Perpustakaan Dekorasi</em>.
-        </PanelPlaceholder>
-      );
+      return <TextPanel />;
 
     case "sticker":
-      return (
-        <>
-          <PanelGrid items={["🎓", "🎉", "✨", "💜", "🌸", "📸"]} />
-          <PanelPlaceholder>
-            Pratinjau koleksi. Katalog stiker penuh dipasang pada halaman{" "}
-            <em>Perpustakaan Dekorasi</em>.
-          </PanelPlaceholder>
-        </>
-      );
+      return <StickerPanel />;
 
     case "background":
-      return (
-        <PanelPlaceholder>
-          Galeri latar belakang — warna, gradasi, tekstur, dan pola — dipasang pada
-          halaman <em>Perpustakaan Dekorasi</em>.
-        </PanelPlaceholder>
-      );
+      return <BackgroundPanel />;
 
     case "ai":
       return (
@@ -100,7 +72,6 @@ function PanelBody({ panel }: { panel: PanelId }) {
       return <LayersPanel />;
   }
 }
-
 
 export function SidePanel() {
   const activePanel = useEditorStore((state) => state.activePanel);

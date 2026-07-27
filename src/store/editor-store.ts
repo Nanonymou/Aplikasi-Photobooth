@@ -7,6 +7,7 @@ import type {
   CanvasObject,
   CanvasPage,
   EditorProject,
+  PageBackground,
   PanelId,
   PhotoSlotObject,
   SlotPhoto,
@@ -98,6 +99,7 @@ export interface EditorState {
   updateObjects: (updates: ObjectUpdate[]) => void;
   addObject: (object: CanvasObject) => void;
   replaceSlots: (slots: PhotoSlotObject[]) => void;
+  setPageBackground: (background: PageBackground) => void;
   setSlotPhoto: (slotId: string, photo: SlotPhoto | null) => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */
   fillNextEmptySlot: (src: string) => string | null;
@@ -338,6 +340,17 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       ),
       selectedIds: [],
     })),
+
+  setPageBackground: (background) =>
+    set((state) =>
+      commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          background,
+        })),
+      ),
+    ),
 
   setSlotPhoto: (slotId, photo) => get().updateObject(slotId, { photo }),
 
