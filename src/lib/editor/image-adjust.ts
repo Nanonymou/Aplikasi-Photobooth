@@ -81,3 +81,91 @@ export async function enhanceFaceApprox(
   // PNG so a cut-out photo does not lose its alpha when enhanced afterwards.
   return canvas.toDataURL("image/png");
 }
+
+/**
+ * Local stand-in for smart colour correction: per-channel auto levels.
+ *
+ * Each channel's histogram is stretched between its low and high percentiles,
+ * which fixes a colour cast and flat contrast in one pass — the same trick as
+ * "auto levels" in a photo editor. Clipping a small share at each end stops a
+ * few stray pixels from deciding the whole mapping.
+ */
+const CLIP_SHARE = 0.005;
+
+export async function autoColorCorrectApprox(src: string): Promise<string> {
+  const image = await loadImage(src);
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!width || !height) throw new Error("Ukuran gambar tidak terbaca.");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Kanvas tidak tersedia.");
+
+  context.drawImage(image, 0, 0);
+  const frame = context.getImageData(0, 0, width, height);
+  const { data } = frame;
+
+  // Histograms are built from opaque pixels only, so a cut-out photo is levelled
+  // on its subject rather than on the transparent surround.
+  const histograms = [
+    new Uint32Array(256),
+    new Uint32Array(256),
+    new Uint32Array(256),
+  ];
+  let counted = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    histograms[0][data[index]] += 1;
+    histograms[1][data[index + 1]] += 1;
+    histograms[2][data[index + 2]] += 1;
+    counted += 1;
+  }
+
+  if (counted === 0) return src;
+
+  const clip = Math.max(1, Math.floor(counted * CLIP_SHARE));
+
+  /** Lookup table mapping [low..high] onto the full 0–255 range. */
+  const tables = histograms.map((histogram) => {
+    let low = 0;
+    let high = 255;
+
+    for (let running = 0, value = 0; value < 256; value += 1) {
+      running += histogram[value];
+      if (running > clip) {
+        low = value;
+        break;
+      }
+    }
+    for (let running = 0, value = 255; value >= 0; value -= 1) {
+      running += histogram[value];
+      if (running > clip) {
+        high = value;
+        break;
+      }
+    }
+
+    const table = new Uint8ClampedArray(256);
+    // A flat channel would divide by zero; leave it untouched instead.
+    const span = high - low;
+    for (let value = 0; value < 256; value += 1) {
+      table[value] = span <= 0 ? value : clamp(((value - low) / span) * 255);
+    }
+    return table;
+  });
+
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    data[index] = tables[0][data[index]];
+    data[index + 1] = tables[1][data[index + 1]];
+    data[index + 2] = tables[2][data[index + 2]];
+  }
+
+  context.putImageData(frame, 0, 0);
+  return canvas.toDataURL("image/png");
+}

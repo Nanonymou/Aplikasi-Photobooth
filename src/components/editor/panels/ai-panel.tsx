@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Check, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  Eye,
+  LoaderCircle,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -11,7 +17,10 @@ import { useAiJob } from "@/hooks/use-ai-job";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { AI_TOOLS, type AiTool } from "@/lib/editor/ai-tools";
 import { removeBackgroundApprox } from "@/lib/editor/background-removal";
-import { enhanceFaceApprox } from "@/lib/editor/image-adjust";
+import {
+  autoColorCorrectApprox,
+  enhanceFaceApprox,
+} from "@/lib/editor/image-adjust";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PhotoSlotObject } from "@/types/editor";
@@ -155,6 +164,10 @@ export function AiPanel() {
   const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
   // Per-tool strength, remembered across runs within the session.
   const [intensities, setIntensities] = useState<Record<string, number>>({});
+  const updateObjects = useEditorStore((state) => state.updateObjects);
+  // Holds the enhanced source while the original is being peeked at, so it can
+  // be put back on release.
+  const [peeking, setPeeking] = useState<string | null>(null);
 
   const slot =
     useSelectedObjects().find(
@@ -193,8 +206,39 @@ export function AiPanel() {
       };
     }
 
+    if (tool.id === "color-correct" && slot?.photo) {
+      const photo = slot.photo;
+      return async () => {
+        const corrected = await autoColorCorrectApprox(photo.src);
+        setSlotPhoto(slot.id, {
+          ...photo,
+          src: corrected,
+          originalSrc: photo.originalSrc ?? photo.src,
+        });
+      };
+    }
+
     // Every other enhancement lands in its own task.
     return () => {};
+  }
+
+  /** Swaps the slot to the original while held, without touching history. */
+  function showOriginal(show: boolean) {
+    const photo = slot?.photo;
+    if (!slot || !photo?.originalSrc) return;
+
+    if (show) {
+      if (peeking) return;
+      setPeeking(photo.src);
+      updateObjects([
+        { id: slot.id, patch: { photo: { ...photo, src: photo.originalSrc } } },
+      ]);
+      return;
+    }
+
+    if (!peeking) return;
+    updateObjects([{ id: slot.id, patch: { photo: { ...photo, src: peeking } } }]);
+    setPeeking(null);
   }
 
   function revert() {
@@ -224,11 +268,53 @@ export function AiPanel() {
         </p>
       )}
 
-      {edited && (
-        <Button variant="outline" size="sm" onClick={revert} disabled={busy}>
-          <RotateCcw />
-          Kembalikan foto asli
-        </Button>
+      {edited && slot?.photo?.originalSrc && (
+        <div className="border-editor-border flex flex-col gap-2 rounded-lg border p-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["Sebelum", slot.photo.originalSrc],
+                ["Sesudah", peeking ?? slot.photo.src],
+              ] as const
+            ).map(([label, src]) => (
+              <figure key={label} className="flex flex-col gap-1">
+                {/* Data URLs; next/image would only add a loader round-trip. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={`${label} perbaikan`}
+                  className="border-editor-border aspect-square w-full rounded border object-cover"
+                />
+                <figcaption className="text-muted-foreground text-center text-[10px]">
+                  {label}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            // Hold to compare: the swap is a transient update, so peeking at the
+            // original never lands in the undo history.
+            onPointerDown={() => showOriginal(true)}
+            onPointerUp={() => showOriginal(false)}
+            onPointerLeave={() => showOriginal(false)}
+            onKeyDown={(event) => {
+              if (event.key === " " || event.key === "Enter") showOriginal(true);
+            }}
+            onKeyUp={() => showOriginal(false)}
+          >
+            <Eye />
+            Tahan untuk lihat aslinya
+          </Button>
+
+          <Button variant="ghost" size="sm" onClick={revert} disabled={busy}>
+            <RotateCcw />
+            Kembalikan foto asli
+          </Button>
+        </div>
       )}
 
       <Separator />
