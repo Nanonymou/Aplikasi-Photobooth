@@ -111,6 +111,7 @@ export interface EditorState {
     height: number;
     background: PageBackground;
     objects: CanvasObject[];
+    templateId?: string | null;
   }) => void;
   setSlotPhoto: (slotId: string, photo: SlotPhoto | null) => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */

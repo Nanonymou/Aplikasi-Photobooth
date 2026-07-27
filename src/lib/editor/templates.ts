@@ -348,6 +348,7 @@ export interface InstantiatedTemplate {
   height: number;
   background: PageBackground;
   objects: CanvasObject[];
+  templateId: string;
 }
 
 /**
@@ -431,5 +432,6 @@ export function instantiateTemplate(
     height: template.height,
     background: template.background,
     objects,
+    templateId: template.id,
   };
 }

@@ -163,6 +163,11 @@ export type PageBackground =
 export interface CanvasPage {
   id: string;
   name: string;
+  /**
+   * Template this page was last built from, so the library can mark it as
+   * applied. Null once the page no longer came from a template.
+   */
+  templateId?: string | null;
   /** Page size in design px. */
   width: number;
   height: number;
