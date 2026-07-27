@@ -79,6 +79,7 @@ export function CameraPreview({
   status,
   error,
   demoMode,
+  reviewSrc,
   onRetry,
   onUseDemo,
 }: {
@@ -88,6 +89,8 @@ export function CameraPreview({
   status: CameraStatus;
   error: string | null;
   demoMode: boolean;
+  /** When set, the just-taken frame is frozen here for review. */
+  reviewSrc?: string | null;
   onRetry: () => void;
   onUseDemo: () => void;
 }) {
@@ -106,6 +109,9 @@ export function CameraPreview({
       {demoMode ? (
         <DemoPreview />
       ) : (
+        // Kept mounted during review: unmounting the element would drop the
+        // stream, and remounting would not re-attach it (the stream is unchanged,
+        // so the effect that assigns `srcObject` would not re-run).
         <video
           ref={videoRef}
           autoPlay
@@ -115,7 +121,23 @@ export function CameraPreview({
         />
       )}
 
-      {demoMode ? (
+      {reviewSrc && (
+        <div className="absolute inset-0">
+          {/* A data URL or local sample; next/image would only add a round-trip. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={reviewSrc}
+            alt="Pratinjau jepretan terakhir"
+            className="size-full object-cover"
+          />
+        </div>
+      )}
+
+      {reviewSrc ? (
+        <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
+          Tinjau jepretan
+        </span>
+      ) : demoMode ? (
         <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
           Mode demo — data tiruan
         </span>
