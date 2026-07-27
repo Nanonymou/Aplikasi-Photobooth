@@ -23,6 +23,7 @@ import {
 } from "@/lib/editor/decorations";
 import { useRecentStickers } from "@/hooks/use-recent-stickers";
 import { createId } from "@/lib/editor/id";
+import { getPattern, patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import { arcHeight } from "@/lib/editor/text-path";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PageBackground } from "@/types/editor";
@@ -52,7 +53,19 @@ function backgroundStyle(background: PageBackground): React.CSSProperties {
       backgroundImage: `linear-gradient(${background.angle}deg, ${background.from}, ${background.to})`,
     };
   }
+
   if (background.type === "solid") return { backgroundColor: background.color };
+
+  if (background.type === "pattern") {
+    const pattern = getPattern(background.pattern as PatternId);
+    // Same SVG the canvas tiles, so the swatch cannot drift from the result.
+    return {
+      backgroundColor: background.background,
+      backgroundImage: `url("${patternDataUri(background.pattern as PatternId, background.foreground, background.background)}")`,
+      backgroundSize: `${pattern.tile * background.scale}px ${pattern.tile * background.scale}px`,
+    };
+  }
+
   return { backgroundImage: `url(${background.src})`, backgroundSize: "cover" };
 }
 
@@ -149,6 +162,7 @@ export function BackgroundPanel() {
   const { search, setSearch, category, setCategory, results } =
     useLibrary(BACKGROUNDS);
   const setPageBackground = useEditorStore((state) => state.setPageBackground);
+  const [customColor, setCustomColor] = useState("#ffffff");
 
   return (
     <LibraryPanel
@@ -159,6 +173,21 @@ export function BackgroundPanel() {
       activeCategory={category}
       onCategoryChange={setCategory}
       resultCount={results.length}
+      footer={
+        <label className="border-editor-border flex items-center justify-between gap-2 rounded-lg border p-2.5">
+          <span className="text-xs font-medium">Warna kustom</span>
+          <input
+            type="color"
+            value={customColor}
+            onChange={(event) => {
+              setCustomColor(event.target.value);
+              setPageBackground({ type: "solid", color: event.target.value });
+            }}
+            aria-label="Pilih warna latar kustom"
+            className="border-editor-border size-8 cursor-pointer rounded border bg-transparent"
+          />
+        </label>
+      }
     >
       <LibraryGrid columns={3}>
         {results.map((item) => (

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { Group, Layer, Line, Rect, Stage } from "react-konva";
 
+import { useImage } from "@/hooks/use-image";
 import { useObjectDrag } from "@/hooks/use-object-drag";
+import { patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import {
   useEditorStore,
   useActivePage,
@@ -37,6 +39,48 @@ function gradientPoints(angle: number, width: number, height: number) {
   };
 }
 
+/** Tiled SVG pattern background. Split out so it can use the image-loading hook. */
+function PatternBackground({
+  background,
+  width,
+  height,
+}: {
+  background: Extract<PageBackground, { type: "pattern" }>;
+  width: number;
+  height: number;
+}) {
+  const image = useImage(
+    patternDataUri(
+      background.pattern as PatternId,
+      background.foreground,
+      background.background,
+    ),
+  );
+
+  return (
+    <>
+      {/* The base colour is painted separately so the page is never transparent
+          while the pattern tile is still decoding. */}
+      <Rect
+        width={width}
+        height={height}
+        fill={background.background}
+        listening={false}
+      />
+      {image && (
+        <Rect
+          width={width}
+          height={height}
+          fillPatternImage={image}
+          fillPatternRepeat="repeat"
+          fillPatternScale={{ x: background.scale, y: background.scale }}
+          listening={false}
+        />
+      )}
+    </>
+  );
+}
+
 function PageBackgroundRect({
   background,
   width,
@@ -46,6 +90,16 @@ function PageBackgroundRect({
   width: number;
   height: number;
 }) {
+  if (background.type === "pattern") {
+    return (
+      <PatternBackground
+        background={background}
+        width={width}
+        height={height}
+      />
+    );
+  }
+
   if (background.type === "gradient") {
     const { start, end } = gradientPoints(background.angle, width, height);
 

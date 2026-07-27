@@ -149,6 +149,15 @@ export type CanvasObject =
 export type PageBackground =
   | { type: "solid"; color: string }
   | { type: "gradient"; from: string; to: string; angle: number }
+  | {
+      type: "pattern";
+      /** Id from the pattern catalogue in `lib/editor/patterns`. */
+      pattern: string;
+      foreground: string;
+      background: string;
+      /** Tile scale; 1 draws the tile at its natural size. */
+      scale: number;
+    }
   | { type: "image"; src: string };
 
 export interface CanvasPage {

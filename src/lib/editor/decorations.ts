@@ -140,43 +140,36 @@ export const STICKERS: StickerItem[] = [
 export const BACKGROUND_CATEGORIES: LibraryCategory[] = [
   { id: "polos", label: "Polos" },
   { id: "gradasi", label: "Gradasi" },
+  { id: "pola", label: "Pola" },
 ];
 
 export const BACKGROUNDS: BackgroundItem[] = [
   { id: "putih", label: "Putih", category: "polos", background: { type: "solid", color: "#ffffff" } },
-  { id: "krem", label: "Krem", category: "polos", background: { type: "solid", color: "#faf5ef" }, keywords: ["vintage"] },
-  { id: "hitam", label: "Hitam", category: "polos", background: { type: "solid", color: "#0f172a" }, keywords: ["gelap"] },
-  { id: "navy", label: "Navy", category: "polos", background: { type: "solid", color: "#1e293b" } },
-  { id: "rose", label: "Rose", category: "polos", background: { type: "solid", color: "#fecdd3" }, keywords: ["pink"] },
-  { id: "mint", label: "Mint", category: "polos", background: { type: "solid", color: "#ccfbf1" }, keywords: ["hijau"] },
-  {
-    id: "senja",
-    label: "Senja",
-    category: "gradasi",
-    keywords: ["sunset", "jingga"],
-    background: { type: "gradient", from: "#fb7185", to: "#fbbf24", angle: 135 },
-  },
-  {
-    id: "lavender",
-    label: "Lavender",
-    category: "gradasi",
-    keywords: ["ungu", "wisuda"],
-    background: { type: "gradient", from: "#fdf2f8", to: "#ede9fe", angle: 135 },
-  },
-  {
-    id: "samudra",
-    label: "Samudra",
-    category: "gradasi",
-    keywords: ["biru", "laut"],
-    background: { type: "gradient", from: "#38bdf8", to: "#34d399", angle: 135 },
-  },
-  {
-    id: "malam",
-    label: "Malam",
-    category: "gradasi",
-    keywords: ["gelap", "luxury"],
-    background: { type: "gradient", from: "#312e81", to: "#0f172a", angle: 160 },
-  },
+  { id: "krem", label: "Krem", category: "polos", keywords: ["vintage", "hangat"], background: { type: "solid", color: "#faf5ef" } },
+  { id: "abu", label: "Abu muda", category: "polos", keywords: ["netral"], background: { type: "solid", color: "#e2e8f0" } },
+  { id: "hitam", label: "Hitam", category: "polos", keywords: ["gelap", "dark"], background: { type: "solid", color: "#0f172a" } },
+  { id: "navy", label: "Navy", category: "polos", keywords: ["biru tua"], background: { type: "solid", color: "#1e293b" } },
+  { id: "rose", label: "Rose", category: "polos", keywords: ["pink", "lembut"], background: { type: "solid", color: "#fecdd3" } },
+  { id: "mint", label: "Mint", category: "polos", keywords: ["hijau", "segar"], background: { type: "solid", color: "#ccfbf1" } },
+  { id: "lavender-polos", label: "Lavender", category: "polos", keywords: ["ungu"], background: { type: "solid", color: "#ede9fe" } },
+  { id: "kuning", label: "Kuning lembut", category: "polos", keywords: ["cerah"], background: { type: "solid", color: "#fef3c7" } },
+  { id: "terakota", label: "Terakota", category: "polos", keywords: ["earth", "bata"], background: { type: "solid", color: "#e7c6a5" } },
+
+  { id: "senja", label: "Senja", category: "gradasi", keywords: ["sunset", "jingga"], background: { type: "gradient", from: "#fb7185", to: "#fbbf24", angle: 135 } },
+  { id: "lavender", label: "Lavender lembut", category: "gradasi", keywords: ["ungu", "wisuda"], background: { type: "gradient", from: "#fdf2f8", to: "#ede9fe", angle: 135 } },
+  { id: "samudra", label: "Samudra", category: "gradasi", keywords: ["biru", "laut"], background: { type: "gradient", from: "#38bdf8", to: "#34d399", angle: 135 } },
+  { id: "malam", label: "Malam", category: "gradasi", keywords: ["gelap", "luxury"], background: { type: "gradient", from: "#312e81", to: "#0f172a", angle: 160 } },
+  { id: "permen", label: "Permen kapas", category: "gradasi", keywords: ["pink", "biru", "pastel"], background: { type: "gradient", from: "#f9a8d4", to: "#a5b4fc", angle: 120 } },
+  { id: "emas", label: "Emas", category: "gradasi", keywords: ["mewah", "gold"], background: { type: "gradient", from: "#fde68a", to: "#d97706", angle: 145 } },
+  { id: "hutan", label: "Hutan", category: "gradasi", keywords: ["hijau", "alam"], background: { type: "gradient", from: "#86efac", to: "#065f46", angle: 150 } },
+  { id: "neon", label: "Neon", category: "gradasi", keywords: ["gaming", "cerah"], background: { type: "gradient", from: "#a855f7", to: "#22d3ee", angle: 110 } },
+
+  { id: "pola-titik", label: "Titik", category: "pola", keywords: ["polkadot", "bulat"], background: { type: "pattern", pattern: "titik", foreground: "#c4b5fd", background: "#faf5ff", scale: 1 } },
+  { id: "pola-kotak", label: "Kotak", category: "pola", keywords: ["grid", "garis"], background: { type: "pattern", pattern: "kotak", foreground: "#cbd5e1", background: "#ffffff", scale: 1 } },
+  { id: "pola-garis", label: "Garis miring", category: "pola", keywords: ["stripe", "diagonal"], background: { type: "pattern", pattern: "garis", foreground: "#fecdd3", background: "#fff1f2", scale: 1 } },
+  { id: "pola-catur", label: "Papan catur", category: "pola", keywords: ["retro", "kotak"], background: { type: "pattern", pattern: "papan-catur", foreground: "#e2e8f0", background: "#ffffff", scale: 1 } },
+  { id: "pola-konfeti", label: "Konfeti", category: "pola", keywords: ["pesta", "ulang tahun"], background: { type: "pattern", pattern: "konfeti", foreground: "#fbbf24", background: "#1e293b", scale: 1 } },
+  { id: "pola-hati", label: "Hati kecil", category: "pola", keywords: ["cinta", "wedding"], background: { type: "pattern", pattern: "hati", foreground: "#fda4af", background: "#fff1f2", scale: 1 } },
 ];
 
 export const TEXT_STYLE_CATEGORIES: LibraryCategory[] = [
