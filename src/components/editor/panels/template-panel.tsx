@@ -1,13 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Sparkles, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Expand,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 
 import {
   ALL_CATEGORY,
   LibraryPanel,
 } from "@/components/editor/panels/library-panel";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { matchesSearch } from "@/lib/editor/decorations";
 import { slotPathData } from "@/lib/editor/slot-shape";
 import {
@@ -100,6 +115,7 @@ export function TemplatePanel() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORY.id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const page = useActivePage();
   const applyPageContent = useEditorStore((state) => state.applyPageContent);
@@ -116,6 +132,18 @@ export function TemplatePanel() {
 
   const selected = TEMPLATES.find((template) => template.id === selectedId);
 
+  const previewIndex = results.findIndex(
+    (template) => template.id === previewId,
+  );
+  const previewed = previewIndex >= 0 ? results[previewIndex] : null;
+
+  /** Steps through the filtered results, so the arrows follow what is on screen. */
+  function stepPreview(delta: number) {
+    if (previewIndex < 0 || results.length === 0) return;
+    const next = (previewIndex + delta + results.length) % results.length;
+    setPreviewId(results[next].id);
+  }
+
   /** Objects a template would discard — photos are carried over, these are not. */
   const decorationsAtRisk = page.objects.filter(
     (object) => object.kind !== "slot",
@@ -131,6 +159,7 @@ export function TemplatePanel() {
   }
 
   return (
+    <>
     <LibraryPanel
       search={search}
       onSearchChange={setSearch}
@@ -184,56 +213,124 @@ export function TemplatePanel() {
         )
       }
     >
-      <div className="grid grid-cols-2 gap-2">
+      <div className="group/grid grid grid-cols-2 gap-2">
         {results.map((template) => {
           const isSelected = template.id === selectedId;
           const isApplied = page.templateId === template.id;
 
           return (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() =>
-                setSelectedId(isSelected ? null : template.id)
-              }
-              onDoubleClick={() => apply(template)}
-              title={template.label}
-              aria-pressed={isSelected}
-              className={cn(
-                // min-w-0 lets the card shrink: a grid item's automatic minimum
-                // size is its content, and the size line below would otherwise
-                // push both columns wider than the panel.
-                "group relative flex min-w-0 flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-colors",
-                "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
-                isSelected
-                  ? "border-primary bg-primary/10"
-                  : "border-editor-border hover:border-primary/60 hover:bg-accent",
-              )}
-            >
-              <span className="bg-editor-surface flex h-24 items-center justify-center overflow-hidden rounded">
-                <TemplatePreview template={template} />
-              </span>
+            <div key={template.id} className="relative min-w-0">
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedId(isSelected ? null : template.id)
+                }
+                onDoubleClick={() => apply(template)}
+                title={template.label}
+                aria-pressed={isSelected}
+                className={cn(
+                  // min-w-0 lets the card shrink: a grid item's automatic
+                  // minimum size is its content, and the size line below would
+                  // otherwise push both columns wider than the panel.
+                  "flex w-full min-w-0 flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-colors",
+                  "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
+                  isSelected
+                    ? "border-primary bg-primary/10"
+                    : "border-editor-border hover:border-primary/60 hover:bg-accent",
+                )}
+              >
+                <span className="bg-editor-surface flex h-24 items-center justify-center overflow-hidden rounded">
+                  <TemplatePreview template={template} />
+                </span>
+
+                <span className="truncate px-0.5 text-[11px] font-medium">
+                  {template.label}
+                </span>
+                <span className="text-muted-foreground truncate px-0.5 text-[10px] tabular-nums">
+                  {template.slots.length} slot · {template.width}×
+                  {template.height}
+                </span>
+              </button>
 
               {isApplied && (
                 <span
-                  className="bg-primary text-primary-foreground absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full"
+                  className="bg-primary text-primary-foreground pointer-events-none absolute left-2.5 top-2.5 flex size-5 items-center justify-center rounded-full"
                   title="Sedang dipakai di halaman ini"
                 >
                   <Check className="size-3" />
                 </span>
               )}
 
-              <span className="truncate px-0.5 text-[11px] font-medium">
-                {template.label}
-              </span>
-              <span className="text-muted-foreground truncate px-0.5 text-[10px] tabular-nums">
-                {template.slots.length} slot · {template.width}×
-                {template.height}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setPreviewId(template.id)}
+                aria-label={`Pratinjau besar ${template.label}`}
+                className="bg-background/90 text-foreground hover:bg-background focus-visible:ring-ring/50 absolute right-2.5 top-2.5 flex size-6 items-center justify-center rounded-full opacity-0 shadow-sm transition-opacity outline-none focus-visible:opacity-100 focus-visible:ring-[3px] group-hover/grid:opacity-100"
+              >
+                <Expand className="size-3" />
+              </button>
+            </div>
           );
         })}
       </div>
     </LibraryPanel>
+
+    <Dialog
+      open={!!previewed}
+      onOpenChange={(open) => !open && setPreviewId(null)}
+    >
+      <DialogContent className="max-w-2xl">
+        {previewed && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{previewed.label}</DialogTitle>
+              <DialogDescription className="tabular-nums">
+                {previewed.slots.length} slot foto · {previewed.width}×
+                {previewed.height} px
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="bg-editor-surface flex max-h-[55vh] items-center justify-center overflow-hidden rounded-lg p-4">
+              <TemplatePreview template={previewed} />
+            </div>
+
+            <DialogFooter className="sm:justify-between">
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => stepPreview(-1)}
+                  aria-label="Template sebelumnya"
+                >
+                  <ChevronLeft />
+                </Button>
+                <span className="text-muted-foreground px-1 text-xs tabular-nums">
+                  {previewIndex + 1} / {results.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => stepPreview(1)}
+                  aria-label="Template berikutnya"
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+
+              <Button
+                onClick={() => {
+                  apply(previewed);
+                  setPreviewId(null);
+                }}
+              >
+                <Sparkles />
+                Terapkan template
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
