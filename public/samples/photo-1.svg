@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="480" viewBox="0 0 1000 480" role="img" aria-label="Contoh foto 1">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#f0abfc"/>
+    </linearGradient>
+  </defs>
+  <rect width="1000" height="480" fill="url(#g1)"/>
+  <circle cx="500" cy="200" r="86" fill="#ffffff" opacity="0.85"/>
+  <path d="M340 480c0-88 72-160 160-160s160 72 160 160z" fill="#ffffff" opacity="0.85"/>
+</svg>

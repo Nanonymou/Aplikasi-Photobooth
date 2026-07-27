@@ -1,0 +1,183 @@
+"use client";
+
+import { X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { getPanel } from "@/lib/editor/panels";
+import { cn } from "@/lib/utils";
+import { useActivePage, useEditorStore } from "@/store/editor-store";
+import type { PanelId } from "@/types/editor";
+
+/**
+ * Placeholder used by panels whose contents belong to a feature that has not been
+ * built yet. It keeps the editor navigable end to end without pretending the
+ * feature works.
+ */
+function PanelPlaceholder({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-4 text-xs leading-relaxed">
+      {children}
+    </div>
+  );
+}
+
+function PanelGrid({ items }: { items: string[] }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {items.map((item) => (
+        <div
+          key={item}
+          className="bg-editor-surface border-editor-border text-muted-foreground flex aspect-square items-center justify-center rounded-lg border text-2xl"
+        >
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Lists the objects on the page, newest layer first, and selects on click. */
+function LayersPanel() {
+  const page = useActivePage();
+  const selectedIds = useEditorStore((state) => state.selectedIds);
+  const select = useEditorStore((state) => state.select);
+
+  return (
+    <ul className="flex flex-col gap-1">
+      {[...page.objects].reverse().map((object) => {
+        const active = selectedIds.includes(object.id);
+
+        return (
+          <li key={object.id}>
+            <button
+              type="button"
+              onClick={() => select([object.id])}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors",
+                "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
+                active
+                  ? "bg-primary/10 text-primary"
+                  : "hover:bg-accent hover:text-accent-foreground",
+              )}
+            >
+              <span className="bg-editor-surface border-editor-border flex size-7 shrink-0 items-center justify-center rounded border text-[13px]">
+                {object.kind === "slot"
+                  ? "🖼"
+                  : object.kind === "text"
+                    ? "T"
+                    : object.kind === "sticker"
+                      ? object.content
+                      : "◻"}
+              </span>
+              <span className="truncate font-medium">{object.name}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function PanelBody({ panel }: { panel: PanelId }) {
+  switch (panel) {
+    case "frame":
+      return (
+        <PanelPlaceholder>
+          Pembuat frame dinamis — tentukan jumlah, bentuk, dan susunan slot foto —
+          dipasang pada tugas <em>Bangun Frame Dinamis</em>.
+        </PanelPlaceholder>
+      );
+
+    case "photo":
+      return (
+        <PanelPlaceholder>
+          Kamera webcam (countdown, mirror, flash, retake) dan unggah dari
+          perangkat dipasang pada halaman <em>Kamera &amp; Unggah Live</em>.
+        </PanelPlaceholder>
+      );
+
+    case "text":
+      return (
+        <PanelPlaceholder>
+          Gaya teks artistik — gradasi, bayangan, outline, lengkung — dipasang pada
+          halaman <em>Perpustakaan Dekorasi</em>.
+        </PanelPlaceholder>
+      );
+
+    case "sticker":
+      return (
+        <>
+          <PanelGrid items={["🎓", "🎉", "✨", "💜", "🌸", "📸"]} />
+          <PanelPlaceholder>
+            Pratinjau koleksi. Katalog stiker penuh dipasang pada halaman{" "}
+            <em>Perpustakaan Dekorasi</em>.
+          </PanelPlaceholder>
+        </>
+      );
+
+    case "background":
+      return (
+        <PanelPlaceholder>
+          Galeri latar belakang — warna, gradasi, tekstur, dan pola — dipasang pada
+          halaman <em>Perpustakaan Dekorasi</em>.
+        </PanelPlaceholder>
+      );
+
+    case "ai":
+      return (
+        <PanelPlaceholder>
+          Hapus latar belakang, perbaikan wajah, koreksi warna, dan auto-layout
+          dipasang pada halaman <em>Tingkatkan Gambar AI</em>.
+        </PanelPlaceholder>
+      );
+
+    case "layers":
+      return <LayersPanel />;
+  }
+}
+
+export function SidePanel() {
+  const activePanel = useEditorStore((state) => state.activePanel);
+  const setPanel = useEditorStore((state) => state.setPanel);
+
+  if (!activePanel) return null;
+
+  const panel = getPanel(activePanel);
+
+  return (
+    <aside
+      aria-label={panel.label}
+      className={cn(
+        "bg-editor-chrome border-editor-border flex shrink-0 flex-col",
+        // Phones: a sheet docked between the stage and the rail. It takes real
+        // layout space rather than overlaying, so zoom-to-fit sees the smaller
+        // stage and keeps the page fully visible.
+        "order-2 h-[42dvh] border-t",
+        // Desktop: a column between the rail and the stage.
+        "md:order-none md:h-auto md:w-72 md:border-t-0 md:border-r",
+      )}
+    >
+      <div className="border-editor-border flex items-start gap-2 border-b px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">{panel.label}</h2>
+          <p className="text-muted-foreground truncate text-xs">{panel.hint}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setPanel(null)}
+          aria-label="Tutup panel"
+        >
+          <X />
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-3 p-4">
+          <PanelBody panel={activePanel} />
+        </div>
+      </ScrollArea>
+    </aside>
+  );
+}
