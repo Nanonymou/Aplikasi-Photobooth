@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Spline } from "lucide-react";
+import { Plus, Spline } from "lucide-react";
 
 import {
   ALL_CATEGORY,
@@ -21,12 +21,14 @@ import {
   type StickerItem,
   type TextStyleItem,
 } from "@/lib/editor/decorations";
+import { Button } from "@/components/ui/button";
 import { useRecentStickers } from "@/hooks/use-recent-stickers";
+import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { createId } from "@/lib/editor/id";
 import { getPattern, patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import { arcHeight } from "@/lib/editor/text-path";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { PageBackground } from "@/types/editor";
+import type { PageBackground, TextObject } from "@/types/editor";
 
 /** Shared search + category filtering for every library panel. */
 function useLibrary<T extends LibraryItem>(items: T[]) {
@@ -253,6 +255,70 @@ export function TextPanel() {
     useLibrary(TEXT_STYLES);
   const page = useActivePage();
   const addObject = useEditorStore((state) => state.addObject);
+  const updateObject = useEditorStore((state) => state.updateObject);
+  const [forceAdd, setForceAdd] = useState(false);
+
+  // With a single text object selected, a style restyles it in place — that is
+  // what "pick a style" means once something is already on the canvas. Adding a
+  // second copy would be the surprising outcome.
+  const selectedText = useSelectedObjects().find(
+    (object): object is TextObject => object.kind === "text",
+  );
+  const target = forceAdd ? null : selectedText;
+
+  /** Visual properties a preset carries; content and geometry stay put. */
+  function styleOf(style: TextStyleItem): Partial<TextObject> {
+    return {
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      letterSpacing: style.letterSpacing,
+      fill: style.fill,
+      gradient: style.gradient ?? null,
+      stroke: style.stroke ?? null,
+      strokeWidth: style.strokeWidth ?? 0,
+      shadow: style.shadow ?? null,
+      curve: style.curve ?? 0,
+      italic: style.italic ?? false,
+    };
+  }
+
+  function pick(style: TextStyleItem) {
+    const curve = style.curve ?? 0;
+
+    if (target) {
+      updateObject(target.id, {
+        ...styleOf(style),
+        // Keep room for the arc so curved text is not clipped by the old box.
+        height: Math.round(
+          style.fontSize * 1.4 + arcHeight(target.width, curve),
+        ),
+      });
+      return;
+    }
+
+    const width = Math.round(page.width * 0.8);
+    const height = Math.round(style.fontSize * 1.4 + arcHeight(width, curve));
+
+    addObject({
+      id: createId("text"),
+      kind: "text",
+      name: style.label,
+      x: (page.width - width) / 2,
+      y: (page.height - height) / 2,
+      width,
+      height,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+      visible: true,
+      text: style.text,
+      fontFamily: "var(--font-geist-sans)",
+      lineHeight: 1.2,
+      align: "center",
+      ...styleOf(style),
+    } as TextObject);
+    setForceAdd(false);
+  }
 
   return (
     <LibraryPanel
@@ -263,6 +329,42 @@ export function TextPanel() {
       activeCategory={category}
       onCategoryChange={setCategory}
       resultCount={results.length}
+      footer={
+        <div className="border-editor-border flex items-center gap-2 rounded-lg border p-2.5">
+          <p className="text-muted-foreground min-w-0 flex-1 text-[11px] leading-relaxed">
+            {target ? (
+              <>
+                Gaya diterapkan ke{" "}
+                <span className="text-foreground font-medium">
+                  {target.name}
+                </span>
+              </>
+            ) : (
+              "Gaya menambahkan teks baru di tengah halaman."
+            )}
+          </p>
+          {target ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setForceAdd(true)}
+            >
+              <Plus />
+              Teks baru
+            </Button>
+          ) : (
+            selectedText && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setForceAdd(false)}
+              >
+                Ke objek terpilih
+              </Button>
+            )
+          )}
+        </div>
+      }
     >
       <div className="flex flex-col gap-2">
         {results.map((style) => {
@@ -272,45 +374,11 @@ export function TextPanel() {
             <button
               key={style.id}
               type="button"
-              onClick={() => {
-                const width = Math.round(page.width * 0.8);
-                // Curved text needs room for the arc on top of the line box.
-                const height = Math.round(
-                  style.fontSize * 1.4 + arcHeight(width, curve),
-                );
-
-                addObject({
-                  id: createId("text"),
-                  kind: "text",
-                  name: style.label,
-                  x: (page.width - width) / 2,
-                  y: (page.height - height) / 2,
-                  width,
-                  height,
-                  rotation: 0,
-                  opacity: 1,
-                  locked: false,
-                  visible: true,
-                  text: style.text,
-                  fontFamily: "var(--font-geist-sans)",
-                  fontSize: style.fontSize,
-                  fontWeight: style.fontWeight,
-                  letterSpacing: style.letterSpacing,
-                  lineHeight: 1.2,
-                  align: "center",
-                  fill: style.fill,
-                  gradient: style.gradient ?? null,
-                  stroke: style.stroke ?? null,
-                  strokeWidth: style.strokeWidth ?? 0,
-                  shadow: style.shadow ?? null,
-                  curve,
-                  italic: style.italic ?? false,
-                });
-              }}
+              onClick={() => pick(style)}
               className="bg-editor-surface border-editor-border hover:border-primary/60 hover:bg-accent focus-visible:ring-ring/50 flex min-w-0 flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left outline-none focus-visible:ring-[3px]"
             >
               <span className="max-w-full truncate" style={previewStyle(style)}>
-                {style.text}
+                {target ? target.text : style.text}
               </span>
               <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
                 {curve !== 0 && <Spline className="size-3" />}
