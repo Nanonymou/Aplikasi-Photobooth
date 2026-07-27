@@ -24,6 +24,12 @@ const HISTORY_LIMIT = 50;
  */
 export type ZoomMode = "fit" | "manual";
 
+/** A patch aimed at one object, used for batched multi-object edits. */
+export interface ObjectUpdate {
+  id: string;
+  patch: Partial<CanvasObject>;
+}
+
 export interface EditorState {
   project: EditorProject;
   activePageId: string;
@@ -36,6 +42,11 @@ export interface EditorState {
   pan: { x: number; y: number };
   past: EditorProject[];
   future: EditorProject[];
+  /**
+   * Project state captured when a continuous gesture (a drag, a resize) starts,
+   * so the whole gesture collapses into a single undo step.
+   */
+  interactionSnapshot: EditorProject | null;
 
   setActiveTool: (tool: ToolId) => void;
   togglePanel: (panel: PanelId) => void;
@@ -56,7 +67,11 @@ export interface EditorState {
 
   renameProject: (title: string) => void;
   updateObject: (id: string, patch: Partial<CanvasObject>) => void;
+  updateObjects: (updates: ObjectUpdate[]) => void;
   removeSelected: () => void;
+
+  beginInteraction: () => void;
+  endInteraction: () => void;
 
   undo: () => void;
   redo: () => void;
@@ -104,6 +119,7 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   pan: { x: 0, y: 0 },
   past: [],
   future: [],
+  interactionSnapshot: null,
 
   setActiveTool: (activeTool) => set({ activeTool }),
 
@@ -170,6 +186,47 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         })),
       ),
     ),
+
+  /**
+   * Applies several patches at once WITHOUT touching history — the update path
+   * for continuous gestures. Wrap a gesture in `beginInteraction` /
+   * `endInteraction` so it lands as one undo step.
+   */
+  updateObjects: (updates) =>
+    set((state) => {
+      if (updates.length === 0) return {};
+      const byId = new Map(updates.map((update) => [update.id, update.patch]));
+
+      return {
+        project: withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          objects: page.objects.map((object) => {
+            const patch = byId.get(object.id);
+            return patch ? ({ ...object, ...patch } as CanvasObject) : object;
+          }),
+        })),
+      };
+    }),
+
+  beginInteraction: () =>
+    set((state) =>
+      // A gesture already in flight keeps its original snapshot.
+      state.interactionSnapshot ? {} : { interactionSnapshot: state.project },
+    ),
+
+  endInteraction: () =>
+    set((state) => {
+      const snapshot = state.interactionSnapshot;
+      if (!snapshot) return {};
+      // A click that never moved anything should not create an undo step.
+      if (snapshot === state.project) return { interactionSnapshot: null };
+
+      return {
+        past: [...state.past, snapshot].slice(-HISTORY_LIMIT),
+        future: [],
+        interactionSnapshot: null,
+      };
+    }),
 
   removeSelected: () =>
     set((state) => {

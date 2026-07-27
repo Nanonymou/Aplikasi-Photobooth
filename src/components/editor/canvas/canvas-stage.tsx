@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
-import { Group, Layer, Rect, Stage } from "react-konva";
+import { Group, Layer, Line, Rect, Stage } from "react-konva";
 
+import { useObjectDrag } from "@/hooks/use-object-drag";
 import { useEditorStore, useActivePage, ZOOM_MAX, ZOOM_MIN } from "@/store/editor-store";
 import type { CanvasPage, PageBackground } from "@/types/editor";
 
@@ -116,6 +117,8 @@ export function CanvasStage() {
   const fitted = fitZoom(page, viewport.width, viewport.height);
   const effectiveZoom = zoomMode === "fit" ? fitted : zoom;
 
+  const drag = useObjectDrag(page, effectiveZoom);
+
   // Keep the store's zoom readout in sync while fitting, so the toolbar shows the
   // real percentage instead of a stale manual value.
   const syncedFit = useRef<number>(0);
@@ -149,12 +152,29 @@ export function CanvasStage() {
     [clearSelection],
   );
 
-  const handleSelect = useCallback(
+  const handlePointerDown = useCallback(
     (id: string, additive: boolean) => {
-      if (additive) toggleSelect(id);
-      else select([id]);
+      if (additive) {
+        toggleSelect(id);
+        return;
+      }
+      // Pressing on an object that is already part of a multi-selection must
+      // keep that selection, otherwise the group could never be dragged.
+      if (useEditorStore.getState().selectedIds.includes(id)) return;
+      select([id]);
     },
     [select, toggleSelect],
+  );
+
+  const handleClick = useCallback(
+    (id: string, additive: boolean) => {
+      if (additive) return; // Already handled on pointer down.
+
+      // Clicking (without dragging) a member of a multi-selection isolates it.
+      const { selectedIds: current } = useEditorStore.getState();
+      if (current.length > 1 && current.includes(id)) select([id]);
+    },
+    [select],
   );
 
   const panning = activeTool === "hand";
@@ -212,7 +232,28 @@ export function CanvasStage() {
                   key={object.id}
                   object={object}
                   selected={selectedIds.includes(object.id)}
-                  onSelect={handleSelect}
+                  draggable={!panning && !object.locked}
+                  onPointerDown={handlePointerDown}
+                  onClick={handleClick}
+                  onDragStart={drag.onDragStart}
+                  onDragMove={drag.onDragMove}
+                  onDragEnd={drag.onDragEnd}
+                />
+              ))}
+
+              {drag.guides.map((guide) => (
+                <Line
+                  key={`${guide.axis}-${guide.position}`}
+                  points={
+                    guide.axis === "x"
+                      ? [guide.position, 0, guide.position, page.height]
+                      : [0, guide.position, page.width, guide.position]
+                  }
+                  stroke="#f472b6"
+                  strokeWidth={1}
+                  dash={[6, 4]}
+                  strokeScaleEnabled={false}
+                  listening={false}
                 />
               ))}
             </Group>

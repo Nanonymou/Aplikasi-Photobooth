@@ -1,5 +1,6 @@
 "use client";
 
+import type Konva from "konva";
 import { Ellipse, Group, Image as KonvaImage, Rect, Text } from "react-konva";
 
 import { useImage } from "@/hooks/use-image";
@@ -216,11 +217,21 @@ function BasicShape({ object }: ObjectProps<ShapeObject>) {
 export function CanvasObjectNode({
   object,
   selected,
-  onSelect,
+  draggable,
+  onPointerDown,
+  onClick,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }: {
   object: CanvasObject;
   selected: boolean;
-  onSelect: (id: string, additive: boolean) => void;
+  draggable: boolean;
+  onPointerDown: (id: string, additive: boolean) => void;
+  onClick: (id: string, additive: boolean) => void;
+  onDragStart: (id: string, node: Konva.Node) => void;
+  onDragMove: (id: string, node: Konva.Node) => void;
+  onDragEnd: (id: string, node: Konva.Node) => void;
 }) {
   if (!object.visible) return null;
 
@@ -237,13 +248,36 @@ export function CanvasObjectNode({
       rotation={object.rotation}
       opacity={object.opacity}
       listening={!object.locked}
+      draggable={draggable}
       onMouseDown={(event) => {
         event.cancelBubble = true;
-        onSelect(object.id, event.evt.shiftKey);
+        onPointerDown(object.id, event.evt.shiftKey);
       }}
       onTouchStart={(event) => {
         event.cancelBubble = true;
-        onSelect(object.id, false);
+        onPointerDown(object.id, false);
+      }}
+      // Konva suppresses `click` after a drag, so this only fires on a real
+      // click — which is where collapsing a multi-selection belongs.
+      onClick={(event) => {
+        event.cancelBubble = true;
+        onClick(object.id, event.evt.shiftKey);
+      }}
+      onTap={(event) => {
+        event.cancelBubble = true;
+        onClick(object.id, false);
+      }}
+      onDragStart={(event) => onDragStart(object.id, event.target)}
+      onDragMove={(event) => onDragMove(object.id, event.target)}
+      onDragEnd={(event) => onDragEnd(object.id, event.target)}
+      onMouseEnter={(event) => {
+        if (!draggable) return;
+        const container = event.target.getStage()?.container();
+        if (container) container.style.cursor = "move";
+      }}
+      onMouseLeave={(event) => {
+        const container = event.target.getStage()?.container();
+        if (container) container.style.cursor = "";
       }}
     >
       {object.kind === "slot" && <PhotoSlot object={object} />}
@@ -251,6 +285,13 @@ export function CanvasObjectNode({
       {object.kind === "text" && <TextLayer object={object} />}
       {object.kind === "sticker" && <Sticker object={object} />}
       {object.kind === "shape" && <BasicShape object={object} />}
+
+      {/*
+        The artwork itself is not hit-testable: text glyphs and emoji cover only
+        a fraction of their box, which would make objects fiddly to grab. This
+        transparent rect gives every object the same full-bounds grab target.
+      */}
+      <Rect width={object.width} height={object.height} fill="transparent" />
 
       {selected && (
         <Rect
