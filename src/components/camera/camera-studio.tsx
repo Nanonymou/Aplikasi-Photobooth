@@ -16,7 +16,13 @@ import {
   ZapOff,
 } from "lucide-react";
 
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+
 import { CameraPreview } from "@/components/camera/camera-preview";
+import {
+  CameraStatusChip,
+  SlotProgress,
+} from "@/components/camera/camera-status";
 import { FlashOverlay } from "@/components/camera/flash-overlay";
 import { ShotGallery } from "@/components/camera/shot-gallery";
 import { Button } from "@/components/ui/button";
@@ -170,6 +176,7 @@ function SlotQueue({
 export function CameraStudio() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const camera = useCamera();
+  const reduceMotion = useReducedMotion();
   useAutosave();
 
   const [demoRequested, setDemoRequested] = useState(false);
@@ -446,6 +453,11 @@ export function CameraStudio() {
               Bergaya di depan kamera, lalu tekan jepret untuk mengisi frame.
             </p>
           </div>
+          <CameraStatusChip
+            status={status}
+            demoMode={demoMode}
+            className="ml-auto"
+          />
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
@@ -496,8 +508,18 @@ export function CameraStudio() {
             </div>
 
             <div className="flex flex-col items-center gap-3">
+              {/* The two control sets swap in place; `mode="wait"` keeps the
+                  row from doubling in height mid-transition. */}
+              <AnimatePresence mode="wait" initial={false}>
               {pending ? (
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <motion.div
+                  key="review"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="flex flex-wrap items-center justify-center gap-3"
+                >
                   <Button size="lg" className="min-w-40" onClick={keepShot}>
                     <Check />
                     Pakai foto
@@ -511,9 +533,16 @@ export function CameraStudio() {
                     <RotateCcw />
                     Ambil ulang
                   </Button>
-                </div>
+                </motion.div>
               ) : (
-                <div className="flex flex-col items-center gap-3">
+                <motion.div
+                  key="shoot"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="flex flex-col items-center gap-3"
+                >
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <TimerPicker
                       value={timer}
@@ -597,8 +626,9 @@ export function CameraStudio() {
                       </Button>
                     )}
                   </div>
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
 
               <input
                 ref={fileInputRef}
@@ -631,6 +661,7 @@ export function CameraStudio() {
           </div>
 
           <aside className="flex flex-col gap-4">
+            <SlotProgress filled={filled} total={slots.length} />
             <SlotQueue slots={slots} target={target} onTarget={setTarget} />
 
             {camera.devices.length > 1 && !demoMode && (

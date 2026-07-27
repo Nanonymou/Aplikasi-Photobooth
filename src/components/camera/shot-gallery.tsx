@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Images, RotateCcw, Trash2 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,8 @@ export function ShotGallery({
   onRetake: (shot: CapturedShot) => void;
   onDelete: (shot: CapturedShot) => void;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <section className="flex min-h-0 flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -55,9 +58,15 @@ export function ShotGallery({
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {shots.map((shot) => (
-            <li
+          <AnimatePresence initial={false}>
+            {shots.map((shot) => (
+            <motion.li
               key={shot.id}
+              layout={!reduceMotion}
+              initial={reduceMotion ? false : { opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 24 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
               className="border-editor-border flex items-center gap-3 rounded-lg border p-2"
             >
               {/* Data URLs and local samples — next/image adds nothing here. */}
@@ -114,8 +123,9 @@ export function ShotGallery({
                   <TooltipContent>Hapus dari sesi</TooltipContent>
                 </Tooltip>
               </div>
-            </li>
-          ))}
+            </motion.li>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
     </section>
