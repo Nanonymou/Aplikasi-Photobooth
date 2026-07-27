@@ -231,7 +231,7 @@ function BasicShape({ object }: ObjectProps<ShapeObject>) {
  */
 export function CanvasObjectNode({
   object,
-  selected,
+  outlined,
   draggable,
   onPointerDown,
   onClick,
@@ -240,7 +240,8 @@ export function CanvasObjectNode({
   onDragEnd,
 }: {
   object: CanvasObject;
-  selected: boolean;
+  /** Draws the dashed group-membership outline (multi-selection only). */
+  outlined: boolean;
   draggable: boolean;
   onPointerDown: (id: string, additive: boolean) => void;
   onClick: (id: string, additive: boolean) => void;
@@ -308,7 +309,7 @@ export function CanvasObjectNode({
       */}
       <Rect width={object.width} height={object.height} fill="transparent" />
 
-      {selected && (
+      {outlined && (
         <Rect
           width={object.width}
           height={object.height}

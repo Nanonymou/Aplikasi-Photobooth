@@ -5,10 +5,22 @@ import type Konva from "konva";
 import { Group, Layer, Line, Rect, Stage } from "react-konva";
 
 import { useObjectDrag } from "@/hooks/use-object-drag";
-import { useEditorStore, useActivePage, ZOOM_MAX, ZOOM_MIN } from "@/store/editor-store";
-import type { CanvasPage, PageBackground } from "@/types/editor";
+import {
+  useEditorStore,
+  useActivePage,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  type ObjectUpdate,
+} from "@/store/editor-store";
+import type {
+  CanvasObject,
+  CanvasPage,
+  PageBackground,
+  TextObject,
+} from "@/types/editor";
 
 import { CanvasObjectNode } from "./canvas-object";
+import { MIN_OBJECT_SIZE, SelectionTransformer } from "./selection-transformer";
 
 /** Breathing room between the page edge and the viewport when zoom-to-fit runs. */
 const FIT_PADDING = 48;
@@ -93,6 +105,7 @@ function fitZoom(page: CanvasPage, width: number, height: number) {
 
 export function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const viewport = useViewportSize(containerRef);
   const page = useActivePage();
 
@@ -106,6 +119,9 @@ export function CanvasStage() {
   const clearSelection = useEditorStore((state) => state.clearSelection);
   const setZoom = useEditorStore((state) => state.setZoom);
   const setPan = useEditorStore((state) => state.setPan);
+  const updateObjects = useEditorStore((state) => state.updateObjects);
+  const beginInteraction = useEditorStore((state) => state.beginInteraction);
+  const endInteraction = useEditorStore((state) => state.endInteraction);
 
   // Konva paints text to a canvas, so a late-loading webfont needs an explicit
   // repaint once it is ready — React has no reason to re-render on its own.
@@ -143,6 +159,57 @@ export function CanvasStage() {
     },
     [effectiveZoom, setZoom],
   );
+
+  /**
+   * Folds the transformer's scale back into the model.
+   *
+   * Konva resizes by scaling the node, but objects store real `width`/`height`,
+   * so the scale is baked into the size here and reset to 1. The node's
+   * `x`/`y` is the box centre (its offset is half its size), which is what makes
+   * the top-left recomputation below correct even after a rotation.
+   */
+  const handleTransformEnd = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const updates: ObjectUpdate[] = [];
+
+    for (const id of selectedIds) {
+      const node = stage.findOne(`#${id}`);
+      const object = page.objects.find((candidate) => candidate.id === id);
+      if (!node || !object) continue;
+
+      const width = Math.max(MIN_OBJECT_SIZE, object.width * node.scaleX());
+      const height = Math.max(MIN_OBJECT_SIZE, object.height * node.scaleY());
+
+      const patch: Partial<CanvasObject> = {
+        x: node.x() - width / 2,
+        y: node.y() - height / 2,
+        width,
+        height,
+        rotation: node.rotation(),
+      };
+
+      // Text keeps its own font size, so scale it with the vertical handle:
+      // corner handles then scale the type, while side handles only re-wrap it.
+      if (object.kind === "text") {
+        (patch as Partial<TextObject>).fontSize = Math.max(
+          4,
+          object.fontSize * node.scaleY(),
+        );
+      }
+
+      updates.push({ id, patch });
+      node.scaleX(1);
+      node.scaleY(1);
+    }
+
+    if (updates.length === 0) return;
+
+    beginInteraction();
+    updateObjects(updates);
+    endInteraction();
+  }, [selectedIds, page.objects, updateObjects, beginInteraction, endInteraction]);
 
   const handleStageMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -188,6 +255,7 @@ export function CanvasStage() {
     >
       {viewport.width > 0 && viewport.height > 0 && (
         <Stage
+          ref={stageRef}
           width={viewport.width}
           height={viewport.height}
           draggable={panning}
@@ -231,7 +299,11 @@ export function CanvasStage() {
                 <CanvasObjectNode
                   key={object.id}
                   object={object}
-                  selected={selectedIds.includes(object.id)}
+                  // The transformer already frames a single selection; the dashed
+                  // outline is only needed to show group membership.
+                  outlined={
+                    selectedIds.length > 1 && selectedIds.includes(object.id)
+                  }
                   draggable={!panning && !object.locked}
                   onPointerDown={handlePointerDown}
                   onClick={handleClick}
@@ -257,6 +329,14 @@ export function CanvasStage() {
                 />
               ))}
             </Group>
+
+            <SelectionTransformer
+              stageRef={stageRef}
+              selectedIds={selectedIds}
+              objects={page.objects}
+              enabled={!panning}
+              onTransformEnd={handleTransformEnd}
+            />
           </Layer>
         </Stage>
       )}
