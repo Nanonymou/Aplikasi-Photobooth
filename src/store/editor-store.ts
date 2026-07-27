@@ -21,6 +21,10 @@ const ZOOM_STEPS = [
 ] as const;
 const HISTORY_LIMIT = 50;
 
+/** Nudge applied to a new object that would land exactly on an existing one. */
+const CASCADE_OFFSET = 48;
+const MAX_CASCADE_STEPS = 12;
+
 /**
  * `fit` keeps the page scaled to the viewport (and re-fits on resize); any manual
  * zoom switches to `manual` and pins the value the user chose.
@@ -318,16 +322,45 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     }),
 
   addObject: (object) =>
-    set((state) => ({
-      ...commit(
-        state,
-        withActivePage(state.project, state.activePageId, (page) => ({
-          ...page,
-          objects: [...page.objects, object],
-        })),
-      ),
-      selectedIds: [object.id],
-    })),
+    set((state) => {
+      const page = state.project.pages.find(
+        (candidate) => candidate.id === state.activePageId,
+      );
+
+      // Library panels drop everything at the page centre, so adding several in
+      // a row would bury them under each other. Cascade past anything already
+      // sitting on the same spot.
+      let placed = object;
+      if (page) {
+        let step = 0;
+        while (
+          step < MAX_CASCADE_STEPS &&
+          page.objects.some(
+            (existing) =>
+              Math.abs(existing.x - placed.x) < 1 &&
+              Math.abs(existing.y - placed.y) < 1,
+          )
+        ) {
+          step += 1;
+          placed = {
+            ...object,
+            x: object.x + step * CASCADE_OFFSET,
+            y: object.y + step * CASCADE_OFFSET,
+          };
+        }
+      }
+
+      return {
+        ...commit(
+          state,
+          withActivePage(state.project, state.activePageId, (current) => ({
+            ...current,
+            objects: [...current.objects, placed],
+          })),
+        ),
+        selectedIds: [placed.id],
+      };
+    }),
 
   /**
    * Swaps the page's photo slots for a freshly generated set, leaving text,

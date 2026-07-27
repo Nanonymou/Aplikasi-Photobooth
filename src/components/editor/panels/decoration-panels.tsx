@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Spline } from "lucide-react";
 
 import {
   ALL_CATEGORY,
@@ -17,8 +18,10 @@ import {
   TEXT_STYLE_CATEGORIES,
   TEXT_STYLES,
   type LibraryItem,
+  type TextStyleItem,
 } from "@/lib/editor/decorations";
 import { createId } from "@/lib/editor/id";
+import { arcHeight } from "@/lib/editor/text-path";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PageBackground } from "@/types/editor";
 
@@ -133,6 +136,46 @@ export function BackgroundPanel() {
   );
 }
 
+/** CSS approximation of a text preset, for the panel preview. */
+function previewStyle(style: TextStyleItem): React.CSSProperties {
+  const base: React.CSSProperties = {
+    fontSize: Math.min(20, Math.max(13, style.fontSize / 3.5)),
+    fontWeight: style.fontWeight,
+    fontStyle: style.italic ? "italic" : "normal",
+    letterSpacing: style.letterSpacing / 8,
+    color: style.fill,
+  };
+
+  if (style.gradient) {
+    // background-clip:text is how the browser paints a gradient into glyphs.
+    return {
+      ...base,
+      backgroundImage: `linear-gradient(${style.gradient.angle}deg, ${style.gradient.from}, ${style.gradient.to})`,
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+      color: "transparent",
+    };
+  }
+
+  if (style.stroke && style.strokeWidth) {
+    return {
+      ...base,
+      WebkitTextStrokeWidth: Math.max(1, style.strokeWidth / 4),
+      WebkitTextStrokeColor: style.stroke,
+    };
+  }
+
+  if (style.shadow) {
+    const { offsetX, offsetY, blur, color } = style.shadow;
+    return {
+      ...base,
+      textShadow: `${offsetX / 3}px ${offsetY / 3}px ${blur / 3}px ${color}`,
+    };
+  }
+
+  return base;
+}
+
 export function TextPanel() {
   const { search, setSearch, category, setCategory, results } =
     useLibrary(TEXT_STYLES);
@@ -150,54 +193,60 @@ export function TextPanel() {
       resultCount={results.length}
     >
       <div className="flex flex-col gap-2">
-        {results.map((style) => (
-          <button
-            key={style.id}
-            type="button"
-            onClick={() => {
-              const width = Math.round(page.width * 0.8);
-              const height = Math.round(style.fontSize * 1.4);
+        {results.map((style) => {
+          const curve = style.curve ?? 0;
 
-              addObject({
-                id: createId("text"),
-                kind: "text",
-                name: style.label,
-                x: (page.width - width) / 2,
-                y: (page.height - height) / 2,
-                width,
-                height,
-                rotation: 0,
-                opacity: 1,
-                locked: false,
-                visible: true,
-                text: style.text,
-                fontFamily: "var(--font-geist-sans)",
-                fontSize: style.fontSize,
-                fontWeight: style.fontWeight,
-                letterSpacing: style.letterSpacing,
-                lineHeight: 1.2,
-                align: "center",
-                fill: style.fill,
-              });
-            }}
-            className="bg-editor-surface border-editor-border hover:border-primary/60 hover:bg-accent focus-visible:ring-ring/50 flex flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left outline-none focus-visible:ring-[3px]"
-          >
-            <span
-              className="max-w-full truncate"
-              style={{
-                fontSize: Math.min(20, style.fontSize / 3),
-                fontWeight: style.fontWeight,
-                letterSpacing: style.letterSpacing / 8,
-                color: style.fill,
+          return (
+            <button
+              key={style.id}
+              type="button"
+              onClick={() => {
+                const width = Math.round(page.width * 0.8);
+                // Curved text needs room for the arc on top of the line box.
+                const height = Math.round(
+                  style.fontSize * 1.4 + arcHeight(width, curve),
+                );
+
+                addObject({
+                  id: createId("text"),
+                  kind: "text",
+                  name: style.label,
+                  x: (page.width - width) / 2,
+                  y: (page.height - height) / 2,
+                  width,
+                  height,
+                  rotation: 0,
+                  opacity: 1,
+                  locked: false,
+                  visible: true,
+                  text: style.text,
+                  fontFamily: "var(--font-geist-sans)",
+                  fontSize: style.fontSize,
+                  fontWeight: style.fontWeight,
+                  letterSpacing: style.letterSpacing,
+                  lineHeight: 1.2,
+                  align: "center",
+                  fill: style.fill,
+                  gradient: style.gradient ?? null,
+                  stroke: style.stroke ?? null,
+                  strokeWidth: style.strokeWidth ?? 0,
+                  shadow: style.shadow ?? null,
+                  curve,
+                  italic: style.italic ?? false,
+                });
               }}
+              className="bg-editor-surface border-editor-border hover:border-primary/60 hover:bg-accent focus-visible:ring-ring/50 flex min-w-0 flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left outline-none focus-visible:ring-[3px]"
             >
-              {style.text}
-            </span>
-            <span className="text-muted-foreground text-[11px]">
-              {style.label}
-            </span>
-          </button>
-        ))}
+              <span className="max-w-full truncate" style={previewStyle(style)}>
+                {style.text}
+              </span>
+              <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                {curve !== 0 && <Spline className="size-3" />}
+                {style.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </LibraryPanel>
   );

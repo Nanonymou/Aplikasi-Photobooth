@@ -83,6 +83,24 @@ export interface ImageObject extends BaseObject {
   cornerRadius: number;
 }
 
+export interface TextGradient {
+  from: string;
+  to: string;
+  /** Degrees, clockwise from "to top", matching CSS `linear-gradient`. */
+  angle: number;
+}
+
+export interface TextShadow {
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * Artistic properties are all optional so plain text stays plain — a preset only
+ * sets the ones it needs, and older saved objects keep rendering unchanged.
+ */
 export interface TextObject extends BaseObject {
   kind: "text";
   text: string;
@@ -93,6 +111,17 @@ export interface TextObject extends BaseObject {
   lineHeight: number;
   align: "left" | "center" | "right";
   fill: string;
+  /** Overrides `fill` when set. */
+  gradient?: TextGradient | null;
+  stroke?: string | null;
+  strokeWidth?: number;
+  shadow?: TextShadow | null;
+  /**
+   * Arc of the baseline in degrees. 0 is a straight line; positive bulges the
+   * text upward, negative downward.
+   */
+  curve?: number;
+  italic?: boolean;
 }
 
 export interface StickerObject extends BaseObject {

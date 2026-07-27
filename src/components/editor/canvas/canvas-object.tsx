@@ -8,11 +8,13 @@ import {
   Rect,
   Shape,
   Text,
+  TextPath,
 } from "react-konva";
 
 import { useImage } from "@/hooks/use-image";
 import { resolveFontFamily } from "@/lib/editor/fonts";
 import { coverScale, traceSlotPath } from "@/lib/editor/slot-shape";
+import { arcPathData } from "@/lib/editor/text-path";
 import type {
   CanvasObject,
   ImageObject,
@@ -162,19 +164,93 @@ function FreeImage({ object }: ObjectProps<ImageObject>) {
   );
 }
 
+/** Shared paint settings so straight and curved text look identical. */
+function textPaint(object: TextObject) {
+  const fontStyle = [
+    object.italic ? "italic" : "",
+    object.fontWeight >= 600 ? "bold" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const gradient = object.gradient
+    ? (() => {
+        // Same angle convention as CSS: 0deg points up, growing clockwise.
+        const radians = ((object.gradient.angle - 90) * Math.PI) / 180;
+        const dx = Math.cos(radians);
+        const dy = Math.sin(radians);
+        const height = object.fontSize * object.lineHeight;
+        const length = Math.abs(object.width * dx) + Math.abs(height * dy);
+
+        return {
+          fillLinearGradientStartPoint: {
+            x: object.width / 2 - (dx * length) / 2,
+            y: height / 2 - (dy * length) / 2,
+          },
+          fillLinearGradientEndPoint: {
+            x: object.width / 2 + (dx * length) / 2,
+            y: height / 2 + (dy * length) / 2,
+          },
+          fillLinearGradientColorStops: [
+            0,
+            object.gradient.from,
+            1,
+            object.gradient.to,
+          ],
+        };
+      })()
+    : {};
+
+  return {
+    fontSize: object.fontSize,
+    fontFamily: resolveFontFamily(object.fontFamily),
+    fontStyle: fontStyle || "normal",
+    letterSpacing: object.letterSpacing,
+    fill: object.fill,
+    ...gradient,
+    ...(object.stroke && object.strokeWidth
+      ? {
+          stroke: object.stroke,
+          strokeWidth: object.strokeWidth,
+          // Without this the outline is painted over the fill and swallows thin
+          // letterforms; drawing the fill last keeps the glyphs readable.
+          fillAfterStrokeEnabled: true,
+        }
+      : {}),
+    ...(object.shadow
+      ? {
+          shadowColor: object.shadow.color,
+          shadowBlur: object.shadow.blur,
+          shadowOffsetX: object.shadow.offsetX,
+          shadowOffsetY: object.shadow.offsetY,
+        }
+      : {}),
+  };
+}
+
 function TextLayer({ object }: ObjectProps<TextObject>) {
+  const curve = object.curve ?? 0;
+
+  if (Math.abs(curve) >= 0.5) {
+    return (
+      <TextPath
+        text={object.text}
+        data={arcPathData(object.width, curve)}
+        align={object.align}
+        listening={false}
+        {...textPaint(object)}
+      />
+    );
+  }
+
   return (
     <Text
       text={object.text}
       width={object.width}
-      fontSize={object.fontSize}
-      fontFamily={resolveFontFamily(object.fontFamily)}
-      fontStyle={object.fontWeight >= 600 ? "bold" : "normal"}
-      letterSpacing={object.letterSpacing}
       lineHeight={object.lineHeight}
       align={object.align}
-      fill={object.fill}
       listening={false}
+      {...textPaint(object)}
     />
   );
 }

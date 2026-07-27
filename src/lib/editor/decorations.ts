@@ -1,5 +1,9 @@
 import type { LibraryCategory } from "@/components/editor/panels/library-panel";
-import type { PageBackground } from "@/types/editor";
+import type {
+  PageBackground,
+  TextGradient,
+  TextShadow,
+} from "@/types/editor";
 
 /** Shared shape for anything listed in a decoration library. */
 export interface LibraryItem {
@@ -24,6 +28,13 @@ export interface TextStyleItem extends LibraryItem {
   fontWeight: number;
   letterSpacing: number;
   fill: string;
+  gradient?: TextGradient;
+  stroke?: string;
+  strokeWidth?: number;
+  shadow?: TextShadow;
+  /** Degrees of baseline arc; positive bulges upward. */
+  curve?: number;
+  italic?: boolean;
 }
 
 export const STICKER_CATEGORIES: LibraryCategory[] = [
@@ -100,6 +111,8 @@ export const BACKGROUNDS: BackgroundItem[] = [
 
 export const TEXT_STYLE_CATEGORIES: LibraryCategory[] = [
   { id: "judul", label: "Judul" },
+  { id: "artistik", label: "Artistik" },
+  { id: "lengkung", label: "Lengkung" },
   { id: "caption", label: "Caption" },
 ];
 
@@ -125,6 +138,116 @@ export const TEXT_STYLES: TextStyleItem[] = [
     fill: "#0f172a",
   },
   {
+    id: "judul-miring",
+    label: "Judul miring",
+    category: "judul",
+    keywords: ["italic", "elegan"],
+    text: "Momen Terbaik",
+    fontSize: 58,
+    fontWeight: 400,
+    letterSpacing: 1,
+    fill: "#1e293b",
+    italic: true,
+  },
+  {
+    id: "gradasi-senja",
+    label: "Gradasi senja",
+    category: "artistik",
+    keywords: ["gradient", "warna", "sunset"],
+    text: "SUNSET",
+    fontSize: 72,
+    fontWeight: 700,
+    letterSpacing: 6,
+    fill: "#fb7185",
+    gradient: { from: "#fb7185", to: "#fbbf24", angle: 135 },
+  },
+  {
+    id: "gradasi-ungu",
+    label: "Gradasi ungu",
+    category: "artistik",
+    keywords: ["gradient", "wisuda"],
+    text: "WISUDA",
+    fontSize: 72,
+    fontWeight: 700,
+    letterSpacing: 10,
+    fill: "#a855f7",
+    gradient: { from: "#a855f7", to: "#38bdf8", angle: 90 },
+  },
+  {
+    id: "outline",
+    label: "Outline",
+    category: "artistik",
+    keywords: ["garis", "kosong", "stroke"],
+    text: "OUTLINE",
+    fontSize: 72,
+    fontWeight: 700,
+    letterSpacing: 6,
+    fill: "#ffffff",
+    stroke: "#0f172a",
+    strokeWidth: 4,
+  },
+  {
+    id: "bayangan",
+    label: "Bayangan tebal",
+    category: "artistik",
+    keywords: ["shadow", "drop"],
+    text: "POP!",
+    fontSize: 84,
+    fontWeight: 700,
+    letterSpacing: 4,
+    fill: "#fbbf24",
+    shadow: { color: "#0f172a", blur: 0, offsetX: 8, offsetY: 8 },
+  },
+  {
+    id: "glow",
+    label: "Glow lembut",
+    category: "artistik",
+    keywords: ["cahaya", "neon"],
+    text: "GLOW",
+    fontSize: 76,
+    fontWeight: 700,
+    letterSpacing: 8,
+    fill: "#f0abfc",
+    shadow: { color: "#a855f7", blur: 28, offsetX: 0, offsetY: 0 },
+  },
+  {
+    id: "lengkung-atas",
+    label: "Melengkung ke atas",
+    category: "lengkung",
+    keywords: ["curve", "arc", "melengkung"],
+    text: "SELAMAT WISUDA",
+    fontSize: 56,
+    fontWeight: 700,
+    letterSpacing: 4,
+    fill: "#4c1d95",
+    curve: 60,
+  },
+  {
+    id: "lengkung-bawah",
+    label: "Melengkung ke bawah",
+    category: "lengkung",
+    keywords: ["curve", "arc", "melengkung"],
+    text: "TERIMA KASIH",
+    fontSize: 56,
+    fontWeight: 700,
+    letterSpacing: 4,
+    fill: "#0f766e",
+    curve: -60,
+  },
+  {
+    id: "lengkung-gradasi",
+    label: "Lengkung gradasi",
+    category: "lengkung",
+    keywords: ["curve", "gradient"],
+    text: "HAPPY BIRTHDAY",
+    fontSize: 52,
+    fontWeight: 700,
+    letterSpacing: 3,
+    fill: "#fb7185",
+    gradient: { from: "#fb7185", to: "#a855f7", angle: 90 },
+    curve: 80,
+  },
+  {
     id: "caption-kecil",
     label: "Caption kecil",
     category: "caption",
@@ -144,6 +267,18 @@ export const TEXT_STYLES: TextStyleItem[] = [
     letterSpacing: 6,
     fill: "#7c3aed",
     keywords: ["date"],
+  },
+  {
+    id: "lokasi",
+    label: "Lokasi",
+    category: "caption",
+    keywords: ["tempat", "venue"],
+    text: "Bandung, Indonesia",
+    fontSize: 30,
+    fontWeight: 400,
+    letterSpacing: 2,
+    fill: "#475569",
+    italic: true,
   },
 ];
 
