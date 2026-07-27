@@ -23,10 +23,45 @@ import {
 } from "@/lib/editor/image-adjust";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { PhotoSlotObject } from "@/types/editor";
+import {
+  suggestLayouts,
+  type LayoutSuggestion,
+} from "@/lib/editor/layout-suggestions";
+import type { CanvasPage, PhotoSlotObject } from "@/types/editor";
 
 /** Starting strength for tools with an intensity dial. */
 const DEFAULT_INTENSITY = 0.6;
+
+/** Thumbnail of a proposed arrangement, drawn from its boxes. */
+function LayoutThumb({
+  page,
+  suggestion,
+}: {
+  page: CanvasPage;
+  suggestion: LayoutSuggestion;
+}) {
+  return (
+    <svg
+      viewBox={`0 0 ${page.width} ${page.height}`}
+      className="size-full"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+    >
+      <rect width={page.width} height={page.height} fill="#ffffff" />
+      {suggestion.boxes.map((box, index) => (
+        <rect
+          key={index}
+          x={box.x}
+          y={box.y}
+          width={box.width}
+          height={box.height}
+          rx={Math.min(box.width, box.height) * 0.08}
+          fill="#c4b5fd"
+        />
+      ))}
+    </svg>
+  );
+}
 
 /** What the tools will act on, and whether that is currently possible. */
 function TargetSummary({ slot }: { slot: PhotoSlotObject | null }) {
@@ -165,9 +200,13 @@ export function AiPanel() {
   // Per-tool strength, remembered across runs within the session.
   const [intensities, setIntensities] = useState<Record<string, number>>({});
   const updateObjects = useEditorStore((state) => state.updateObjects);
+  const beginInteraction = useEditorStore((state) => state.beginInteraction);
+  const endInteraction = useEditorStore((state) => state.endInteraction);
+  const page = useActivePage();
   // Holds the enhanced source while the original is being peeked at, so it can
   // be put back on release.
   const [peeking, setPeeking] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<LayoutSuggestion[]>([]);
 
   const slot =
     useSelectedObjects().find(
@@ -218,6 +257,14 @@ export function AiPanel() {
       };
     }
 
+    if (tool.id === "auto-layout") {
+      return () => {
+        // Proposals only: rearranging the page without asking would be rude
+        // when the user may have positioned the slots deliberately.
+        setSuggestions(suggestLayouts(page));
+      };
+    }
+
     // Every other enhancement lands in its own task.
     return () => {};
   }
@@ -239,6 +286,20 @@ export function AiPanel() {
     if (!peeking) return;
     updateObjects([{ id: slot.id, patch: { photo: { ...photo, src: peeking } } }]);
     setPeeking(null);
+  }
+
+  function applyLayout(suggestion: LayoutSuggestion) {
+    const slots = page.objects.filter((object) => object.kind === "slot");
+
+    beginInteraction();
+    updateObjects(
+      slots.map((slot, index) => ({
+        id: slot.id,
+        patch: suggestion.boxes[index] ?? {},
+      })),
+    );
+    endInteraction();
+    setSuggestions([]);
   }
 
   function revert() {
@@ -313,6 +374,35 @@ export function AiPanel() {
           <Button variant="ghost" size="sm" onClick={revert} disabled={busy}>
             <RotateCcw />
             Kembalikan foto asli
+          </Button>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="border-editor-border flex flex-col gap-2 rounded-lg border p-2.5">
+          <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+            {suggestions.length} usulan tata letak
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                type="button"
+                onClick={() => applyLayout(suggestion)}
+                title={suggestion.label}
+                className="border-editor-border hover:border-primary/60 hover:bg-accent focus-visible:ring-ring/50 flex min-w-0 flex-col gap-1 rounded-lg border p-1.5 outline-none focus-visible:ring-[3px]"
+              >
+                <span className="bg-editor-surface flex h-20 items-center justify-center overflow-hidden rounded">
+                  <LayoutThumb page={page} suggestion={suggestion} />
+                </span>
+                <span className="truncate text-[11px] font-medium">
+                  {suggestion.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setSuggestions([])}>
+            Tutup usulan
           </Button>
         </div>
       )}
