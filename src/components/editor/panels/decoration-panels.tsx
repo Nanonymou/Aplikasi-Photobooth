@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRecentStickers } from "@/hooks/use-recent-stickers";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
+import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
 import { getPattern, patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import { arcHeight } from "@/lib/editor/text-path";
@@ -129,6 +130,9 @@ export function StickerPanel() {
                   key={`recent-${sticker.id}`}
                   label={sticker.label}
                   onClick={() => place(sticker)}
+                  onDragStart={(event) =>
+                    event.dataTransfer.setData(STICKER_DRAG_TYPE, sticker.id)
+                  }
                 >
                   <span className="text-2xl">{sticker.glyph}</span>
                 </LibraryTile>
@@ -149,6 +153,9 @@ export function StickerPanel() {
                 key={sticker.id}
                 label={sticker.label}
                 onClick={() => place(sticker)}
+                onDragStart={(event) =>
+                  event.dataTransfer.setData(STICKER_DRAG_TYPE, sticker.id)
+                }
               >
                 <span className="text-2xl">{sticker.glyph}</span>
               </LibraryTile>

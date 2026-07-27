@@ -137,11 +137,14 @@ export function LibraryGrid({
 export function LibraryTile({
   label,
   onClick,
+  onDragStart,
   className,
   children,
 }: {
   label: string;
   onClick?: () => void;
+  /** Set to make the tile draggable onto the canvas. */
+  onDragStart?: (event: React.DragEvent<HTMLButtonElement>) => void;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -149,6 +152,8 @@ export function LibraryTile({
     <button
       type="button"
       onClick={onClick}
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
       title={label}
       aria-label={label}
       className={cn(

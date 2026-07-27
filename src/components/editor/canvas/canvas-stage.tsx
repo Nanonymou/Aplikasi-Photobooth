@@ -6,6 +6,9 @@ import { Group, Layer, Line, Rect, Stage } from "react-konva";
 
 import { useImage } from "@/hooks/use-image";
 import { useObjectDrag } from "@/hooks/use-object-drag";
+import { STICKERS } from "@/lib/editor/decorations";
+import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
+import { createId } from "@/lib/editor/id";
 import { patternDataUri, type PatternId } from "@/lib/editor/patterns";
 import {
   useEditorStore,
@@ -181,6 +184,7 @@ export function CanvasStage() {
   // Konva paints text to a canvas, so a late-loading webfont needs an explicit
   // repaint once it is ready — React has no reason to re-render on its own.
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
 
   const [, setFontsReady] = useState(false);
   useEffect(() => {
@@ -268,6 +272,45 @@ export function CanvasStage() {
     endInteraction();
   }, [selectedIds, page.objects, updateObjects, beginInteraction, endInteraction]);
 
+  /**
+   * Places a sticker dragged in from the library at the cursor, converting the
+   * drop point from screen space back into page coordinates.
+   */
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      setDropActive(false);
+
+      const stickerId = event.dataTransfer.getData(STICKER_DRAG_TYPE);
+      const sticker = STICKERS.find((item) => item.id === stickerId);
+      const container = containerRef.current;
+      if (!sticker || !container) return;
+
+      const rect = container.getBoundingClientRect();
+      const size = Math.round(Math.min(page.width, page.height) * 0.16);
+      const pageX = (event.clientX - rect.left - offsetX) / effectiveZoom;
+      const pageY = (event.clientY - rect.top - offsetY) / effectiveZoom;
+
+      useEditorStore.getState().addObject({
+        id: createId("sticker"),
+        kind: "sticker",
+        name: sticker.label,
+        // Centre the sticker on the cursor, which is where it looked like it
+        // was while being dragged.
+        x: pageX - size / 2,
+        y: pageY - size / 2,
+        width: size,
+        height: size,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        visible: true,
+        content: sticker.glyph,
+      });
+    },
+    [page.width, page.height, offsetX, offsetY, effectiveZoom],
+  );
+
   const handleDoubleClick = useCallback(
     (id: string) => {
       const object = page.objects.find((candidate) => candidate.id === id);
@@ -322,7 +365,21 @@ export function CanvasStage() {
       className="stage-checkerboard relative h-full w-full overflow-hidden"
       data-panning={panning || undefined}
       style={{ cursor: panning ? "grab" : "default" }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(STICKER_DRAG_TYPE)) return;
+        // Preventing default is what marks this as a valid drop target.
+        event.preventDefault();
+        setDropActive(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setDropActive(false);
+      }}
+      onDrop={handleDrop}
     >
+      {dropActive && (
+        <div className="border-primary pointer-events-none absolute inset-2 z-10 rounded-lg border-2 border-dashed" />
+      )}
       {viewport.width > 0 && viewport.height > 0 && (
         <Stage
           ref={stageRef}
