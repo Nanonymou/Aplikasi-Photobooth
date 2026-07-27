@@ -80,6 +80,7 @@ export function CameraPreview({
   error,
   demoMode,
   reviewSrc,
+  countdown,
   onRetry,
   onUseDemo,
 }: {
@@ -91,6 +92,8 @@ export function CameraPreview({
   demoMode: boolean;
   /** When set, the just-taken frame is frozen here for review. */
   reviewSrc?: string | null;
+  /** Seconds left before the shutter fires, or null when not counting. */
+  countdown?: number | null;
   onRetry: () => void;
   onUseDemo: () => void;
 }) {
@@ -130,6 +133,22 @@ export function CameraPreview({
             alt="Pratinjau jepretan terakhir"
             className="size-full object-cover"
           />
+        </div>
+      )}
+
+      {countdown !== null && countdown !== undefined && (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/35"
+          aria-live="assertive"
+          aria-label={`Menjepret dalam ${countdown} detik`}
+        >
+          <span
+            // `key` restarts the zoom animation on every tick.
+            key={countdown}
+            className="animate-in zoom-in-50 fade-in text-8xl font-bold text-white drop-shadow-lg tabular-nums duration-300 sm:text-9xl"
+          >
+            {countdown}
+          </span>
         </div>
       )}
 

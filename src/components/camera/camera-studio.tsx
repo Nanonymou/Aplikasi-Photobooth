@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, Check, RotateCcw } from "lucide-react";
+import { ArrowLeft, Camera, Check, RotateCcw, TimerOff, X } from "lucide-react";
 
 import { CameraPreview } from "@/components/camera/camera-preview";
 import { ShotGallery } from "@/components/camera/shot-gallery";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAutosave } from "@/hooks/use-autosave";
 import { useCamera } from "@/hooks/use-camera";
+import { useCountdown } from "@/hooks/use-countdown";
 import { captureFrame } from "@/lib/camera/capture";
 import { demoShotSource } from "@/lib/camera/demo-shots";
 import { createId } from "@/lib/editor/id";
@@ -21,6 +23,9 @@ import type { PhotoSlotObject, SlotPhoto } from "@/types/editor";
 
 /** `auto` means "the next empty slot"; otherwise a specific slot id. */
 type SlotTarget = "auto" | string;
+
+/** Self-timer choices, in seconds. 0 fires the shutter immediately. */
+const TIMER_OPTIONS = [0, 3, 5, 10] as const;
 
 /**
  * A shot waiting for the user's verdict. `previousPhoto` is what the slot held
@@ -35,6 +40,44 @@ function useSlots(): PhotoSlotObject[] {
   const page = useActivePage();
   return page.objects.filter(
     (object): object is PhotoSlotObject => object.kind === "slot",
+  );
+}
+
+/** Self-timer selector shown above the shutter. */
+function TimerPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (seconds: number) => void;
+  disabled: boolean;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      size="sm"
+      variant="outline"
+      value={String(value)}
+      onValueChange={(next) => next && onChange(Number(next))}
+      disabled={disabled}
+      aria-label="Timer sebelum menjepret"
+    >
+      {TIMER_OPTIONS.map((seconds) => (
+        <ToggleGroupItem
+          key={seconds}
+          value={String(seconds)}
+          aria-label={seconds === 0 ? "Tanpa timer" : `Timer ${seconds} detik`}
+          className="px-3"
+        >
+          {seconds === 0 ? (
+            <TimerOff className="size-4" />
+          ) : (
+            <span className="text-xs tabular-nums">{seconds}s</span>
+          )}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }
 
@@ -110,6 +153,7 @@ export function CameraStudio() {
   const [pending, setPending] = useState<PendingShot | null>(null);
   const [target, setTarget] = useState<SlotTarget>("auto");
   const [notice, setNotice] = useState<string | null>(null);
+  const [timer, setTimer] = useState<number>(3);
 
   const slots = useSlots();
   const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
@@ -173,6 +217,17 @@ export function CameraStudio() {
     });
   }, [demoMode, shots.length, target, slots, setSlotPhoto]);
 
+  const countdown = useCountdown(capture);
+
+  /** Shutter press: run the self-timer first when one is set. */
+  const triggerShutter = useCallback(() => {
+    if (countdown.running) {
+      countdown.cancel();
+      return;
+    }
+    countdown.start(timer);
+  }, [countdown, timer]);
+
   const keepShot = useCallback(() => {
     if (!pending) return;
     setShots((current) => [...current, pending.shot]);
@@ -234,15 +289,21 @@ export function CameraStudio() {
         return;
       }
 
+      if (countdown.running && event.code === "Escape") {
+        event.preventDefault();
+        countdown.cancel();
+        return;
+      }
+
       if (event.code === "Space" && canCapture) {
         event.preventDefault();
-        capture();
+        triggerShutter();
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [capture, canCapture, pending, keepShot, retakeShot]);
+  }, [triggerShutter, canCapture, pending, keepShot, retakeShot, countdown]);
 
   const filled = slots.filter((slot) => slot.photo).length;
 
@@ -275,6 +336,7 @@ export function CameraStudio() {
               error={camera.error}
               demoMode={demoMode}
               reviewSrc={pending?.shot.src ?? null}
+              countdown={countdown.remaining}
               onRetry={() => void start()}
               onUseDemo={enableDemo}
             />
@@ -297,26 +359,44 @@ export function CameraStudio() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <Button
-                    size="lg"
-                    className="min-w-44"
-                    onClick={capture}
-                    disabled={!canCapture}
-                  >
-                    <Camera />
-                    Jepret
-                  </Button>
+                <div className="flex flex-col items-center gap-3">
+                  <TimerPicker
+                    value={timer}
+                    onChange={setTimer}
+                    disabled={countdown.running}
+                  />
 
-                  {demoMode ? (
-                    <Button variant="outline" size="sm" onClick={leaveDemo}>
-                      Coba kamera asli
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button
+                      size="lg"
+                      className="min-w-44"
+                      variant={countdown.running ? "outline" : "default"}
+                      onClick={triggerShutter}
+                      disabled={!canCapture}
+                    >
+                      {countdown.running ? (
+                        <>
+                          <X />
+                          Batalkan
+                        </>
+                      ) : (
+                        <>
+                          <Camera />
+                          Jepret
+                        </>
+                      )}
                     </Button>
-                  ) : (
-                    <Button variant="ghost" size="sm" onClick={enableDemo}>
-                      Mode demo
-                    </Button>
-                  )}
+
+                    {demoMode ? (
+                      <Button variant="outline" size="sm" onClick={leaveDemo}>
+                        Coba kamera asli
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={enableDemo}>
+                        Mode demo
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -330,7 +410,9 @@ export function CameraStudio() {
                 {notice ??
                   (pending
                     ? `Menuju ${pending.shot.slotName} · Spasi untuk pakai, R untuk ambil ulang`
-                    : `Tekan Spasi untuk menjepret · ${filled}/${slots.length} slot terisi`)}
+                    : countdown.running
+                      ? "Bersiap… tekan Esc untuk membatalkan"
+                      : `Tekan Spasi untuk menjepret · ${filled}/${slots.length} slot terisi`)}
               </p>
             </div>
           </div>
