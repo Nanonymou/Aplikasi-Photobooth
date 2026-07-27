@@ -8,7 +8,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CapturedShot } from "@/types/camera";
+import type { CapturedShot, ShotSource } from "@/types/camera";
+
+const SOURCE_LABELS: Record<ShotSource, string> = {
+  camera: "kamera",
+  upload: "unggahan",
+  demo: "demo",
+};
 
 function takenAtLabel(iso: string) {
   return new Date(iso).toLocaleTimeString("id-ID", {
@@ -73,7 +79,7 @@ export function ShotGallery({
                 <p className="text-muted-foreground flex items-center gap-1 text-[11px]">
                   {shot.slotName && <Check className="size-3" />}
                   {takenAtLabel(shot.takenAt)}
-                  {shot.demo && " · demo"}
+                  {shot.source !== "camera" && ` · ${SOURCE_LABELS[shot.source]}`}
                 </p>
               </div>
 

@@ -8,7 +8,9 @@ import {
   Check,
   FlipHorizontal2,
   RotateCcw,
+  LoaderCircle,
   TimerOff,
+  Upload,
   X,
   Zap,
   ZapOff,
@@ -31,6 +33,7 @@ import { useCamera } from "@/hooks/use-camera";
 import { useCountdown } from "@/hooks/use-countdown";
 import { captureFrame } from "@/lib/camera/capture";
 import { demoShotSource } from "@/lib/camera/demo-shots";
+import { fileToDataUrl, UploadError } from "@/lib/camera/upload";
 import { createId } from "@/lib/editor/id";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
@@ -180,8 +183,13 @@ export function CameraStudio() {
   const [flashEnabled, setFlashEnabled] = useState(true);
   const [flashing, setFlashing] = useState(false);
 
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const slots = useSlots();
   const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
+  const fillNextEmptySlot = useEditorStore((state) => state.fillNextEmptySlot);
 
   const { start, status } = camera;
 
@@ -235,7 +243,7 @@ export function CameraStudio() {
         id: createId("shot"),
         src,
         takenAt: new Date().toISOString(),
-        demo: demoMode,
+        source: demoMode ? "demo" : "camera",
         slotId: slot.id,
         slotName: slot.name,
       },
@@ -270,6 +278,75 @@ export function CameraStudio() {
     }
     countdown.start(timer);
   }, [countdown, timer]);
+
+  /**
+   * Places picked files into slots, in order. Uploads skip the review step: the
+   * user already chose the image, so there is nothing to approve.
+   */
+  const handleFiles = useCallback(
+    async (files: FileList | File[] | null) => {
+      const list = files ? Array.from(files) : [];
+      if (list.length === 0) return;
+
+      setUploading(true);
+      setNotice(null);
+
+      let aim: SlotTarget = target;
+      const problems: string[] = [];
+      const placed: CapturedShot[] = [];
+
+      for (const file of list) {
+        try {
+          const src = await fileToDataUrl(file);
+
+          // `fillNextEmptySlot` reads live store state, so consecutive files land
+          // in consecutive slots rather than all fighting for the same one.
+          let slotId: string | null;
+          if (aim === "auto") {
+            slotId = fillNextEmptySlot(src);
+          } else {
+            setSlotPhoto(aim, { src, offsetX: 0, offsetY: 0, scale: 1 });
+            slotId = aim;
+            aim = "auto";
+          }
+
+          if (!slotId) {
+            problems.push(
+              "Semua slot sudah terisi — sisa gambar tidak ditempatkan.",
+            );
+            break;
+          }
+
+          const page = useEditorStore.getState().project.pages.find(
+            (candidate) =>
+              candidate.id === useEditorStore.getState().activePageId,
+          );
+          const slot = page?.objects.find((object) => object.id === slotId);
+
+          placed.push({
+            id: createId("shot"),
+            src,
+            takenAt: new Date().toISOString(),
+            source: "upload",
+            slotId,
+            slotName: slot?.name ?? null,
+          });
+        } catch (error) {
+          problems.push(
+            error instanceof UploadError
+              ? error.message
+              : `"${file.name}" gagal diunggah.`,
+          );
+        }
+      }
+
+      if (placed.length > 0) setShots((current) => [...current, ...placed]);
+      setTarget("auto");
+      setNotice(problems[0] ?? null);
+      setUploading(false);
+    },
+    [target, fillNextEmptySlot, setSlotPhoto],
+  );
 
   const keepShot = useCallback(() => {
     if (!pending) return;
@@ -373,18 +450,50 @@ export function CameraStudio() {
 
         <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
           <div className="flex flex-col gap-4">
-            <CameraPreview
-              videoRef={videoRef}
-              stream={camera.stream}
-              status={status}
-              error={camera.error}
-              demoMode={demoMode}
-              mirrored={mirrored}
-              reviewSrc={pending?.shot.src ?? null}
-              countdown={countdown.remaining}
-              onRetry={() => void start()}
-              onUseDemo={enableDemo}
-            />
+            {/* Dropping files anywhere on the viewfinder is the obvious gesture,
+                so the drop target wraps the preview rather than a separate box. */}
+            <div
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node)) {
+                  return;
+                }
+                setDragActive(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+                void handleFiles(event.dataTransfer.files);
+              }}
+              className={cn(
+                "relative rounded-xl transition-shadow",
+                dragActive && "ring-primary ring-4 ring-offset-2 ring-offset-background",
+              )}
+            >
+              <CameraPreview
+                videoRef={videoRef}
+                stream={camera.stream}
+                status={status}
+                error={camera.error}
+                demoMode={demoMode}
+                mirrored={mirrored}
+                reviewSrc={pending?.shot.src ?? null}
+                countdown={countdown.remaining}
+                onRetry={() => void start()}
+                onUseDemo={enableDemo}
+              />
+
+              {dragActive && (
+                <div className="bg-background/80 pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl">
+                  <p className="text-sm font-medium">
+                    Lepaskan gambar untuk mengisi slot
+                  </p>
+                </div>
+              )}
+            </div>
 
             <div className="flex flex-col items-center gap-3">
               {pending ? (
@@ -468,6 +577,16 @@ export function CameraStudio() {
                       )}
                     </Button>
 
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}
+                      Unggah
+                    </Button>
+
                     {demoMode ? (
                       <Button variant="outline" size="sm" onClick={leaveDemo}>
                         Coba kamera asli
@@ -480,6 +599,19 @@ export function CameraStudio() {
                   </div>
                 </div>
               )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(event) => {
+                  void handleFiles(event.target.files);
+                  // Reset so picking the same file twice still fires a change.
+                  event.target.value = "";
+                }}
+              />
 
               <p
                 className={cn(
