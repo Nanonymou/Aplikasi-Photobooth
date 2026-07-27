@@ -10,6 +10,7 @@ import { SidePanel } from "@/components/editor/side-panel";
 import { StatusBar } from "@/components/editor/status-bar";
 import { ToolRail } from "@/components/editor/tool-rail";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAutosave } from "@/hooks/use-autosave";
 import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 
 /**
@@ -22,6 +23,7 @@ import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 export function EditorShell() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   useEditorShortcuts();
+  useAutosave();
 
   return (
     <TooltipProvider>

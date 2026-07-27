@@ -26,6 +26,14 @@ const HISTORY_LIMIT = 50;
 export type ZoomMode = "fit" | "manual";
 
 /**
+ * Autosave state.
+ *
+ * `idle` means nothing has changed since the editor opened — distinct from
+ * `saved`, which means a write actually happened.
+ */
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+/**
  * Layer moves, named from the viewer's side of the canvas: "front" is the top of
  * the stack (the end of `page.objects`), "back" is the bottom (index 0).
  */
@@ -54,6 +62,18 @@ export interface EditorState {
    * so the whole gesture collapses into a single undo step.
    */
   interactionSnapshot: EditorProject | null;
+
+  saveStatus: SaveStatus;
+  /** ISO timestamp of the last successful write, or null if none yet. */
+  lastSavedAt: string | null;
+  /**
+   * False until the stored project has been read. Autosave stays quiet until
+   * then, so an empty first render can never overwrite a real saved project.
+   */
+  hydrated: boolean;
+
+  hydrateProject: (project: EditorProject | null) => void;
+  setSaveStatus: (status: SaveStatus, savedAt?: string) => void;
 
   setActiveTool: (tool: ToolId) => void;
   togglePanel: (panel: PanelId) => void;
@@ -170,6 +190,31 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   past: [],
   future: [],
   interactionSnapshot: null,
+  saveStatus: "idle",
+  lastSavedAt: null,
+  hydrated: false,
+
+  /**
+   * Adopts the project restored from storage (or just marks hydration done when
+   * there is nothing stored). History starts empty: the restored state is the
+   * baseline, not something the user should be able to undo past.
+   */
+  hydrateProject: (project) =>
+    set(() =>
+      project
+        ? {
+            project,
+            activePageId: project.pages[0].id,
+            selectedIds: [],
+            past: [],
+            future: [],
+            hydrated: true,
+          }
+        : { hydrated: true },
+    ),
+
+  setSaveStatus: (saveStatus, savedAt) =>
+    set(savedAt ? { saveStatus, lastSavedAt: savedAt } : { saveStatus }),
 
   setActiveTool: (activeTool) => set({ activeTool }),
 

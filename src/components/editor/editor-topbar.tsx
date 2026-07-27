@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   Aperture,
-  CloudCheck,
   Download,
   PanelRightClose,
   PanelRightOpen,
@@ -13,6 +12,7 @@ import {
   Undo2,
 } from "lucide-react";
 
+import { SaveIndicator } from "@/components/editor/save-indicator";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,7 +29,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { useCanRedo, useCanUndo, useEditorStore } from "@/store/editor-store";
 
 function ProjectTitle() {
@@ -126,7 +125,7 @@ export function EditorTopbar({
         </Tooltip>
       </div>
 
-      <SaveStatus className="ml-2 hidden lg:flex" />
+      <SaveIndicator className="ml-2 hidden lg:flex" />
 
       <div className="ml-auto flex items-center gap-1.5">
         <Tooltip>
@@ -174,23 +173,5 @@ export function EditorTopbar({
         </Button>
       </div>
     </header>
-  );
-}
-
-/**
- * Placeholder for the autosave indicator. Wired to real persistence by the
- * "Simpan Otomatis" task; for now it reflects the in-memory project timestamp.
- */
-function SaveStatus({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "text-muted-foreground items-center gap-1.5 text-xs",
-        className,
-      )}
-    >
-      <CloudCheck className="size-3.5" />
-      Tersimpan lokal
-    </span>
   );
 }
