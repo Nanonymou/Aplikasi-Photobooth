@@ -10,6 +10,7 @@ import {
 } from "@/components/editor/panels/decoration-panels";
 import { FramePanel } from "@/components/editor/panels/frame-panel";
 import { LayersPanel } from "@/components/editor/panels/layers-panel";
+import { TemplatePanel } from "@/components/editor/panels/template-panel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getPanel } from "@/lib/editor/panels";
@@ -32,6 +33,9 @@ function PanelPlaceholder({ children }: { children: React.ReactNode }) {
 
 function PanelBody({ panel }: { panel: PanelId }) {
   switch (panel) {
+    case "template":
+      return <TemplatePanel />;
+
     case "frame":
       return <FramePanel />;
 

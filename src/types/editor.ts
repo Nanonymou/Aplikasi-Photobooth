@@ -12,6 +12,7 @@ export type ToolId = "select" | "hand";
 
 /** Left-rail panels. `null` means the rail is collapsed. */
 export type PanelId =
+  | "template"
   | "frame"
   | "photo"
   | "text"

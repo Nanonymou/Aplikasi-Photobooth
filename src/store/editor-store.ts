@@ -100,6 +100,14 @@ export interface EditorState {
   addObject: (object: CanvasObject) => void;
   replaceSlots: (slots: PhotoSlotObject[]) => void;
   setPageBackground: (background: PageBackground) => void;
+  /** Replaces the active page's size, background and contents wholesale. */
+  applyPageContent: (content: {
+    name: string;
+    width: number;
+    height: number;
+    background: PageBackground;
+    objects: CanvasObject[];
+  }) => void;
   setSlotPhoto: (slotId: string, photo: SlotPhoto | null) => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */
   fillNextEmptySlot: (src: string) => string | null;
@@ -351,6 +359,21 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         })),
       ),
     ),
+
+  applyPageContent: (content) =>
+    set((state) => ({
+      ...commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          ...content,
+        })),
+      ),
+      selectedIds: [],
+      // The new page is very likely a different size, so re-fit the view.
+      zoomMode: "fit" as ZoomMode,
+      pan: { x: 0, y: 0 },
+    })),
 
   setSlotPhoto: (slotId, photo) => get().updateObject(slotId, { photo }),
 

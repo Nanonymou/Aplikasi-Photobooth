@@ -2,6 +2,7 @@ import {
   Camera,
   Frame,
   Layers,
+  LayoutTemplate,
   Palette,
   Sparkles,
   Sticker,
@@ -21,6 +22,12 @@ export interface PanelDefinition {
 
 /** Order of the left tool rail, top to bottom. */
 export const EDITOR_PANELS: PanelDefinition[] = [
+  {
+    id: "template",
+    label: "Template",
+    icon: LayoutTemplate,
+    hint: "Mulai dari desain siap pakai",
+  },
   {
     id: "frame",
     label: "Frame",
