@@ -1,7 +1,14 @@
 "use client";
 
 import type Konva from "konva";
-import { Ellipse, Group, Image as KonvaImage, Rect, Text } from "react-konva";
+import {
+  Ellipse,
+  Group,
+  Image as KonvaImage,
+  Rect,
+  Shape,
+  Text,
+} from "react-konva";
 
 import { useImage } from "@/hooks/use-image";
 import { resolveFontFamily } from "@/lib/editor/fonts";
@@ -72,6 +79,18 @@ function SlotContents({ object }: ObjectProps<PhotoSlotObject>) {
 function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
   return (
     <>
+      {/* A polaroid's photo window is inset, so the surrounding paper is drawn
+          as its own full-box rect behind the clipped photo. */}
+      {object.shape === "polaroid" && (
+        <Rect
+          width={object.width}
+          height={object.height}
+          cornerRadius={object.width * 0.03}
+          fill={object.borderColor}
+          listening={false}
+        />
+      )}
+
       <Group
         clipFunc={(ctx) =>
           traceSlotPath(
@@ -86,27 +105,23 @@ function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
         <SlotContents object={object} />
       </Group>
 
-      {object.borderWidth > 0 &&
-        (object.shape === "circle" ? (
-          <Ellipse
-            x={object.width / 2}
-            y={object.height / 2}
-            radiusX={object.width / 2}
-            radiusY={object.height / 2}
-            stroke={object.borderColor}
-            strokeWidth={object.borderWidth}
-            listening={false}
-          />
-        ) : (
-          <Rect
-            width={object.width}
-            height={object.height}
-            cornerRadius={object.cornerRadius}
-            stroke={object.borderColor}
-            strokeWidth={object.borderWidth}
-            listening={false}
-          />
-        ))}
+      {object.borderWidth > 0 && object.shape !== "polaroid" && (
+        <Shape
+          sceneFunc={(ctx, shape) => {
+            traceSlotPath(
+              ctx,
+              object.shape,
+              object.width,
+              object.height,
+              object.cornerRadius,
+            );
+            ctx.strokeShape(shape);
+          }}
+          stroke={object.borderColor}
+          strokeWidth={object.borderWidth}
+          listening={false}
+        />
+      )}
     </>
   );
 }

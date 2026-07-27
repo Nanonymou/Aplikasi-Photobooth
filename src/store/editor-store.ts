@@ -8,6 +8,7 @@ import type {
   CanvasPage,
   EditorProject,
   PanelId,
+  PhotoSlotObject,
   ToolId,
 } from "@/types/editor";
 
@@ -68,6 +69,8 @@ export interface EditorState {
   renameProject: (title: string) => void;
   updateObject: (id: string, patch: Partial<CanvasObject>) => void;
   updateObjects: (updates: ObjectUpdate[]) => void;
+  addObject: (object: CanvasObject) => void;
+  replaceSlots: (slots: PhotoSlotObject[]) => void;
   removeSelected: () => void;
 
   beginInteraction: () => void;
@@ -207,6 +210,38 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         })),
       };
     }),
+
+  addObject: (object) =>
+    set((state) => ({
+      ...commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          objects: [...page.objects, object],
+        })),
+      ),
+      selectedIds: [object.id],
+    })),
+
+  /**
+   * Swaps the page's photo slots for a freshly generated set, leaving text,
+   * stickers and shapes untouched. Slots go to the back of the z-order, which is
+   * where a frame belongs relative to its decorations.
+   */
+  replaceSlots: (slots) =>
+    set((state) => ({
+      ...commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          objects: [
+            ...slots,
+            ...page.objects.filter((object) => object.kind !== "slot"),
+          ],
+        })),
+      ),
+      selectedIds: [],
+    })),
 
   beginInteraction: () =>
     set((state) =>

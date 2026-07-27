@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 
+import { FramePanel } from "@/components/editor/panels/frame-panel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getPanel } from "@/lib/editor/panels";
@@ -82,12 +83,7 @@ function LayersPanel() {
 function PanelBody({ panel }: { panel: PanelId }) {
   switch (panel) {
     case "frame":
-      return (
-        <PanelPlaceholder>
-          Pembuat frame dinamis — tentukan jumlah, bentuk, dan susunan slot foto —
-          dipasang pada tugas <em>Bangun Frame Dinamis</em>.
-        </PanelPlaceholder>
-      );
+      return <FramePanel />;
 
     case "photo":
       return (
@@ -149,7 +145,7 @@ export function SidePanel() {
     <aside
       aria-label={panel.label}
       className={cn(
-        "bg-editor-chrome border-editor-border flex shrink-0 flex-col",
+        "bg-editor-chrome border-editor-border flex min-h-0 shrink-0 flex-col",
         // Phones: a sheet docked between the stage and the rail. It takes real
         // layout space rather than overlaying, so zoom-to-fit sees the smaller
         // stage and keeps the page fully visible.
@@ -173,7 +169,9 @@ export function SidePanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      {/* min-h-0 is what lets this actually scroll: without it the flex child's
+          automatic minimum size grows the whole column past the viewport. */}
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-3 p-4">
           <PanelBody panel={activePanel} />
         </div>

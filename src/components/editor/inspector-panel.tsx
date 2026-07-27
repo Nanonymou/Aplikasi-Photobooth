@@ -148,9 +148,9 @@ export function InspectorPanel() {
   return (
     <aside
       aria-label="Properti"
-      className="bg-editor-chrome border-editor-border hidden w-72 shrink-0 border-l md:flex md:flex-col"
+      className="bg-editor-chrome border-editor-border hidden w-72 shrink-0 border-l md:flex md:min-h-0 md:flex-col"
     >
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
           {selected.length === 1 ? (
             <ObjectInspector object={selected[0]} />
