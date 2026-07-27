@@ -39,7 +39,11 @@ export function useAiJob() {
   }, [clear]);
 
   const run = useCallback(
-    (toolId: string, estimatedSeconds: number, apply: () => void) => {
+    (
+      toolId: string,
+      estimatedSeconds: number,
+      apply: () => void | Promise<void>,
+    ) => {
       clear();
       setJob({ toolId, status: "running", progress: 0, message: null });
 
@@ -51,22 +55,27 @@ export function useAiJob() {
 
         if (step >= steps) {
           clear();
-          try {
-            apply();
-            setJob({
-              toolId,
-              status: "done",
-              progress: 1,
-              message: "Selesai diterapkan.",
-            });
-          } catch {
-            setJob({
-              toolId,
-              status: "error",
-              progress: 1,
-              message: "Gagal memproses. Coba lagi.",
-            });
-          }
+          // `apply` may be async (image decoding, and later a network call), so
+          // the result is awaited — reporting "done" before the work finished
+          // would be a lie, and a rejection would go unhandled.
+          void (async () => {
+            try {
+              await apply();
+              setJob({
+                toolId,
+                status: "done",
+                progress: 1,
+                message: "Selesai diterapkan.",
+              });
+            } catch {
+              setJob({
+                toolId,
+                status: "error",
+                progress: 1,
+                message: "Gagal memproses. Coba lagi.",
+              });
+            }
+          })();
           return;
         }
 

@@ -1,15 +1,16 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import { Check, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAiJob } from "@/hooks/use-ai-job";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { AI_TOOLS, type AiTool } from "@/lib/editor/ai-tools";
+import { removeBackgroundApprox } from "@/lib/editor/background-removal";
 import { cn } from "@/lib/utils";
-import { useActivePage } from "@/store/editor-store";
+import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { PhotoSlotObject } from "@/types/editor";
 
 /** What the tools will act on, and whether that is currently possible. */
@@ -111,13 +112,14 @@ function ToolRow({
 /**
  * AI toolbox.
  *
- * The tools are wired to a job runner but do not transform pixels yet — each
- * enhancement lands in its own task, and the provider call is backend work.
- * Running one here walks the real progress states so the flow can be tried end
- * to end.
+ * Background removal already produces a real transparent PNG (via a local
+ * approximation); the remaining enhancements land in their own tasks. All of
+ * them share the same job runner, so progress, failure and revert behave
+ * identically whichever one is wired up.
  */
 export function AiPanel() {
   const { job, run, reset } = useAiJob();
+  const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
 
   const slot =
     useSelectedObjects().find(
@@ -126,6 +128,36 @@ export function AiPanel() {
     ) ?? null;
 
   const busy = job.status === "running";
+  const edited = !!slot?.photo?.originalSrc;
+
+  /** What each tool does once its job finishes. */
+  function applyTool(tool: AiTool): () => void | Promise<void> {
+    if (tool.id === "remove-background" && slot?.photo) {
+      const photo = slot.photo;
+      return async () => {
+        const cutout = await removeBackgroundApprox(photo.src);
+        setSlotPhoto(slot.id, {
+          ...photo,
+          src: cutout,
+          // Keep the first original across repeated runs.
+          originalSrc: photo.originalSrc ?? photo.src,
+        });
+      };
+    }
+
+    // Every other enhancement lands in its own task.
+    return () => {};
+  }
+
+  function revert() {
+    if (!slot?.photo?.originalSrc) return;
+    setSlotPhoto(slot.id, {
+      ...slot.photo,
+      src: slot.photo.originalSrc,
+      originalSrc: null,
+    });
+    reset();
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -144,6 +176,13 @@ export function AiPanel() {
         </p>
       )}
 
+      {edited && (
+        <Button variant="outline" size="sm" onClick={revert} disabled={busy}>
+          <RotateCcw />
+          Kembalikan foto asli
+        </Button>
+      )}
+
       <Separator />
 
       <ul className="flex flex-col gap-2">
@@ -158,11 +197,7 @@ export function AiPanel() {
               disabled={busy || (needsPhoto && !slot)}
               active={active}
               progress={active ? job.progress : 0}
-              onRun={() =>
-                run(tool.id, tool.estimatedSeconds, () => {
-                  // Each tool's actual edit is added with its own task.
-                })
-              }
+              onRun={() => run(tool.id, tool.estimatedSeconds, applyTool(tool))}
             />
           );
         })}
@@ -179,8 +214,9 @@ export function AiPanel() {
           "border-editor-border text-muted-foreground rounded-lg border border-dashed p-3 text-[11px] leading-relaxed",
         )}
       >
-        Pemrosesan masih disimulasikan. Panggilan ke penyedia AI dipasang pada
-        tugas backend; alat-alat di atas sudah memakai alur kerja yang sama.
+        Hapus latar belakang memakai perkiraan lokal: warna di keempat sudut
+        dianggap latar lalu dibuat transparan. Hasilnya PNG ber-alpha sungguhan,
+        tapi belum mengenali orang — model AI-nya dipasang pada tugas backend.
       </p>
     </div>
   );

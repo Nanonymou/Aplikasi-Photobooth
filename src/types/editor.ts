@@ -57,6 +57,11 @@ export interface BaseObject {
 /** A photo taken with the webcam or uploaded, as placed inside a slot. */
 export interface SlotPhoto {
   src: string;
+  /**
+   * The untouched photo, kept when an AI tool replaces `src`, so the edit can be
+   * undone without re-taking the shot.
+   */
+  originalSrc?: string | null;
   /** Pan of the photo within its slot, in design px. */
   offsetX: number;
   offsetY: number;
