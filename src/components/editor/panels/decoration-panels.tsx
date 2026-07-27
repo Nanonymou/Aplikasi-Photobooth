@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, Plus, Spline } from "lucide-react";
+import { Check, Grid2x2, Plus, Spline } from "lucide-react";
 
 import {
   ALL_CATEGORY,
@@ -27,7 +27,13 @@ import { useRecentStickers } from "@/hooks/use-recent-stickers";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
-import { getPattern, patternDataUri, type PatternId } from "@/lib/editor/patterns";
+import {
+  getPattern,
+  patternDataUri,
+  transparencyCheckerDataUri,
+  TRANSPARENCY_TILE_SIZE,
+  type PatternId,
+} from "@/lib/editor/patterns";
 import { arcHeight } from "@/lib/editor/text-path";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
@@ -68,6 +74,13 @@ function backgroundStyle(background: PageBackground): React.CSSProperties {
       backgroundColor: background.background,
       backgroundImage: `url("${patternDataUri(background.pattern as PatternId, background.foreground, background.background)}")`,
       backgroundSize: `${pattern.tile * background.scale}px ${pattern.tile * background.scale}px`,
+    };
+  }
+
+  if (background.type === "transparent") {
+    return {
+      backgroundImage: `url("${transparencyCheckerDataUri()}")`,
+      backgroundSize: `${TRANSPARENCY_TILE_SIZE / 2}px ${TRANSPARENCY_TILE_SIZE / 2}px`,
     };
   }
 
@@ -174,6 +187,8 @@ function sameBackground(a: PageBackground, b: PageBackground): boolean {
   if (a.type !== b.type) return false;
 
   switch (a.type) {
+    case "transparent":
+      return true;
     case "solid":
       return a.color === (b as typeof a).color;
     case "gradient": {
@@ -327,13 +342,32 @@ export function BackgroundPanel() {
             />
           </label>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPageBackground({ type: "solid", color: "#ffffff" })}
-          >
-            Kembalikan ke putih polos
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() =>
+                setPageBackground({ type: "solid", color: "#ffffff" })
+              }
+            >
+              Putih polos
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setPageBackground({ type: "transparent" })}
+            >
+              <Grid2x2 />
+              Transparan
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            Latar transparan disimpan tanpa warna, jadi ekspor PNG-nya
+            mempertahankan alpha — cocok untuk frame yang ditempel di atas
+            desain lain.
+          </p>
         </div>
       }
     >

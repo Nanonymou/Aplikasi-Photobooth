@@ -9,7 +9,11 @@ import { useObjectDrag } from "@/hooks/use-object-drag";
 import { STICKERS } from "@/lib/editor/decorations";
 import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
-import { patternDataUri, type PatternId } from "@/lib/editor/patterns";
+import {
+  patternDataUri,
+  transparencyCheckerDataUri,
+  type PatternId,
+} from "@/lib/editor/patterns";
 import {
   useEditorStore,
   useActivePage,
@@ -41,6 +45,32 @@ function gradientPoints(angle: number, width: number, height: number) {
     start: { x: width / 2 - (dx * length) / 2, y: height / 2 - (dy * length) / 2 },
     end: { x: width / 2 + (dx * length) / 2, y: height / 2 + (dy * length) / 2 },
   };
+}
+
+/** Checkerboard standing in for "no background", the usual transparency cue. */
+function TransparentBackground({
+  width,
+  height,
+}: {
+  width: number;
+  height: number;
+}) {
+  const image = useImage(transparencyCheckerDataUri());
+
+  return (
+    <>
+      <Rect width={width} height={height} fill="#ffffff" listening={false} />
+      {image && (
+        <Rect
+          width={width}
+          height={height}
+          fillPatternImage={image}
+          fillPatternRepeat="repeat"
+          listening={false}
+        />
+      )}
+    </>
+  );
 }
 
 /** Tiled SVG pattern background. Split out so it can use the image-loading hook. */
@@ -94,6 +124,10 @@ function PageBackgroundRect({
   width: number;
   height: number;
 }) {
+  if (background.type === "transparent") {
+    return <TransparentBackground width={width} height={height} />;
+  }
+
   if (background.type === "pattern") {
     return (
       <PatternBackground

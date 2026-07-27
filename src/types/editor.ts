@@ -147,6 +147,8 @@ export type CanvasObject =
   | ShapeObject;
 
 export type PageBackground =
+  /** No background at all — exports keep the alpha channel. */
+  | { type: "transparent" }
   | { type: "solid"; color: string }
   | { type: "gradient"; from: string; to: string; angle: number }
   | {

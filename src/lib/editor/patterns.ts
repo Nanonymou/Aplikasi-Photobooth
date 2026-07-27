@@ -102,3 +102,19 @@ export function patternDataUri(
   const svg = patternSvg(id, foreground, background);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
+
+/**
+ * Checkerboard that signals "no background".
+ *
+ * Built through `patternDataUri` rather than as its own SVG string on purpose:
+ * a hand-rolled literal here is fully statically known, and the production
+ * minifier constant-folds such template concatenations incorrectly — it dropped
+ * whole `" fill="..."/>` runs and emitted malformed SVG that failed to decode.
+ * Routing through the shared builder keeps one proven code path.
+ */
+export function transparencyCheckerDataUri(): string {
+  return patternDataUri("papan-catur", "#e2e8f0", "#ffffff");
+}
+
+/** Tile size of the transparency checker, for CSS previews. */
+export const TRANSPARENCY_TILE_SIZE = getPattern("papan-catur").tile;
