@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Spline } from "lucide-react";
 
 import {
@@ -18,8 +18,10 @@ import {
   TEXT_STYLE_CATEGORIES,
   TEXT_STYLES,
   type LibraryItem,
+  type StickerItem,
   type TextStyleItem,
 } from "@/lib/editor/decorations";
+import { useRecentStickers } from "@/hooks/use-recent-stickers";
 import { createId } from "@/lib/editor/id";
 import { arcHeight } from "@/lib/editor/text-path";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
@@ -59,6 +61,36 @@ export function StickerPanel() {
     useLibrary(STICKERS);
   const page = useActivePage();
   const addObject = useEditorStore((state) => state.addObject);
+  const { recent, remember } = useRecentStickers();
+
+  const place = useCallback(
+    (sticker: StickerItem) => {
+      const size = Math.round(Math.min(page.width, page.height) * 0.16);
+
+      addObject({
+        id: createId("sticker"),
+        kind: "sticker",
+        name: sticker.label,
+        x: (page.width - size) / 2,
+        y: (page.height - size) / 2,
+        width: size,
+        height: size,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        visible: true,
+        content: sticker.glyph,
+      });
+      remember(sticker.id);
+    },
+    [page.width, page.height, addObject, remember],
+  );
+
+  // Resolved from ids so a sticker dropped from the catalogue simply disappears
+  // from the recents rather than rendering as a hole.
+  const recentStickers = recent
+    .map((id) => STICKERS.find((sticker) => sticker.id === id))
+    .filter((sticker): sticker is StickerItem => !!sticker);
 
   return (
     <LibraryPanel
@@ -70,34 +102,45 @@ export function StickerPanel() {
       onCategoryChange={setCategory}
       resultCount={results.length}
     >
-      <LibraryGrid columns={4}>
-        {results.map((sticker) => (
-          <LibraryTile
-            key={sticker.id}
-            label={sticker.label}
-            onClick={() => {
-              const size = Math.round(Math.min(page.width, page.height) * 0.16);
+      <div className="flex flex-col gap-3">
+        {recentStickers.length > 0 && !search && (
+          <section className="flex flex-col gap-1.5">
+            <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              Baru dipakai
+            </h3>
+            <LibraryGrid columns={4}>
+              {recentStickers.map((sticker) => (
+                <LibraryTile
+                  key={`recent-${sticker.id}`}
+                  label={sticker.label}
+                  onClick={() => place(sticker)}
+                >
+                  <span className="text-2xl">{sticker.glyph}</span>
+                </LibraryTile>
+              ))}
+            </LibraryGrid>
+          </section>
+        )}
 
-              addObject({
-                id: createId("sticker"),
-                kind: "sticker",
-                name: sticker.label,
-                x: (page.width - size) / 2,
-                y: (page.height - size) / 2,
-                width: size,
-                height: size,
-                rotation: 0,
-                opacity: 1,
-                locked: false,
-                visible: true,
-                content: sticker.glyph,
-              });
-            }}
-          >
-            <span className="text-2xl">{sticker.glyph}</span>
-          </LibraryTile>
-        ))}
-      </LibraryGrid>
+        <section className="flex flex-col gap-1.5">
+          {recentStickers.length > 0 && !search && (
+            <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              {results.length} stiker
+            </h3>
+          )}
+          <LibraryGrid columns={4}>
+            {results.map((sticker) => (
+              <LibraryTile
+                key={sticker.id}
+                label={sticker.label}
+                onClick={() => place(sticker)}
+              >
+                <span className="text-2xl">{sticker.glyph}</span>
+              </LibraryTile>
+            ))}
+          </LibraryGrid>
+        </section>
+      </div>
     </LibraryPanel>
   );
 }
