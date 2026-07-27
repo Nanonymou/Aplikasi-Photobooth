@@ -52,6 +52,19 @@ export function useEditorShortcuts() {
         return;
       }
 
+      // Layer order, following the usual design-tool bindings.
+      if (mod && (event.key === "]" || event.key === "}")) {
+        event.preventDefault();
+        store.reorderSelection(event.shiftKey ? "front" : "forward");
+        return;
+      }
+
+      if (mod && (event.key === "[" || event.key === "{")) {
+        event.preventDefault();
+        store.reorderSelection(event.shiftKey ? "back" : "backward");
+        return;
+      }
+
       if (mod) return;
 
       switch (event.key) {

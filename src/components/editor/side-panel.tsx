@@ -3,11 +3,12 @@
 import { X } from "lucide-react";
 
 import { FramePanel } from "@/components/editor/panels/frame-panel";
+import { LayersPanel } from "@/components/editor/panels/layers-panel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getPanel } from "@/lib/editor/panels";
 import { cn } from "@/lib/utils";
-import { useActivePage, useEditorStore } from "@/store/editor-store";
+import { useEditorStore } from "@/store/editor-store";
 import type { PanelId } from "@/types/editor";
 
 /**
@@ -35,48 +36,6 @@ function PanelGrid({ items }: { items: string[] }) {
         </div>
       ))}
     </div>
-  );
-}
-
-/** Lists the objects on the page, newest layer first, and selects on click. */
-function LayersPanel() {
-  const page = useActivePage();
-  const selectedIds = useEditorStore((state) => state.selectedIds);
-  const select = useEditorStore((state) => state.select);
-
-  return (
-    <ul className="flex flex-col gap-1">
-      {[...page.objects].reverse().map((object) => {
-        const active = selectedIds.includes(object.id);
-
-        return (
-          <li key={object.id}>
-            <button
-              type="button"
-              onClick={() => select([object.id])}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors",
-                "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-accent hover:text-accent-foreground",
-              )}
-            >
-              <span className="bg-editor-surface border-editor-border flex size-7 shrink-0 items-center justify-center rounded border text-[13px]">
-                {object.kind === "slot"
-                  ? "🖼"
-                  : object.kind === "text"
-                    ? "T"
-                    : object.kind === "sticker"
-                      ? object.content
-                      : "◻"}
-              </span>
-              <span className="truncate font-medium">{object.name}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -132,6 +91,7 @@ function PanelBody({ panel }: { panel: PanelId }) {
       return <LayersPanel />;
   }
 }
+
 
 export function SidePanel() {
   const activePanel = useEditorStore((state) => state.activePanel);

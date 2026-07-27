@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  BringToFront,
   Eye,
   EyeOff,
   Hand,
   Lock,
   LockOpen,
   MousePointer2,
+  SendToBack,
   Trash2,
 } from "lucide-react";
 
@@ -64,6 +66,7 @@ function SelectionActions() {
   const selected = useSelectedObjects();
   const updateObject = useEditorStore((state) => state.updateObject);
   const removeSelected = useEditorStore((state) => state.removeSelected);
+  const reorderSelection = useEditorStore((state) => state.reorderSelection);
 
   if (selected.length === 0) return null;
 
@@ -136,6 +139,38 @@ function SelectionActions() {
         </TooltipTrigger>
         <TooltipContent>{allLocked ? "Buka kunci" : "Kunci"}</TooltipContent>
       </Tooltip>
+
+      <Separator orientation="vertical" className="h-6" />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => reorderSelection("front")}
+            aria-label="Bawa ke paling depan"
+          >
+            <BringToFront />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Paling depan (Ctrl+Shift+])</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => reorderSelection("back")}
+            aria-label="Kirim ke paling belakang"
+          >
+            <SendToBack />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Paling belakang (Ctrl+Shift+[)</TooltipContent>
+      </Tooltip>
+
+      <Separator orientation="vertical" className="h-6" />
 
       <Tooltip>
         <TooltipTrigger asChild>

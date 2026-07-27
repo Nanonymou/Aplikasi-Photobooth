@@ -25,6 +25,12 @@ const HISTORY_LIMIT = 50;
  */
 export type ZoomMode = "fit" | "manual";
 
+/**
+ * Layer moves, named from the viewer's side of the canvas: "front" is the top of
+ * the stack (the end of `page.objects`), "back" is the bottom (index 0).
+ */
+export type ReorderMode = "front" | "forward" | "backward" | "back";
+
 /** A patch aimed at one object, used for batched multi-object edits. */
 export interface ObjectUpdate {
   id: string;
@@ -71,6 +77,8 @@ export interface EditorState {
   updateObjects: (updates: ObjectUpdate[]) => void;
   addObject: (object: CanvasObject) => void;
   replaceSlots: (slots: PhotoSlotObject[]) => void;
+  moveObject: (id: string, toIndex: number) => void;
+  reorderSelection: (mode: ReorderMode) => void;
   removeSelected: () => void;
 
   beginInteraction: () => void;
@@ -97,6 +105,45 @@ function withActivePage(
       page.id === activePageId ? update(page) : page,
     ),
   };
+}
+
+/**
+ * Reorders `objects` so the selected ids move one step (or all the way) through
+ * the stack, keeping the selection's own relative order intact.
+ */
+function reorderObjects(
+  objects: CanvasObject[],
+  ids: string[],
+  mode: ReorderMode,
+): CanvasObject[] {
+  const isSelected = (object: CanvasObject) => ids.includes(object.id);
+
+  if (mode === "front") {
+    return [...objects.filter((o) => !isSelected(o)), ...objects.filter(isSelected)];
+  }
+
+  if (mode === "back") {
+    return [...objects.filter(isSelected), ...objects.filter((o) => !isSelected(o))];
+  }
+
+  const next = [...objects];
+
+  if (mode === "forward") {
+    // Walk from the top so a block of selected objects shifts as a unit.
+    for (let i = next.length - 2; i >= 0; i -= 1) {
+      if (isSelected(next[i]) && !isSelected(next[i + 1])) {
+        [next[i], next[i + 1]] = [next[i + 1], next[i]];
+      }
+    }
+  } else {
+    for (let i = 1; i < next.length; i += 1) {
+      if (isSelected(next[i]) && !isSelected(next[i - 1])) {
+        [next[i], next[i - 1]] = [next[i - 1], next[i]];
+      }
+    }
+  }
+
+  return next;
 }
 
 /** Pushes the current project onto the undo stack and clears the redo stack. */
@@ -242,6 +289,42 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       ),
       selectedIds: [],
     })),
+
+  /** Moves one object to an absolute index in the page's object list. */
+  moveObject: (id, toIndex) =>
+    set((state) => {
+      const page = state.project.pages.find(
+        (candidate) => candidate.id === state.activePageId,
+      );
+      const fromIndex = page?.objects.findIndex((object) => object.id === id);
+      if (!page || fromIndex === undefined || fromIndex < 0) return {};
+
+      const target = Math.max(0, Math.min(toIndex, page.objects.length - 1));
+      if (target === fromIndex) return {};
+
+      return commit(
+        state,
+        withActivePage(state.project, state.activePageId, (current) => {
+          const objects = [...current.objects];
+          const [moved] = objects.splice(fromIndex, 1);
+          objects.splice(target, 0, moved);
+          return { ...current, objects };
+        }),
+      );
+    }),
+
+  reorderSelection: (mode) =>
+    set((state) => {
+      if (state.selectedIds.length === 0) return {};
+
+      return commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          objects: reorderObjects(page.objects, state.selectedIds, mode),
+        })),
+      );
+    }),
 
   beginInteraction: () =>
     set((state) =>
