@@ -308,9 +308,11 @@ function BasicShape({ object }: ObjectProps<ShapeObject>) {
 export function CanvasObjectNode({
   object,
   outlined,
+  editing,
   draggable,
   onPointerDown,
   onClick,
+  onDoubleClick,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -318,14 +320,17 @@ export function CanvasObjectNode({
   object: CanvasObject;
   /** Draws the dashed group-membership outline (multi-selection only). */
   outlined: boolean;
+  /** Hidden while its inline editor is open, so the two never double up. */
+  editing?: boolean;
   draggable: boolean;
   onPointerDown: (id: string, additive: boolean) => void;
   onClick: (id: string, additive: boolean) => void;
+  onDoubleClick: (id: string) => void;
   onDragStart: (id: string, node: Konva.Node) => void;
   onDragMove: (id: string, node: Konva.Node) => void;
   onDragEnd: (id: string, node: Konva.Node) => void;
 }) {
-  if (!object.visible) return null;
+  if (!object.visible || editing) return null;
 
   return (
     <Group
@@ -358,6 +363,14 @@ export function CanvasObjectNode({
       onTap={(event) => {
         event.cancelBubble = true;
         onClick(object.id, false);
+      }}
+      onDblClick={(event) => {
+        event.cancelBubble = true;
+        onDoubleClick(object.id);
+      }}
+      onDblTap={(event) => {
+        event.cancelBubble = true;
+        onDoubleClick(object.id);
       }}
       onDragStart={(event) => onDragStart(object.id, event.target)}
       onDragMove={(event) => onDragMove(object.id, event.target)}

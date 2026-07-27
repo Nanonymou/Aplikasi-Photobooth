@@ -1,13 +1,20 @@
 "use client";
 
-import { Settings2 } from "lucide-react";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Settings2,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { CanvasObject } from "@/types/editor";
+import type { CanvasObject, TextObject } from "@/types/editor";
 
 function Field({
   label,
@@ -48,6 +55,106 @@ function Field({
   );
 }
 
+/** Type controls, shown when the selection is a single text object. */
+function TextProperties({ object }: { object: TextObject }) {
+  const updateObject = useEditorStore((state) => state.updateObject);
+  const patch = (next: Partial<TextObject>) => updateObject(object.id, next);
+
+  const curve = object.curve ?? 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          Isi teks
+        </span>
+        <textarea
+          value={object.text}
+          onChange={(event) => patch({ text: event.target.value })}
+          rows={2}
+          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 min-h-16 resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Ukuran"
+          value={object.fontSize}
+          min={4}
+          onCommit={(fontSize) => patch({ fontSize })}
+        />
+        <Field
+          label="Spasi huruf"
+          value={object.letterSpacing}
+          onCommit={(letterSpacing) => patch({ letterSpacing })}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          Perataan
+        </span>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={object.align}
+          onValueChange={(value) =>
+            value && patch({ align: value as TextObject["align"] })
+          }
+          aria-label="Perataan teks"
+        >
+          <ToggleGroupItem value="left" aria-label="Rata kiri">
+            <AlignLeft />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="center" aria-label="Rata tengah">
+            <AlignCenter />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="right" aria-label="Rata kanan">
+            <AlignRight />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      <label className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          Warna
+        </span>
+        <input
+          type="color"
+          value={object.fill}
+          onChange={(event) =>
+            // A picked colour replaces any gradient, otherwise the change would
+            // appear to do nothing — the gradient paints over `fill`.
+            patch({ fill: event.target.value, gradient: null })
+          }
+          aria-label="Warna teks"
+          className="border-input size-8 cursor-pointer rounded border bg-transparent"
+        />
+      </label>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+            Lengkung
+          </span>
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {Math.round(curve)}°
+          </span>
+        </div>
+        <Slider
+          value={[curve]}
+          min={-180}
+          max={180}
+          step={5}
+          onValueChange={([value]) => patch({ curve: value })}
+          aria-label="Lengkung teks"
+        />
+      </div>
+    </div>
+  );
+}
+
 function ObjectInspector({ object }: { object: CanvasObject }) {
   const updateObject = useEditorStore((state) => state.updateObject);
 
@@ -59,6 +166,8 @@ function ObjectInspector({ object }: { object: CanvasObject }) {
       </div>
 
       <Separator />
+
+      {object.kind === "text" && <TextProperties object={object} />}
 
       <div className="grid grid-cols-2 gap-3">
         <Field

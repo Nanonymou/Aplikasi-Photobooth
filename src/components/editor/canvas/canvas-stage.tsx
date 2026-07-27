@@ -22,6 +22,7 @@ import type {
 } from "@/types/editor";
 
 import { CanvasObjectNode } from "./canvas-object";
+import { TextEditorOverlay } from "./text-editor-overlay";
 import { MIN_OBJECT_SIZE, SelectionTransformer } from "./selection-transformer";
 
 /** Breathing room between the page edge and the viewport when zoom-to-fit runs. */
@@ -179,6 +180,8 @@ export function CanvasStage() {
 
   // Konva paints text to a canvas, so a late-loading webfont needs an explicit
   // repaint once it is ready — React has no reason to re-render on its own.
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const [, setFontsReady] = useState(false);
   useEffect(() => {
     document.fonts?.ready.then(() => setFontsReady(true));
@@ -265,6 +268,14 @@ export function CanvasStage() {
     endInteraction();
   }, [selectedIds, page.objects, updateObjects, beginInteraction, endInteraction]);
 
+  const handleDoubleClick = useCallback(
+    (id: string) => {
+      const object = page.objects.find((candidate) => candidate.id === id);
+      if (object?.kind === "text" && !object.locked) setEditingId(id);
+    },
+    [page.objects],
+  );
+
   const handleStageMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       // Objects stop propagation themselves, so reaching here means empty stage.
@@ -296,6 +307,11 @@ export function CanvasStage() {
       if (current.length > 1 && current.includes(id)) select([id]);
     },
     [select],
+  );
+
+  const editingObject = page.objects.find(
+    (object): object is TextObject =>
+      object.id === editingId && object.kind === "text",
   );
 
   const panning = activeTool === "hand";
@@ -359,8 +375,10 @@ export function CanvasStage() {
                     selectedIds.length > 1 && selectedIds.includes(object.id)
                   }
                   draggable={!panning && !object.locked}
+                  editing={object.id === editingId}
                   onPointerDown={handlePointerDown}
                   onClick={handleClick}
+                  onDoubleClick={handleDoubleClick}
                   onDragStart={drag.onDragStart}
                   onDragMove={drag.onDragMove}
                   onDragEnd={drag.onDragEnd}
@@ -393,6 +411,22 @@ export function CanvasStage() {
             />
           </Layer>
         </Stage>
+      )}
+
+      {editingObject && (
+        <TextEditorOverlay
+          object={editingObject}
+          zoom={effectiveZoom}
+          offsetX={offsetX}
+          offsetY={offsetY}
+          onCommit={(text) => {
+            if (text !== editingObject.text) {
+              useEditorStore.getState().updateObject(editingObject.id, { text });
+            }
+            setEditingId(null);
+          }}
+          onCancel={() => setEditingId(null)}
+        />
       )}
     </div>
   );
