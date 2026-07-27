@@ -5,6 +5,7 @@ import { CameraOff, LoaderCircle, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { CameraStatus } from "@/hooks/use-camera";
+import { cn } from "@/lib/utils";
 
 /**
  * Simulated preview for demo mode: a slow gradient behind a silhouette, so the
@@ -79,6 +80,7 @@ export function CameraPreview({
   status,
   error,
   demoMode,
+  mirrored,
   reviewSrc,
   countdown,
   onRetry,
@@ -90,6 +92,8 @@ export function CameraPreview({
   status: CameraStatus;
   error: string | null;
   demoMode: boolean;
+  /** Flip the preview horizontally, the way a mirror would. */
+  mirrored: boolean;
   /** When set, the just-taken frame is frozen here for review. */
   reviewSrc?: string | null;
   /** Seconds left before the shutter fires, or null when not counting. */
@@ -120,7 +124,10 @@ export function CameraPreview({
           autoPlay
           playsInline
           muted
-          className="size-full object-cover"
+          className={cn(
+            "size-full object-cover",
+            mirrored && "-scale-x-100",
+          )}
         />
       )}
 

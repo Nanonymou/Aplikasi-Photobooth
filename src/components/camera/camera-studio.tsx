@@ -2,14 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Camera, Check, RotateCcw, TimerOff, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  FlipHorizontal2,
+  RotateCcw,
+  TimerOff,
+  X,
+  Zap,
+  ZapOff,
+} from "lucide-react";
 
 import { CameraPreview } from "@/components/camera/camera-preview";
+import { FlashOverlay } from "@/components/camera/flash-overlay";
 import { ShotGallery } from "@/components/camera/shot-gallery";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAutosave } from "@/hooks/use-autosave";
 import { useCamera } from "@/hooks/use-camera";
 import { useCountdown } from "@/hooks/use-countdown";
@@ -26,6 +42,11 @@ type SlotTarget = "auto" | string;
 
 /** Self-timer choices, in seconds. 0 fires the shutter immediately. */
 const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+
+/** Time the screen stays lit before the frame is grabbed, so exposure adapts. */
+const FLASH_LEAD_MS = 160;
+/** How long the burst lingers after the grab. */
+const FLASH_TAIL_MS = 120;
 
 /**
  * A shot waiting for the user's verdict. `previousPhoto` is what the slot held
@@ -154,6 +175,10 @@ export function CameraStudio() {
   const [target, setTarget] = useState<SlotTarget>("auto");
   const [notice, setNotice] = useState<string | null>(null);
   const [timer, setTimer] = useState<number>(3);
+  // Mirrored by default: people expect a selfie view of themselves.
+  const [mirrored, setMirrored] = useState(true);
+  const [flashEnabled, setFlashEnabled] = useState(true);
+  const [flashing, setFlashing] = useState(false);
 
   const slots = useSlots();
   const setSlotPhoto = useEditorStore((state) => state.setSlotPhoto);
@@ -178,11 +203,12 @@ export function CameraStudio() {
     void start();
   }, [start]);
 
-  const capture = useCallback(() => {
+  /** Grabs the frame and hands it to a slot. Assumes the flash (if any) is lit. */
+  const commitCapture = useCallback(() => {
     const src = demoMode
       ? demoShotSource(shots.length)
       : videoRef.current
-        ? captureFrame(videoRef.current)
+        ? captureFrame(videoRef.current, { mirror: mirrored })
         : null;
 
     if (!src) {
@@ -215,7 +241,24 @@ export function CameraStudio() {
       },
       previousPhoto: slot.photo,
     });
-  }, [demoMode, shots.length, target, slots, setSlotPhoto]);
+  }, [demoMode, shots.length, target, slots, setSlotPhoto, mirrored]);
+
+  /**
+   * Lights the screen first so the burst actually falls on the subject and the
+   * camera's auto-exposure has a moment to react, then grabs the frame.
+   */
+  const capture = useCallback(() => {
+    if (!flashEnabled || demoMode) {
+      commitCapture();
+      return;
+    }
+
+    setFlashing(true);
+    window.setTimeout(() => {
+      commitCapture();
+      window.setTimeout(() => setFlashing(false), FLASH_TAIL_MS);
+    }, FLASH_LEAD_MS);
+  }, [flashEnabled, demoMode, commitCapture]);
 
   const countdown = useCountdown(capture);
 
@@ -309,6 +352,7 @@ export function CameraStudio() {
 
   return (
     <TooltipProvider>
+      <FlashOverlay active={flashing} />
       <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-6 p-4 sm:p-6">
         <header className="flex flex-wrap items-center gap-3">
           <Button asChild variant="ghost" size="sm">
@@ -335,6 +379,7 @@ export function CameraStudio() {
               status={status}
               error={camera.error}
               demoMode={demoMode}
+              mirrored={mirrored}
               reviewSrc={pending?.shot.src ?? null}
               countdown={countdown.remaining}
               onRetry={() => void start()}
@@ -360,11 +405,47 @@ export function CameraStudio() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <TimerPicker
-                    value={timer}
-                    onChange={setTimer}
-                    disabled={countdown.running}
-                  />
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <TimerPicker
+                      value={timer}
+                      onChange={setTimer}
+                      disabled={countdown.running}
+                    />
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={mirrored ? "secondary" : "ghost"}
+                          size="icon"
+                          onClick={() => setMirrored((on) => !on)}
+                          aria-pressed={mirrored}
+                          aria-label="Efek cermin"
+                        >
+                          <FlipHorizontal2 />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {mirrored ? "Cermin aktif" : "Cermin mati"}
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={flashEnabled ? "secondary" : "ghost"}
+                          size="icon"
+                          onClick={() => setFlashEnabled((on) => !on)}
+                          aria-pressed={flashEnabled}
+                          aria-label="Kilau layar sebagai flash"
+                        >
+                          {flashEnabled ? <Zap /> : <ZapOff />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {flashEnabled ? "Kilau aktif" : "Kilau mati"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
 
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <Button
