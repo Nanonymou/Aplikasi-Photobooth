@@ -33,6 +33,14 @@ export default function LoginPage() {
       }
     >
       <LoginForm />
+      <div className="border-editor-border border-t pt-3 text-center">
+        <Link
+          href="/masuk-tautan"
+          className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+        >
+          Masuk dengan tautan email
+        </Link>
+      </div>
     </AuthShell>
   );
 }

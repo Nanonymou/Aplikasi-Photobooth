@@ -63,6 +63,23 @@ export async function register(
 }
 
 /**
+ * Sends a one-time sign-in link to an email.
+ *
+ * Stand-in for `POST /api/auth/magic-link { email }`: the backend mints a short-
+ * lived token, stores its hash, and mails a link that carries it. Here it only
+ * pauses and rejects one canned address, so the form's sent-state and its error
+ * path are both real. What the user sees does not move when the endpoint lands.
+ */
+export async function sendMagicLink(email: string): Promise<void> {
+  await wait();
+
+  // One address that cannot receive mail, so "gagal terkirim" is a real branch.
+  if (email.trim().toLowerCase().endsWith("@nomail.test")) {
+    throw new AuthError("Alamat email ini tidak dapat menerima tautan.");
+  }
+}
+
+/**
  * Moves a device's guest work into the account that just signed in.
  *
  * Stand-in for `POST /api/account/claim { sessionCode }`, run right after auth:
