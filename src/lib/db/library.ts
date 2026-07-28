@@ -67,6 +67,33 @@ export async function listCategories(
   return rows;
 }
 
+/**
+ * The WHERE every library list shares, with fixed parameter positions:
+ * $1 category slug (or null), $2 search text (or null).
+ *
+ * Written once because the three libraries answer the same question and drift
+ * between them would show up as "search works in stickers but not backgrounds".
+ * `i` is the item table, `c` its joined category.
+ */
+const LIBRARY_FILTER = `
+  i.published_at is not null
+  and ($1::text is null or c.slug = $1)
+  and ($2::text is null
+       or i.label ilike '%' || $2 || '%'
+       or exists (
+         select 1 from unnest(i.keywords) as keyword
+          where keyword ilike '%' || $2 || '%'
+       ))
+`;
+
+/** Normalises the free-form filter into the parameters the SQL above expects. */
+function filterValues(options: LibraryQuery): [string | null, string | null] {
+  return [
+    options.category && options.category !== "all" ? options.category : null,
+    options.search?.trim() || null,
+  ];
+}
+
 export interface TemplateSummary {
   /** Slug — what the client has always called a template id. */
   id: string;
@@ -109,28 +136,18 @@ export async function listTemplates(
   options: LibraryQuery = {},
 ): Promise<TemplateListing> {
   const { limit, offset } = bounds(options);
-  const category =
-    options.category && options.category !== "all" ? options.category : null;
-  const search = options.search?.trim() || null;
 
   const rows = await query<TemplateSummaryRow & { total: number }>(
-    `select t.slug, t.label, c.slug as category, t.keywords, t.width, t.height,
-            t.background, jsonb_array_length(t.slots) as slot_count,
-            t.is_premium,
+    `select i.slug, i.label, c.slug as category, i.keywords, i.width, i.height,
+            i.background, jsonb_array_length(i.slots) as slot_count,
+            i.is_premium,
             count(*) over ()::int as total
-       from design_templates t
-       join library_categories c on c.id = t.category_id
-      where t.published_at is not null
-        and ($1::text is null or c.slug = $1)
-        and ($2::text is null
-             or t.label ilike '%' || $2 || '%'
-             or exists (
-               select 1 from unnest(t.keywords) as keyword
-                where keyword ilike '%' || $2 || '%'
-             ))
-      order by t.position, t.label
+       from design_templates i
+       join library_categories c on c.id = i.category_id
+      where ${LIBRARY_FILTER}
+      order by i.position, i.label
       limit $3 offset $4`,
-    [category, search, limit, offset],
+    [...filterValues(options), limit, offset],
   );
 
   return {
@@ -147,6 +164,80 @@ export async function listTemplates(
     })),
     // `count(*) over ()` rides along on the same scan; with no rows there is
     // nothing to ride on, and the total is zero by definition.
+    total: rows[0]?.total ?? 0,
+  };
+}
+
+export interface StickerSummary {
+  id: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  kind: "emoji" | "image";
+  /** Set for emoji stickers; the browser draws it directly. */
+  glyph: string | null;
+  /** Set for image stickers, along with the artwork's intrinsic size. */
+  url: string | null;
+  width: number | null;
+  height: number | null;
+  isPremium: boolean;
+}
+
+interface StickerRow {
+  slug: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  kind: "emoji" | "image";
+  glyph: string | null;
+  storage_key: string | null;
+  width: number | null;
+  height: number | null;
+  is_premium: boolean;
+  total: number;
+}
+
+export interface StickerListing {
+  stickers: StickerSummary[];
+  total: number;
+}
+
+/**
+ * Stickers for the library panel.
+ *
+ * Unlike templates there is no heavier "detail" to fetch later: a sticker is
+ * its glyph or its artwork URL, and both fit in the list.
+ */
+export async function listStickers(
+  options: LibraryQuery = {},
+): Promise<StickerListing> {
+  const { limit, offset } = bounds(options);
+
+  const rows = await query<StickerRow>(
+    `select i.slug, i.label, c.slug as category, i.keywords, i.kind, i.glyph,
+            i.storage_key, i.width, i.height, i.is_premium,
+            count(*) over ()::int as total
+       from stickers i
+       join library_categories c on c.id = i.category_id
+      where ${LIBRARY_FILTER}
+      order by i.position, i.label
+      limit $3 offset $4`,
+    [...filterValues(options), limit, offset],
+  );
+
+  return {
+    stickers: rows.map((row) => ({
+      id: row.slug,
+      label: row.label,
+      category: row.category,
+      keywords: row.keywords,
+      kind: row.kind,
+      glyph: row.glyph,
+      url: row.storage_key ? `/api/photos/${row.storage_key}` : null,
+      width: row.width,
+      height: row.height,
+      isPremium: row.is_premium,
+    })),
     total: rows[0]?.total ?? 0,
   };
 }

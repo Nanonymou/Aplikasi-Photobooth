@@ -1,15 +1,8 @@
 import { jsonError } from "@/lib/api/http";
-import { listCategories, listTemplates, MAX_LIMIT } from "@/lib/db/library";
+import { LIBRARY_CACHE, parseListParams } from "@/lib/api/library-params";
+import { listCategories, listTemplates } from "@/lib/db/library";
 
 export const runtime = "nodejs";
-
-/**
- * Library content is the same for everyone, so it may be cached by the browser
- * and by anything in front of the app. Short freshness with a long stale window:
- * a newly published template should appear within the minute, and a curator's
- * edit must never make the panel wait on the database.
- */
-const CACHE = "public, max-age=60, stale-while-revalidate=300";
 
 /**
  * Templates for the library panel, filtered by theme.
@@ -25,28 +18,12 @@ const CACHE = "public, max-age=60, stale-while-revalidate=300";
  * endpoint, once the user actually picks one.
  */
 export async function GET(request: Request): Promise<Response> {
-  const params = new URL(request.url).searchParams;
-
-  const limitParam = params.get("limit");
-  const limit = limitParam === null ? undefined : Number(limitParam);
-  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
-    return jsonError(400, `Parameter limit harus bilangan 1–${MAX_LIMIT}.`);
-  }
-
-  const offsetParam = params.get("offset");
-  const offset = offsetParam === null ? undefined : Number(offsetParam);
-  if (offset !== undefined && (!Number.isInteger(offset) || offset < 0)) {
-    return jsonError(400, "Parameter offset harus bilangan >= 0.");
-  }
+  const params = parseListParams(request);
+  if (!params.ok) return params.response;
 
   try {
     const [listing, categories] = await Promise.all([
-      listTemplates({
-        category: params.get("category") ?? undefined,
-        search: params.get("q") ?? undefined,
-        limit,
-        offset,
-      }),
+      listTemplates(params.query),
       listCategories("template", "design_templates"),
     ]);
 
@@ -56,7 +33,7 @@ export async function GET(request: Request): Promise<Response> {
         total: listing.total,
         categories,
       },
-      { headers: { "cache-control": CACHE } },
+      { headers: { "cache-control": LIBRARY_CACHE } },
     );
   } catch (error) {
     console.error("GET /api/library/templates failed", error);
