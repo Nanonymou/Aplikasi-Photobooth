@@ -1,21 +1,35 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowUpFromLine,
+  ArrowDownToLine,
   Image as ImageIcon,
   LayoutTemplate,
   MoreHorizontal,
+  Pencil,
   Search,
   Sticker,
+  Trash2,
   Type,
   type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -24,7 +38,7 @@ import {
   ADMIN_CONTENT,
   CONTENT_STATUS_LABELS,
   CONTENT_TYPE_LABELS,
-  contentCounts,
+  type ContentItem,
   type ContentStatus,
   type ContentType,
 } from "@/lib/admin/content";
@@ -84,18 +98,49 @@ function Badge({ className, children }: { className: string; children: string })
  * Templates and the assets that dress them, shown as a preview grid because
  * content is looked at, not read: each card leads with a kind-tinted swatch, then
  * its name, category, and whether it is live. Search and the type filter combine
- * on the client over the mock library. Editing and publishing are later RBAC
- * tasks, so the per-card menu offers them as disabled entries, not dead buttons.
+ * on the client over the library. The per-card menu acts on it — open in the
+ * editor, publish or pull, delete — mutating the list in place ahead of the API.
  */
 export function ContentLibrary() {
+  const [items, setItems] = useState<ContentItem[]>(ADMIN_CONTENT);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<ContentType | "all">("all");
+  const [deleting, setDeleting] = useState<ContentItem | null>(null);
 
-  const counts = useMemo(() => contentCounts(), []);
+  const counts = useMemo(() => {
+    const tally: Record<ContentType, number> = {
+      template: 0,
+      sticker: 0,
+      background: 0,
+      textstyle: 0,
+    };
+    for (const item of items) tally[item.type] += 1;
+    return tally;
+  }, [items]);
+
+  function togglePublish(target: ContentItem) {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === target.id
+          ? {
+              ...item,
+              status: item.status === "published" ? "draft" : "published",
+            }
+          : item,
+      ),
+    );
+  }
+
+  function confirmDelete() {
+    if (deleting) {
+      setItems((current) => current.filter((item) => item.id !== deleting.id));
+    }
+    setDeleting(null);
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return ADMIN_CONTENT.filter((item) => {
+    return items.filter((item) => {
       if (type !== "all" && item.type !== type) return false;
       if (!q) return true;
       return (
@@ -103,7 +148,7 @@ export function ContentLibrary() {
         item.category.toLowerCase().includes(q)
       );
     });
-  }, [query, type]);
+  }, [items, query, type]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -196,11 +241,33 @@ export function ContentLibrary() {
                           <MoreHorizontal />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem disabled>Pratinjau</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Sunting</DropdownMenuItem>
-                        <DropdownMenuItem disabled>
-                          {item.status === "published" ? "Tarik" : "Terbitkan"}
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem asChild>
+                          <Link href="/editor">
+                            <Pencil />
+                            Buka di editor
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => togglePublish(item)}>
+                          {item.status === "published" ? (
+                            <>
+                              <ArrowDownToLine />
+                              Tarik jadi draf
+                            </>
+                          ) : (
+                            <>
+                              <ArrowUpFromLine />
+                              Terbitkan
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => setDeleting(item)}
+                        >
+                          <Trash2 />
+                          Hapus
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -227,8 +294,34 @@ export function ContentLibrary() {
       )}
 
       <p className="text-muted-foreground text-xs">
-        Menampilkan {filtered.length} dari {ADMIN_CONTENT.length} konten.
+        Menampilkan {filtered.length} dari {items.length} konten.
       </p>
+
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Hapus konten?</DialogTitle>
+            <DialogDescription>
+              <span className="text-foreground font-medium">
+                {deleting?.name}
+              </span>{" "}
+              akan dihapus dari pustaka. Tindakan ini tidak bisa dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>
+              Batal
+            </Button>
+            <Button variant="destructive" size="sm" onClick={confirmDelete}>
+              <Trash2 />
+              Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
