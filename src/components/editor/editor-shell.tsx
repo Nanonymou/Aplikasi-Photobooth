@@ -9,6 +9,7 @@ import { InspectorPanel } from "@/components/editor/inspector-panel";
 import { SidePanel } from "@/components/editor/side-panel";
 import { StatusBar } from "@/components/editor/status-bar";
 import { ToolRail } from "@/components/editor/tool-rail";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAutosave } from "@/hooks/use-autosave";
 import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
@@ -47,6 +48,8 @@ export function EditorShell() {
 
           {inspectorOpen && <InspectorPanel />}
         </div>
+
+        <Toaster />
       </div>
     </TooltipProvider>
   );

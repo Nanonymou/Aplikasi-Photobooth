@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import {
   defaultExportSettings,
   downloadBlob,
@@ -21,10 +22,12 @@ import {
   planExport,
   renderExport,
   renderPreview,
+  type ExportProgress,
   type ExportSettings,
 } from "@/lib/editor/export";
 import { transparencyCheckerDataUri } from "@/lib/editor/patterns";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
+import { toast } from "@/store/toast-store";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Ekspor gagal.";
@@ -45,7 +48,7 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
     defaultExportSettings,
   );
   const [preview, setPreview] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -76,18 +79,31 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
     };
   }, [page, previewFormat, previewTransparent]);
 
+  const busy = progress !== null;
+
   async function handleDownload() {
-    setBusy(true);
+    setProgress({ value: 0, label: "Menyiapkan kanvas…" });
     setError(null);
     setSaved(null);
     try {
-      const result = await renderExport(page, title, settings);
+      const result = await renderExport(page, title, settings, setProgress);
       downloadBlob(result.blob, result.filename);
-      setSaved(`${result.filename} · ${formatBytes(result.blob.size)}`);
+
+      const summary = `${result.filename} · ${formatBytes(result.blob.size)}`;
+      setSaved(summary);
+      // The dialog may well be closed by the time this lands, so the
+      // confirmation goes to a toast as well as the footer.
+      toast({
+        variant: "success",
+        title: "Berkas tersimpan",
+        description: `${summary} · ${result.width}×${result.height} px`,
+      });
     } catch (cause) {
-      setError(errorMessage(cause));
+      const message = errorMessage(cause);
+      setError(message);
+      toast({ variant: "error", title: "Ekspor gagal", description: message });
     } finally {
-      setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -148,6 +164,13 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <TriangleAlert className="mt-0.5 size-3 shrink-0" />
           {error}
         </p>
+      )}
+
+      {busy && (
+        <div className="flex flex-col gap-1.5">
+          <Progress value={progress.value} />
+          <p className="text-muted-foreground text-[11px]">{progress.label}</p>
+        </div>
       )}
 
       <DialogFooter className="sm:items-center sm:justify-between">

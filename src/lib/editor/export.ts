@@ -171,6 +171,16 @@ export function planExport(
   };
 }
 
+/**
+ * Above this many output pixels the render blocks the tab for seconds, so the
+ * UI warns before the click rather than after.
+ */
+export const HEAVY_PIXELS = 40_000_000;
+
+export function isHeavyExport(plan: ExportPlan): boolean {
+  return plan.width * plan.height > HEAVY_PIXELS;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -188,6 +198,28 @@ export function exportFilename(title: string, extension: string): string {
       .slice(0, 60) || "framestudio";
 
   return `${slug}.${extension}`;
+}
+
+/** Coarse stages of an export, in the order they run. */
+export interface ExportProgress {
+  /** 0–1, for the progress bar. */
+  value: number;
+  label: string;
+}
+
+export type ProgressCallback = (progress: ExportProgress) => void;
+
+/**
+ * Hands the main thread back long enough for the browser to paint.
+ *
+ * Rasterising a 300 DPI page blocks for a second or more, and without this the
+ * spinner and the stage label would only appear after the work they describe
+ * had already finished.
+ */
+function yieldToPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -296,29 +328,39 @@ export async function renderExport(
   page: Pick<CanvasPage, "width" | "height">,
   title: string,
   settings: ExportSettings,
+  onProgress?: ProgressCallback,
 ): Promise<RenderedExport> {
   const { format, scale, quality } = settings;
   const definition = getExportFormat(format);
-  const canvas = await rasterise(page, scale, keepsTransparency(settings));
   const filename = exportFilename(title, definition.extension);
+
+  const report = async (value: number, label: string) => {
+    onProgress?.({ value, label });
+    if (onProgress) await yieldToPaint();
+  };
+
+  await report(0.1, "Menyiapkan kanvas…");
+  const canvas = await rasterise(page, scale, keepsTransparency(settings));
+
+  await report(0.6, `Menyusun ${definition.label}…`);
 
   if (format === "pdf") {
     const jpeg = await toBlob(canvas, "image/jpeg", quality);
+    await report(0.85, "Membungkus halaman PDF…");
     const blob = jpegToPdf(
       new Uint8Array(await jpeg.arrayBuffer()),
       canvas.width,
       canvas.height,
       dpiFor(scale),
     );
+    await report(1, "Selesai");
     return { blob, filename, width: canvas.width, height: canvas.height };
   }
 
-  return {
-    blob: await toBlob(canvas, definition.mimeType, quality),
-    filename,
-    width: canvas.width,
-    height: canvas.height,
-  };
+  const blob = await toBlob(canvas, definition.mimeType, quality);
+  await report(1, "Selesai");
+
+  return { blob, filename, width: canvas.width, height: canvas.height };
 }
 
 /** Saves an already-encoded data URL, e.g. a generated QR Code. */

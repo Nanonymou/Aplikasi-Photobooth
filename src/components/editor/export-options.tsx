@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -9,6 +9,7 @@ import {
   EXPORT_FORMATS,
   formatBytes,
   getExportFormat,
+  isHeavyExport,
   isLossy,
   matchingPresetId,
   MAX_SCALE,
@@ -186,6 +187,14 @@ export function ExportOptions({
             </button>
           )}
         </div>
+      )}
+
+      {isHeavyExport(plan) && (
+        <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-relaxed">
+          <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+          Ukuran sebesar ini butuh waktu — proses bisa berjalan puluhan detik
+          dan tab akan terasa berhenti sebentar.
+        </p>
       )}
 
       <dl className="border-editor-border bg-editor-surface grid grid-cols-2 gap-y-1 rounded-lg border p-3 text-[11px]">

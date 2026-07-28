@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
   defaultExportSettings,
@@ -30,6 +31,7 @@ import {
   formatBytes,
   getQualityPreset,
   renderExport,
+  type ExportProgress,
 } from "@/lib/editor/export";
 import { renderQrDataUrl } from "@/components/editor/qr-dialog";
 import {
@@ -42,6 +44,7 @@ import {
 } from "@/lib/editor/share";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
+import { toast } from "@/store/toast-store";
 
 /** Small preview of the same code the QR dialog shows full size. */
 function QrPreview({ value }: { value: string }) {
@@ -92,12 +95,18 @@ function useNativeShare(): boolean {
 async function renderSharePng(
   page: Parameters<typeof renderExport>[0],
   title: string,
+  onProgress: (progress: ExportProgress) => void,
 ) {
-  return renderExport(page, title, {
-    ...defaultExportSettings(),
-    format: "png",
-    scale: getQualityPreset("hd").scale,
-  });
+  return renderExport(
+    page,
+    title,
+    {
+      ...defaultExportSettings(),
+      format: "png",
+      scale: getQualityPreset("hd").scale,
+    },
+    onProgress,
+  );
 }
 
 function ShareSheet({
@@ -116,8 +125,17 @@ function ShareSheet({
   const [caption, setCaption] = useState(() => shareCaption(title));
   const [copied, setCopied] = useState<"link" | "caption" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /** One place for the "something went wrong" pair: inline text + a toast. */
+  function fail(cause: unknown, title: string) {
+    const message =
+      cause instanceof Error ? cause.message : "Terjadi kesalahan.";
+    setError(message);
+    toast({ variant: "error", title, description: message });
+  }
 
   async function copy(text: string, what: "link" | "caption") {
     try {
@@ -142,15 +160,21 @@ function ShareSheet({
     setError(null);
     setStatus(null);
     try {
-      const result = await renderSharePng(page, title);
+      const result = await renderSharePng(page, title, setProgress);
       downloadBlob(result.blob, result.filename);
       await copy(caption, "caption");
       window.open(target.href(link, caption), "_blank", "noopener,noreferrer");
       setStatus(target.hint ?? null);
+      toast({
+        variant: "success",
+        title: `Siap diunggah ke ${target.label}`,
+        description: target.hint,
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ekspor gagal.");
+      fail(cause, `Gagal menyiapkan untuk ${target.label}`);
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -160,7 +184,7 @@ function ShareSheet({
     setError(null);
     setStatus(null);
     try {
-      const result = await renderSharePng(page, title);
+      const result = await renderSharePng(page, title, setProgress);
       const file = new File([result.blob], result.filename, {
         type: "image/png",
       });
@@ -168,6 +192,9 @@ function ShareSheet({
       if (canShareFile(file)) {
         const shared = await shareFile(file, title, `${caption} ${link}`);
         setStatus(shared ? "Terkirim lewat menu berbagi perangkat." : null);
+        if (shared) {
+          toast({ variant: "success", title: "Terkirim lewat menu berbagi" });
+        }
         return;
       }
 
@@ -178,9 +205,10 @@ function ShareSheet({
       setStatus("Teks dibagikan, gambar tersimpan di unduhan.");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setError(cause instanceof Error ? cause.message : "Berbagi gagal.");
+      fail(cause, "Berbagi gagal");
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -189,13 +217,21 @@ function ShareSheet({
     setError(null);
     setStatus(null);
     try {
-      const result = await renderSharePng(page, title);
+      const result = await renderSharePng(page, title, setProgress);
       downloadBlob(result.blob, result.filename);
-      setStatus(`${result.filename} · ${formatBytes(result.blob.size)}`);
+
+      const summary = `${result.filename} · ${formatBytes(result.blob.size)}`;
+      setStatus(summary);
+      toast({
+        variant: "success",
+        title: "Gambar tersimpan",
+        description: summary,
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Ekspor gagal.");
+      fail(cause, "Ekspor gagal");
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -364,6 +400,13 @@ function ShareSheet({
           Unduh gambar (PNG HD)
         </Button>
       </div>
+
+      {progress && (
+        <div className="flex flex-col gap-1.5">
+          <Progress value={progress.value} />
+          <p className="text-muted-foreground text-[11px]">{progress.label}</p>
+        </div>
+      )}
 
       <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-relaxed">
         <Info className="mt-0.5 size-3 shrink-0" />

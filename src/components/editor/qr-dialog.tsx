@@ -16,6 +16,7 @@ import {
 import { downloadDataUrl, exportFilename } from "@/lib/editor/export";
 import { shareLink } from "@/lib/editor/share";
 import { useEditorStore } from "@/store/editor-store";
+import { toast } from "@/store/toast-store";
 
 /** Rendered big enough to stay sharp when the card goes fullscreen. */
 const QR_PIXELS = 1024;
@@ -142,10 +143,16 @@ function QrSheet({ onClose }: { onClose: () => void }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              dataUrl &&
-              downloadDataUrl(dataUrl, exportFilename(`${title} qr`, "png"))
-            }
+            onClick={() => {
+              if (!dataUrl) return;
+              const filename = exportFilename(`${title} qr`, "png");
+              downloadDataUrl(dataUrl, filename);
+              toast({
+                variant: "success",
+                title: "QR tersimpan",
+                description: `${filename} · ${QR_PIXELS}×${QR_PIXELS} px`,
+              });
+            }}
             disabled={!dataUrl}
           >
             <Download />
