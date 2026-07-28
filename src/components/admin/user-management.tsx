@@ -2,18 +2,30 @@
 
 import { useMemo, useState } from "react";
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
+  LifeBuoy,
   MoreHorizontal,
   Search,
+  UserCog,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -22,6 +34,7 @@ import {
   ADMIN_USERS,
   ROLE_LABELS,
   STATUS_LABELS,
+  type AdminUser,
   type RoleId,
   type UserStatus,
 } from "@/lib/admin/users";
@@ -49,6 +62,9 @@ const ROLE_FILTERS: (RoleId | "all")[] = [
   "operator",
   "tamu",
 ];
+
+/** Every assignable role, for the change-role picker. */
+const ROLE_IDS = Object.keys(ROLE_LABELS) as RoleId[];
 
 function Badge({ className, children }: { className: string; children: string }) {
   return (
@@ -111,10 +127,52 @@ function SortHeader({
 }
 
 export function UserManagement() {
+  const [users, setUsers] = useState<AdminUser[]>(ADMIN_USERS);
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<RoleId | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("joined");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Change-role dialog: which user, and the role being picked.
+  const [editingRole, setEditingRole] = useState<AdminUser | null>(null);
+  const [roleDraft, setRoleDraft] = useState<RoleId>("editor");
+  // Sign-in help dialog: which user, and whether the mock link was "sent".
+  const [helping, setHelping] = useState<AdminUser | null>(null);
+  const [helpSent, setHelpSent] = useState(false);
+
+  function openRoleEdit(user: AdminUser) {
+    setEditingRole(user);
+    setRoleDraft(user.role);
+  }
+
+  function applyRole() {
+    if (editingRole) {
+      setUsers((current) =>
+        current.map((user) =>
+          user.id === editingRole.id ? { ...user, role: roleDraft } : user,
+        ),
+      );
+    }
+    setEditingRole(null);
+  }
+
+  function toggleSuspend(target: AdminUser) {
+    setUsers((current) =>
+      current.map((user) =>
+        user.id === target.id
+          ? {
+              ...user,
+              status: user.status === "suspended" ? "active" : "suspended",
+            }
+          : user,
+      ),
+    );
+  }
+
+  function openHelp(user: AdminUser) {
+    setHelping(user);
+    setHelpSent(false);
+  }
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -128,7 +186,7 @@ export function UserManagement() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = ADMIN_USERS.filter((user) => {
+    const list = users.filter((user) => {
       if (role !== "all" && user.role !== role) return false;
       if (!q) return true;
       return (
@@ -145,7 +203,7 @@ export function UserManagement() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [query, role, sortKey, sortDir]);
+  }, [users, query, role, sortKey, sortDir]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -254,10 +312,24 @@ export function UserManagement() {
                           <MoreHorizontal />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem disabled>Lihat detail</DropdownMenuItem>
-                        <DropdownMenuItem disabled>Ubah peran</DropdownMenuItem>
-                        <DropdownMenuItem disabled>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onSelect={() => openRoleEdit(user)}>
+                          <UserCog />
+                          Ubah peran
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => openHelp(user)}>
+                          <LifeBuoy />
+                          Bantuan masuk
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant={
+                            user.status === "suspended"
+                              ? "default"
+                              : "destructive"
+                          }
+                          onSelect={() => toggleSuspend(user)}
+                        >
                           {user.status === "suspended"
                             ? "Aktifkan"
                             : "Tangguhkan"}
@@ -284,8 +356,111 @@ export function UserManagement() {
       </div>
 
       <p className="text-muted-foreground text-xs">
-        Menampilkan {filtered.length} dari {ADMIN_USERS.length} pengguna.
+        Menampilkan {filtered.length} dari {users.length} pengguna.
       </p>
+
+      {/* Change role */}
+      <Dialog
+        open={editingRole !== null}
+        onOpenChange={(open) => !open && setEditingRole(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Ubah peran</DialogTitle>
+            <DialogDescription>
+              Atur peran untuk{" "}
+              <span className="text-foreground font-medium">
+                {editingRole?.name}
+              </span>
+              . Peran menentukan apa yang bisa mereka akses.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={roleDraft}
+            onValueChange={(value) => value && setRoleDraft(value as RoleId)}
+            className="flex-wrap justify-start"
+          >
+            {ROLE_IDS.map((id) => (
+              <ToggleGroupItem key={id} value={id}>
+                {ROLE_LABELS[id]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingRole(null)}
+            >
+              Batal
+            </Button>
+            <Button
+              size="sm"
+              onClick={applyRole}
+              disabled={roleDraft === editingRole?.role}
+            >
+              Simpan peran
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sign-in help */}
+      <Dialog
+        open={helping !== null}
+        onOpenChange={(open) => !open && setHelping(null)}
+      >
+        <DialogContent className="max-w-sm">
+          {helpSent ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="text-primary size-5" />
+                  Bantuan terkirim
+                </DialogTitle>
+                <DialogDescription>
+                  Tautan bantuan masuk dikirim ke{" "}
+                  <span className="text-foreground font-medium">
+                    {helping?.email}
+                  </span>
+                  . Ini pratinjau — belum ada email sungguhan yang dikirim.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button size="sm" onClick={() => setHelping(null)}>
+                  Selesai
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Bantuan masuk</DialogTitle>
+                <DialogDescription>
+                  Kirim tautan agar{" "}
+                  <span className="text-foreground font-medium">
+                    {helping?.name}
+                  </span>{" "}
+                  bisa masuk atau mengatur ulang kata sandinya.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="ghost" size="sm" onClick={() => setHelping(null)}>
+                  Batal
+                </Button>
+                <Button size="sm" onClick={() => setHelpSent(true)}>
+                  <LifeBuoy />
+                  Kirim tautan
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
