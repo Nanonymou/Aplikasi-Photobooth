@@ -34,6 +34,7 @@ import { MY_DESIGNS, type MyDesign } from "@/lib/gallery/my-designs";
 import { createId } from "@/lib/editor/id";
 
 type Sort = "recent" | "name";
+type Scope = "all" | "shared";
 
 function thumbStyle(hue: number) {
   return {
@@ -53,22 +54,30 @@ function thumbStyle(hue: number) {
 export function GalleryManager() {
   const [designs, setDesigns] = useState<MyDesign[]>(MY_DESIGNS);
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<Scope>("all");
   const [sort, setSort] = useState<Sort>("recent");
 
   const [renaming, setRenaming] = useState<MyDesign | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [deleting, setDeleting] = useState<MyDesign | null>(null);
 
+  const sharedCount = useMemo(
+    () => designs.filter((design) => design.shared).length,
+    [designs],
+  );
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = designs.filter((design) =>
-      design.title.toLowerCase().includes(q),
+    const list = designs.filter(
+      (design) =>
+        design.title.toLowerCase().includes(q) &&
+        (scope === "all" || design.shared),
     );
     if (sort === "name") {
       return [...list].sort((a, b) => a.title.localeCompare(b.title, "id"));
     }
     return list; // Already newest-first.
-  }, [designs, query, sort]);
+  }, [designs, query, scope, sort]);
 
   function duplicate(design: MyDesign) {
     const copy: MyDesign = {
@@ -121,12 +130,28 @@ export function GalleryManager() {
           />
         </div>
 
-        <div className="min-w-0 overflow-x-auto">
+        <div className="flex min-w-0 gap-2 overflow-x-auto">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={scope}
+            onValueChange={(value) => value && setScope(value as Scope)}
+            aria-label="Saring desain"
+          >
+            <ToggleGroupItem value="all" className="whitespace-nowrap">
+              Semua
+            </ToggleGroupItem>
+            <ToggleGroupItem value="shared" className="whitespace-nowrap">
+              Dibagikan
+            </ToggleGroupItem>
+          </ToggleGroup>
+
           <ToggleGroup
             type="single"
             variant="outline"
             value={sort}
             onValueChange={(value) => value && setSort(value as Sort)}
+            aria-label="Urutkan desain"
           >
             <ToggleGroupItem value="recent" className="whitespace-nowrap">
               Terbaru
@@ -214,7 +239,7 @@ export function GalleryManager() {
       )}
 
       <p className="text-muted-foreground text-xs">
-        {designs.length} desain di galerimu.
+        {designs.length} desain · {sharedCount} dibagikan.
       </p>
 
       {/* Rename */}
