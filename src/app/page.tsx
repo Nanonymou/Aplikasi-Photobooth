@@ -31,6 +31,23 @@ export default function Home() {
           Tanpa akun — karyamu tersimpan di perangkat ini.
         </p>
       </div>
+
+      <p className="text-muted-foreground text-sm">
+        Sudah punya akun?{" "}
+        <Link
+          href="/masuk"
+          className="text-primary font-medium underline-offset-4 hover:underline"
+        >
+          Masuk
+        </Link>{" "}
+        ·{" "}
+        <Link
+          href="/daftar"
+          className="hover:text-foreground underline-offset-4 hover:underline"
+        >
+          Daftar
+        </Link>
+      </p>
     </main>
   );
 }
