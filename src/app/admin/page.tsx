@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { QuickLinks } from "@/components/admin/quick-links";
 import { RecentActivity } from "@/components/admin/recent-activity";
 import { RoleSummary } from "@/components/admin/role-summary";
 import { StatGrid } from "@/components/admin/stat-grid";
@@ -27,6 +28,8 @@ export default function AdminDashboardPage() {
       </div>
 
       <StatGrid />
+
+      <QuickLinks />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
