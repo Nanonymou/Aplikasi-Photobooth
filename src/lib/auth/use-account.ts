@@ -42,3 +42,15 @@ const subscribe = () => () => {};
 export function useAccount(): Profile | null {
   return useSyncExternalStore(subscribe, () => MOCK_PROFILE, () => null);
 }
+
+/**
+ * The current account's role, or `null` before the session resolves.
+ *
+ * The read most role-conditional UI actually needs — a nav item or a menu entry
+ * asks "what am I?", not for the whole profile — so it gets its own hook rather
+ * than reaching through `useAccount().role` and re-rendering on unrelated profile
+ * changes.
+ */
+export function useRole(): Role | null {
+  return useAccount()?.role ?? null;
+}

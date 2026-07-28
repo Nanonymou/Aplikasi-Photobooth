@@ -1,7 +1,9 @@
 "use client";
 
-import { LogOut, Settings, UserRound } from "lucide-react";
+import Link from "next/link";
+import { LogOut, ShieldCheck, Settings, UserRound } from "lucide-react";
 
+import { RoleGate } from "@/components/auth/role-gate";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -92,6 +94,18 @@ export function AccountMenu() {
         </div>
 
         <DropdownMenuSeparator />
+
+        {/* Only admins get a way into the console — the app's main per-role
+            navigation difference. */}
+        <RoleGate allow={["admin"]}>
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <ShieldCheck />
+              Konsol admin
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </RoleGate>
 
         <DropdownMenuItem disabled>
           <UserRound />
