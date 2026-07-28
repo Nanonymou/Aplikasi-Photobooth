@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type Konva from "konva";
 import { Transformer } from "react-konva";
 
+import { EXPORT_CHROME } from "@/lib/editor/stage-registry";
 import type { CanvasObject } from "@/types/editor";
 
 /** Smallest edge an object can be resized to, in page px. */
@@ -57,6 +58,7 @@ export function SelectionTransformer({
   return (
     <Transformer
       ref={transformerRef}
+      name={EXPORT_CHROME}
       rotateEnabled
       rotationSnaps={ROTATION_SNAPS}
       rotationSnapTolerance={4}

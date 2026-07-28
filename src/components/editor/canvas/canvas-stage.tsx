@@ -9,7 +9,7 @@ import { useObjectDrag } from "@/hooks/use-object-drag";
 import { STICKERS } from "@/lib/editor/decorations";
 import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
-import { registerStage } from "@/lib/editor/stage-registry";
+import { EXPORT_CHROME, registerStage } from "@/lib/editor/stage-registry";
 import {
   patternDataUri,
   transparencyCheckerDataUri,
@@ -60,13 +60,20 @@ function TransparentBackground({
 
   return (
     <>
-      <Rect width={width} height={height} fill="#ffffff" listening={false} />
+      <Rect
+        width={width}
+        height={height}
+        fill="#ffffff"
+        name={EXPORT_CHROME}
+        listening={false}
+      />
       {image && (
         <Rect
           width={width}
           height={height}
           fillPatternImage={image}
           fillPatternRepeat="repeat"
+          name={EXPORT_CHROME}
           listening={false}
         />
       )}
@@ -463,6 +470,7 @@ export function CanvasStage() {
                 shadowBlur={32 / effectiveZoom}
                 shadowOpacity={0.35}
                 shadowOffsetY={8 / effectiveZoom}
+                name={EXPORT_CHROME}
                 listening={false}
               />
               <PageBackgroundRect
@@ -503,6 +511,7 @@ export function CanvasStage() {
                   strokeWidth={1}
                   dash={[6, 4]}
                   strokeScaleEnabled={false}
+                  name={EXPORT_CHROME}
                   listening={false}
                 />
               ))}

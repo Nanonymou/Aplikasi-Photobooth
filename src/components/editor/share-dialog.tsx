@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  defaultExportSettings,
   downloadBlob,
   formatBytes,
   getQualityPreset,
@@ -99,12 +100,11 @@ function ShareSheet({ onClose }: { onClose: () => void }) {
     setError(null);
     setSaved(null);
     try {
-      const result = await renderExport(
-        page,
-        title,
-        "png",
-        getQualityPreset("hd").scale,
-      );
+      const result = await renderExport(page, title, {
+        ...defaultExportSettings(),
+        format: "png",
+        scale: getQualityPreset("hd").scale,
+      });
       downloadBlob(result.blob, result.filename);
       setSaved(`${result.filename} · ${formatBytes(result.blob.size)}`);
     } catch (cause) {

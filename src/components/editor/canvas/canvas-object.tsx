@@ -14,6 +14,7 @@ import {
 import { useImage } from "@/hooks/use-image";
 import { resolveFontFamily } from "@/lib/editor/fonts";
 import { coverScale, traceSlotPath } from "@/lib/editor/slot-shape";
+import { EXPORT_CHROME } from "@/lib/editor/stage-registry";
 import { arcPathData } from "@/lib/editor/text-path";
 import type {
   CanvasObject,
@@ -406,6 +407,7 @@ export function CanvasObjectNode({
           strokeWidth={2}
           dash={[8, 5]}
           strokeScaleEnabled={false}
+          name={EXPORT_CHROME}
           listening={false}
         />
       )}

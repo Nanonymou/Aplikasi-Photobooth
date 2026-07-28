@@ -1,5 +1,5 @@
 import { jpegToPdf } from "@/lib/editor/pdf";
-import { getStageSnapshot } from "@/lib/editor/stage-registry";
+import { EXPORT_CHROME, getStageSnapshot } from "@/lib/editor/stage-registry";
 import type { CanvasPage } from "@/types/editor";
 
 export type ExportFormat = "png" | "jpeg" | "webp" | "pdf";
@@ -84,10 +84,53 @@ export const QUALITY_PRESETS: QualityPreset[] = [
 
 export const DEFAULT_PRESET_ID = "hd";
 
+/** Free-scale bounds for the resolution slider. */
+export const MIN_SCALE = 0.5;
+export const MAX_SCALE = 8;
+
 export function getQualityPreset(id: string): QualityPreset {
   return (
     QUALITY_PRESETS.find((preset) => preset.id === id) ?? QUALITY_PRESETS[1]
   );
+}
+
+/** Everything the download panel lets the user choose. */
+export interface ExportSettings {
+  format: ExportFormat;
+  /** Output scale relative to the page's design pixels. */
+  scale: number;
+  /** Encoder quality for lossy formats, 0–1. Ignored by PNG. */
+  quality: number;
+  /** Keep the alpha channel. Only honoured by formats that have one. */
+  transparent: boolean;
+}
+
+export function defaultExportSettings(): ExportSettings {
+  return {
+    format: "png",
+    scale: getQualityPreset(DEFAULT_PRESET_ID).scale,
+    quality: 0.92,
+    transparent: true,
+  };
+}
+
+/** The preset a scale corresponds to, or `null` when it was set by hand. */
+export function matchingPresetId(scale: number): string | null {
+  return QUALITY_PRESETS.find((preset) => preset.scale === scale)?.id ?? null;
+}
+
+export function clampScale(scale: number): number {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+}
+
+/** Whether the alpha channel survives the chosen format. */
+export function keepsTransparency(settings: ExportSettings): boolean {
+  return settings.transparent && getExportFormat(settings.format).supportsTransparency;
+}
+
+/** Lossless formats ignore the quality slider, so the UI hides it. */
+export function isLossy(format: ExportFormat): boolean {
+  return format !== "png";
 }
 
 /** DPI a page exported at `scale` prints at, given design px are 72 DPI. */
@@ -107,18 +150,21 @@ export interface ExportPlan {
 
 export function planExport(
   page: Pick<CanvasPage, "width" | "height">,
-  format: ExportFormat,
-  scale: number,
+  settings: ExportSettings,
 ): ExportPlan {
+  const { format, scale, quality } = settings;
   const width = Math.round(page.width * scale);
   const height = Math.round(page.height * scale);
   const dpi = dpiFor(scale);
+
+  // Lossy encoders roughly track the quality knob; PNG does not care about it.
+  const compression = isLossy(format) ? 0.35 + 0.65 * quality : 1;
 
   return {
     width,
     height,
     estimatedBytes: Math.round(
-      width * height * getExportFormat(format).bytesPerPixel,
+      width * height * getExportFormat(format).bytesPerPixel * compression,
     ),
     printWidthCm: (width / dpi) * 2.54,
     printHeightCm: (height / dpi) * 2.54,
@@ -185,8 +231,17 @@ async function rasterise(
   if (!snapshot) throw new Error("Kanvas belum siap. Buka editor lalu ulangi.");
 
   const { stage, origin, zoom } = snapshot;
-  const source = await loadImage(
-    stage.toDataURL({
+
+  // Editor chrome shares the stage with the artwork, so it has to step aside for
+  // the capture. Konva redraws synchronously inside `toDataURL`, which means the
+  // hidden state never reaches the screen.
+  const chrome = stage.find(`.${EXPORT_CHROME}`);
+  const wasVisible = chrome.map((node) => node.visible());
+  chrome.forEach((node) => node.visible(false));
+
+  let captured: string;
+  try {
+    captured = stage.toDataURL({
       x: origin.x,
       y: origin.y,
       width: page.width * zoom,
@@ -194,8 +249,13 @@ async function rasterise(
       // The stage is drawn at the current zoom, so undo it before applying the
       // requested output scale — otherwise the export would inherit the zoom.
       pixelRatio: scale / zoom,
-    }),
-  );
+    });
+  } finally {
+    chrome.forEach((node, index) => node.visible(wasVisible[index]));
+    stage.batchDraw();
+  }
+
+  const source = await loadImage(captured);
 
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(page.width * scale);
@@ -216,15 +276,11 @@ async function rasterise(
 /** Small raster of the page for the dialog's preview. */
 export async function renderPreview(
   page: Pick<CanvasPage, "width" | "height">,
-  format: ExportFormat,
+  settings: ExportSettings,
   maxSize = 360,
 ): Promise<string> {
   const scale = Math.min(1, maxSize / Math.max(page.width, page.height));
-  const canvas = await rasterise(
-    page,
-    scale,
-    getExportFormat(format).supportsTransparency,
-  );
+  const canvas = await rasterise(page, scale, keepsTransparency(settings));
   return canvas.toDataURL("image/png");
 }
 
@@ -235,19 +291,19 @@ export interface RenderedExport {
   height: number;
 }
 
-/** Renders the page into a downloadable file in the requested format. */
+/** Renders the page into a downloadable file using the panel's settings. */
 export async function renderExport(
   page: Pick<CanvasPage, "width" | "height">,
   title: string,
-  format: ExportFormat,
-  scale: number,
+  settings: ExportSettings,
 ): Promise<RenderedExport> {
+  const { format, scale, quality } = settings;
   const definition = getExportFormat(format);
-  const canvas = await rasterise(page, scale, definition.supportsTransparency);
+  const canvas = await rasterise(page, scale, keepsTransparency(settings));
   const filename = exportFilename(title, definition.extension);
 
   if (format === "pdf") {
-    const jpeg = await toBlob(canvas, "image/jpeg", 0.92);
+    const jpeg = await toBlob(canvas, "image/jpeg", quality);
     const blob = jpegToPdf(
       new Uint8Array(await jpeg.arrayBuffer()),
       canvas.width,
@@ -258,7 +314,7 @@ export async function renderExport(
   }
 
   return {
-    blob: await toBlob(canvas, definition.mimeType, 0.92),
+    blob: await toBlob(canvas, definition.mimeType, quality),
     filename,
     width: canvas.width,
     height: canvas.height,
