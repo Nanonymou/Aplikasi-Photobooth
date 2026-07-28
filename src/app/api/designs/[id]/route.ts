@@ -4,6 +4,7 @@ import { validateProject } from "@/lib/api/validate-project";
 import {
   DesignConflictError,
   DesignNotFoundError,
+  loadDesign,
   saveDesign,
 } from "@/lib/db/designs";
 
@@ -11,6 +12,52 @@ export const runtime = "nodejs";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/** A design is only ever its own owner's, so nothing here may be cached shared. */
+const PRIVATE = "private, no-store";
+
+/**
+ * Loads a design for the editor.
+ *
+ * Answers `{ project, version }`: the project the editor renders, and the
+ * version its next autosave has to quote.
+ *
+ * The version doubles as the ETag. A design carries its photos inline, so a
+ * reload is megabytes; if the browser still holds the same version there is
+ * nothing to send, and `If-None-Match` turns that into a 304.
+ */
+export async function GET(
+  request: Request,
+  context: RouteContext<"/api/designs/[id]">,
+): Promise<Response> {
+  const { id } = await context.params;
+
+  const owner = await getOwnerId();
+  if (!owner) return jsonError(404, "Desain tidak ditemukan.");
+
+  try {
+    const loaded = await loadDesign(owner, id);
+    if (!loaded) return jsonError(404, "Desain tidak ditemukan.");
+
+    const etag = `W/"${loaded.version}"`;
+    if (request.headers.get("if-none-match") === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: { etag, "cache-control": PRIVATE },
+      });
+    }
+
+    return Response.json(loaded, {
+      headers: { etag, "cache-control": PRIVATE },
+    });
+  } catch (error) {
+    if (isRecord(error) && error.code === "22P02") {
+      return jsonError(404, "Desain tidak ditemukan.");
+    }
+    console.error(`GET /api/designs/${id} failed`, error);
+    return jsonError(500, "Desain gagal dimuat.");
+  }
 }
 
 /**

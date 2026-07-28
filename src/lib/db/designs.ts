@@ -162,6 +162,77 @@ export interface LoadedDesign {
   version: number;
 }
 
+/** One row per design, enough to draw a card without loading the artwork. */
+export interface DesignSummary {
+  id: string;
+  title: string;
+  version: number;
+  updatedAt: string;
+  pageCount: number;
+  /** Size of the first page, for the card's aspect ratio. */
+  width: number | null;
+  height: number | null;
+}
+
+interface DesignSummaryRow {
+  id: string;
+  title: string;
+  version: number;
+  updated_at: Date;
+  page_count: number;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * The owner's designs, newest first.
+ *
+ * Page count and cover size come from a lateral join rather than a second
+ * round trip, and the `objects` column is deliberately never selected — a list
+ * of ten designs would otherwise drag every photo in them across the wire.
+ */
+export async function listDesigns(
+  ownerId: string,
+  limit = 50,
+): Promise<DesignSummary[]> {
+  const rows = await query<DesignSummaryRow>(
+    `select d.id,
+            d.title,
+            d.version,
+            d.updated_at,
+            coalesce(counted.page_count, 0)::int as page_count,
+            cover.width,
+            cover.height
+       from designs d
+       left join lateral (
+         select count(*)::int as page_count
+           from design_pages p
+          where p.design_id = d.id
+       ) counted on true
+       left join lateral (
+         select p.width, p.height
+           from design_pages p
+          where p.design_id = d.id
+          order by p.position
+          limit 1
+       ) cover on true
+      where d.owner_id = $1 and d.deleted_at is null
+      order by d.updated_at desc
+      limit $2`,
+    [ownerId, limit],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    version: row.version,
+    updatedAt: row.updated_at.toISOString(),
+    pageCount: row.page_count,
+    width: row.width,
+    height: row.height,
+  }));
+}
+
 export async function loadDesign(
   ownerId: string,
   designId: string,
