@@ -9,6 +9,7 @@ import {
   LayoutTemplate,
   MoreHorizontal,
   Pencil,
+  Plus,
   Search,
   Sticker,
   Trash2,
@@ -16,6 +17,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  ContentForm,
+  type ContentDraft,
+} from "@/components/admin/content-form";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +47,7 @@ import {
   type ContentStatus,
   type ContentType,
 } from "@/lib/admin/content";
+import { createId } from "@/lib/editor/id";
 import { cn } from "@/lib/utils";
 
 const TYPE_ICON: Record<ContentType, LucideIcon> = {
@@ -106,6 +112,38 @@ export function ContentLibrary() {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<ContentType | "all">("all");
   const [deleting, setDeleting] = useState<ContentItem | null>(null);
+  // The upload/edit modal: open flag, and the item being edited (null = create).
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ContentItem | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(item: ContentItem) {
+    setEditing(item);
+    setFormOpen(true);
+  }
+
+  function submitForm(draft: ContentDraft) {
+    if (editing) {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === editing.id
+            ? { ...item, ...draft, updated: "baru saja" }
+            : item,
+        ),
+      );
+    } else {
+      setItems((current) => [
+        { id: createId("content"), updated: "baru saja", ...draft },
+        ...current,
+      ]);
+    }
+    setFormOpen(false);
+    setEditing(null);
+  }
 
   const counts = useMemo(() => {
     const tally: Record<ContentType, number> = {
@@ -186,21 +224,32 @@ export function ContentLibrary() {
           />
         </div>
 
-        <div className="min-w-0 overflow-x-auto">
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            value={type}
-            onValueChange={(value) =>
-              setType((value as ContentType | "all") || "all")
-            }
-          >
-            {TYPE_FILTERS.map((id) => (
-              <ToggleGroupItem key={id} value={id} className="whitespace-nowrap">
-                {id === "all" ? "Semua" : CONTENT_TYPE_LABELS[id]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 overflow-x-auto">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={type}
+              onValueChange={(value) =>
+                setType((value as ContentType | "all") || "all")
+              }
+            >
+              {TYPE_FILTERS.map((id) => (
+                <ToggleGroupItem
+                  key={id}
+                  value={id}
+                  className="whitespace-nowrap"
+                >
+                  {id === "all" ? "Semua" : CONTENT_TYPE_LABELS[id]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
+          <Button size="sm" onClick={openCreate} className="shrink-0">
+            <Plus />
+            <span className="hidden sm:inline">Unggah</span>
+          </Button>
         </div>
       </div>
 
@@ -219,11 +268,20 @@ export function ContentLibrary() {
               >
                 <div
                   className={cn(
-                    "relative flex aspect-[4/3] items-center justify-center bg-gradient-to-br",
+                    "relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br",
                     TYPE_GRADIENT[item.type],
                   )}
                 >
-                  <Icon className="text-foreground/40 size-8" />
+                  {item.src ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.src}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Icon className="text-foreground/40 size-8" />
+                  )}
                   <span className="absolute top-2 left-2">
                     <Badge className={STATUS_BADGE[item.status]}>
                       {CONTENT_STATUS_LABELS[item.status]}
@@ -242,11 +300,12 @@ export function ContentLibrary() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onSelect={() => openEdit(item)}>
+                          <Pencil />
+                          Sunting
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link href="/editor">
-                            <Pencil />
-                            Buka di editor
-                          </Link>
+                          <Link href="/editor">Buka di editor</Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => togglePublish(item)}>
                           {item.status === "published" ? (
@@ -296,6 +355,18 @@ export function ContentLibrary() {
       <p className="text-muted-foreground text-xs">
         Menampilkan {filtered.length} dari {items.length} konten.
       </p>
+
+      {/* Upload / edit modal */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-w-md">
+          <ContentForm
+            key={editing?.id ?? "new"}
+            initial={editing ?? undefined}
+            onSubmit={submitForm}
+            onCancel={() => setFormOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleting !== null}

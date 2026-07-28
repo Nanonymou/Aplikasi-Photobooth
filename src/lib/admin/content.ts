@@ -32,6 +32,8 @@ export interface ContentItem {
   status: ContentStatus;
   /** Pre-formatted, so there is no clock to hydrate. */
   updated: string;
+  /** An uploaded preview (object URL); absent items fall back to a kind swatch. */
+  src?: string;
 }
 
 export const ADMIN_CONTENT: ContentItem[] = [
