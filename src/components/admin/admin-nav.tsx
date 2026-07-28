@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, type LucideIcon } from "lucide-react";
+import {
+  LayoutDashboard,
+  LibraryBig,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -18,6 +23,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/admin", label: "Dasbor", icon: LayoutDashboard, exact: true },
   { href: "/admin/pengguna", label: "Pengguna", icon: Users },
+  { href: "/admin/konten", label: "Konten", icon: LibraryBig },
 ];
 
 /**
