@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { LogOut, Settings, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { logout } from "@/lib/auth/mock-auth";
 import { initials, useAccount, type Profile } from "@/lib/auth/use-account";
+import { useLogout } from "@/lib/auth/use-logout";
 import { cn } from "@/lib/utils";
 
 function Avatar({
@@ -59,21 +58,12 @@ function Avatar({
  */
 export function AccountMenu() {
   const profile = useAccount();
-  const [busy, setBusy] = useState(false);
+  const { signOut, busy } = useLogout();
 
   // Neutral placeholder during the server render / first paint, matching the
   // avatar's footprint so the top bar does not shift when the profile arrives.
   if (!profile) {
     return <span className="bg-muted size-8 shrink-0 rounded-full" aria-hidden />;
-  }
-
-  async function signOut() {
-    if (busy) return;
-    setBusy(true);
-    // End the (mock) session, then a full reload to the landing page so no
-    // signed-in view lingers behind the sign-out.
-    await logout();
-    window.location.assign("/");
   }
 
   return (

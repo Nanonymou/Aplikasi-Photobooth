@@ -70,6 +70,30 @@ export async function register(
 export const POST_LOGIN_REDIRECT = "/editor";
 
 /**
+ * Where a signed-out user lands: the login screen. Its counterpart to
+ * `POST_LOGIN_REDIRECT`, kept beside it so the pair never drifts.
+ */
+export const POST_LOGOUT_REDIRECT = "/masuk";
+
+/**
+ * Client marker that a signed-in session exists on this device.
+ *
+ * The mock login flows will set it and logout clears it; it is deliberately the
+ * account's own key, separate from the guest session, so signing out ends the
+ * account without touching a guest's device-local work.
+ */
+export const AUTH_SESSION_KEY = "framestudio:auth:v1";
+
+/** Drops the client's record of the signed-in session. */
+export function clearSession(): void {
+  try {
+    window.localStorage.removeItem(AUTH_SESSION_KEY);
+  } catch {
+    // Storage blocked (private mode): there is nothing stored to clear.
+  }
+}
+
+/**
  * Verifies a magic-link token.
  *
  * Stand-in for `GET /api/auth/magic-link/verify?token=…`: the backend looks the
