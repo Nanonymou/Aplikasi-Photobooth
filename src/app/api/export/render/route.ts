@@ -2,7 +2,9 @@ import { EXPORT_FORMATS, type ExportFormat } from "@/lib/editor/export";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { requireOwnerId } from "@/lib/api/owner";
 import { validateProject } from "@/lib/api/validate-project";
+import { recordRender } from "@/lib/db/renders";
 import { convertRender } from "@/lib/render/convert";
+import { getRenderStorage } from "@/lib/storage/render-storage";
 import {
   MAX_SCALE,
   MIN_SCALE,
@@ -27,8 +29,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Generates a high-resolution file from a design.
  *
- *   { project, pageIndex?, scale?, format?, quality?, transparent? }
- *     → the file itself, with its size and DPI in `x-render-*` headers
+ *   { project, pageIndex?, scale?, format?, quality?, transparent?, persist? }
+ *     → the file itself, with its size and DPI in `x-render-*` headers,
+ *       or — with `persist` — JSON holding a URL that serves it for a while
  *
  * The editor exports by cropping its own canvas, which is exact but needs a
  * browser with the design open. This is for everything else: a print job, a
@@ -36,10 +39,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The page is rebuilt from the model and rasterised from vector, so 300 DPI is
  * genuinely 300 DPI rather than an enlargement of a screen-sized picture.
  *
- * The file is streamed back rather than stored: an export is something the
- * caller is about to save, not something the server needs to keep. Renders that
- * must outlive the request — a share link, a QR someone scans tomorrow — get a
- * home of their own with the temporary render store.
+ * By default the file is streamed back: an export is usually something the
+ * caller is about to save, not something the server needs to keep. `persist`
+ * puts it in the temporary render store instead and answers with a URL — for a
+ * print queue, a download that starts after the dialog closes, or a share link
+ * built from a format photo storage will not hold, such as PDF.
  */
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
@@ -78,6 +82,11 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError(400, "Bidang `transparent` harus boolean.");
   }
 
+  const persist = body.value.persist ?? false;
+  if (typeof persist !== "boolean") {
+    return jsonError(400, "Bidang `persist` harus boolean.");
+  }
+
   const rawScale = body.value.scale ?? DEFAULT_SCALE;
   if (typeof rawScale !== "number" || !Number.isFinite(rawScale)) {
     return jsonError(400, "Bidang `scale` harus angka.");
@@ -99,6 +108,21 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     const filename = exportFilename(validated.project.title, file.extension);
+
+    if (persist) {
+      const storage = getRenderStorage();
+      const stored = await storage.put(new Uint8Array(file.data), file.extension);
+      const record = await recordRender(await requireOwnerId(), {
+        storageKey: stored.key,
+        contentType: file.contentType,
+        filename,
+        bytes: stored.bytes,
+        width: rendered.width,
+        height: rendered.height,
+      });
+
+      return Response.json({ ...record, format, scale, dpi }, { status: 201 });
+    }
 
     return new Response(file.data as BodyInit, {
       headers: {

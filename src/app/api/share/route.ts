@@ -1,10 +1,12 @@
 import QRCode from "qrcode";
 
-import { jsonError } from "@/lib/api/http";
+import { jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
-import { requireOwnerId } from "@/lib/api/owner";
-import { createShare } from "@/lib/db/shares";
-import { getPhotoStorage } from "@/lib/storage/photo-storage";
+import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
+import { findRender } from "@/lib/db/renders";
+import { createShare, type Share } from "@/lib/db/shares";
+import { getRenderStorage } from "@/lib/storage/render-storage";
+import { getShareStorage } from "@/lib/storage/share-storage";
 
 export const runtime = "nodejs";
 
@@ -14,27 +16,72 @@ const MAX_BYTES = 40 * 1024 * 1024;
 /** Big enough to stay sharp on a kiosk screen and when printed on a card. */
 const QR_PIXELS = 1024;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** `undefined` when absent, `null` when present but not a sane number of days. */
+function readDays(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  const days = Number(value);
+  return Number.isInteger(days) && days >= 1 && days <= 30 ? days : null;
+}
+
+/**
+ * The link plus its QR, built from the request's own origin so it works behind
+ * whatever host, port or proxy this is actually running on.
+ */
+async function shareResponse(share: Share, request: Request): Promise<Response> {
+  const url = new URL(`/s/${share.code}`, request.url).toString();
+
+  const dataUrl = await QRCode.toDataURL(url, {
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: QR_PIXELS,
+    color: { dark: "#0f172a", light: "#ffffff" },
+  });
+
+  return Response.json(
+    {
+      code: share.code,
+      url,
+      expiresAt: share.expiresAt,
+      filename: share.filename,
+      bytes: share.bytes,
+      contentType: share.contentType,
+      // The QR rides along as a data URL: a few kilobytes, needed on screen the
+      // moment the link exists, and a second round trip would only ask for
+      // something the server already had in hand.
+      qr: { dataUrl, pixels: QR_PIXELS },
+    },
+    { status: 201 },
+  );
+}
+
 /**
  * Publishes a finished picture and hands back the link and its QR.
  *
- *   multipart: file, filename?, days?
- *     → { code, url, expiresAt, qr: { dataUrl, pixels }, bytes, contentType }
+ *   multipart: file, filename?, days?            an exported image, uploaded
+ *   json:      { renderKey, filename?, days? }   something already rendered
  *
  * This is what turns the editor's share dialog from a mock into something a
  * guest can act on: the URL resolves to the file itself, so scanning the QR on
- * a phone that has never seen this app downloads the photo.
+ * a phone that has never seen this app opens the photo.
  *
- * The QR comes back inline as a data URL. It is a few kilobytes, it is needed
- * on screen the moment the link exists, and a second round trip to fetch it
- * would be a request for something the server already had in hand.
- *
- * Images only for now — the share dialog offers an HD PNG, and a stored PDF
- * needs the render store that arrives with the temporary-file work.
+ * The JSON path is also how a PDF gets a link — photo storage holds pictures,
+ * the render store holds output, and a share copies whichever it was given into
+ * the bucket the link serves from.
  */
 export async function POST(request: Request): Promise<Response> {
   const type = request.headers.get("content-type") ?? "";
+
+  if (type.includes("application/json")) return shareRender(request);
+
   if (!type.includes("multipart/form-data")) {
-    return jsonError(415, "Unggahan harus berupa multipart/form-data.");
+    return jsonError(
+      415,
+      "Unggahan harus multipart/form-data, atau JSON berisi `renderKey`.",
+    );
   }
 
   let form: FormData;
@@ -49,16 +96,12 @@ export async function POST(request: Request): Promise<Response> {
   if (file.size === 0) return jsonError(400, "Berkas kosong.");
   if (file.size > MAX_BYTES) return jsonError(413, "Berkas terlalu besar.");
 
-  const daysRaw = form.get("days");
-  const days = daysRaw === null ? undefined : Number(daysRaw);
-  if (
-    days !== undefined &&
-    (!Number.isInteger(days) || days < 1 || days > 30)
-  ) {
-    return jsonError(400, "Bidang `days` harus bilangan 1–30.");
-  }
+  const days = readDays(form.get("days"));
+  if (days === null) return jsonError(400, "Bidang `days` harus bilangan 1–30.");
 
   const data = new Uint8Array(await file.arrayBuffer());
+
+  // The browser's reported type comes from the filename, so the bytes decide.
   const image = identifyImage(data);
   if (!image) {
     return jsonError(415, "Berkas bukan gambar JPEG, PNG, atau WEBP.");
@@ -66,8 +109,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const owner = await requireOwnerId();
-    const storage = getPhotoStorage();
-    const stored = await storage.put(data, image.extension);
+    const stored = await getShareStorage().put(data, image.extension);
 
     const nameField = form.get("filename");
     const filename =
@@ -83,32 +125,62 @@ export async function POST(request: Request): Promise<Response> {
       days,
     });
 
-    // Built from the request's own origin so the link works behind whatever
-    // host, port or proxy this is actually running on.
-    const url = new URL(`/s/${share.code}`, request.url).toString();
-    const dataUrl = await QRCode.toDataURL(url, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: QR_PIXELS,
-      color: { dark: "#0f172a", light: "#ffffff" },
-    });
-
-    return Response.json(
-      {
-        code: share.code,
-        url,
-        expiresAt: share.expiresAt,
-        filename: share.filename,
-        bytes: share.bytes,
-        contentType: share.contentType,
-        width: image.width,
-        height: image.height,
-        qr: { dataUrl, pixels: QR_PIXELS },
-      },
-      { status: 201 },
-    );
+    return shareResponse(share, request);
   } catch (error) {
     console.error("POST /api/share failed", error);
+    return jsonError(500, "Tautan berbagi gagal dibuat.");
+  }
+}
+
+/**
+ * Shares a file that was already rendered and persisted.
+ *
+ * The bytes are copied into the share bucket rather than pointed at: a render
+ * is swept up within hours, and a link handed to a guest must not go dark
+ * because the thing it was made from expired on its own schedule.
+ */
+async function shareRender(request: Request): Promise<Response> {
+  const body = await readJsonBody(request);
+  if (!body.ok) return body.response;
+  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+
+  const renderKey = body.value.renderKey;
+  if (typeof renderKey !== "string") {
+    return jsonError(400, "Bidang `renderKey` wajib diisi.");
+  }
+
+  const days = readDays(body.value.days);
+  if (days === null) return jsonError(400, "Bidang `days` harus bilangan 1–30.");
+
+  // No cookie means this browser has never rendered anything, so it owns no
+  // render to share.
+  const owner = await getOwnerId();
+  if (!owner) return jsonError(404, "Render tidak ditemukan.");
+
+  try {
+    const record = await findRender(owner, renderKey);
+    if (!record) return jsonError(404, "Render tidak ditemukan.");
+
+    const data = await getRenderStorage().read(renderKey);
+    if (!data) return jsonError(404, "Render tidak ditemukan.");
+
+    const extension = renderKey.split(".").pop() as string;
+    const stored = await getShareStorage().put(data, extension);
+
+    const share = await createShare(owner, {
+      storageKey: stored.key,
+      contentType: record.contentType,
+      filename:
+        typeof body.value.filename === "string" && body.value.filename.trim()
+          ? body.value.filename.trim().slice(0, 200)
+          : record.filename,
+      bytes: stored.bytes,
+      days,
+    });
+
+    return shareResponse(share, request);
+  } catch (error) {
+    console.error("POST /api/share (render) failed", error);
     return jsonError(500, "Tautan berbagi gagal dibuat.");
   }
 }

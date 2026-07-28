@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:migrate": "node scripts/migrate.mjs",
     "db:status": "node scripts/migrate.mjs --status",
-    "db:seed": "node scripts/seed-library.mjs"
+    "db:seed": "node scripts/seed-library.mjs",
+    "db:purge": "node scripts/purge.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

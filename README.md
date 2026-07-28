@@ -35,7 +35,14 @@ lalu jalankan migrasinya:
 npm run db:migrate    # terapkan migrasi yang belum jalan
 npm run db:status     # lihat mana yang sudah/belum
 npm run db:seed       # isi perpustakaan dekorasi dari katalog di src/lib/editor/
+npm run db:purge      # buang render kedaluwarsa, foto terhapus, tautan lama
 ```
+
+Berkas disimpan di tiga bucket dengan umur berbeda: `.storage/photos` (foto
+tamu), `.storage/renders` (hasil ekspor, beberapa jam), dan `.storage/shares`
+(berkas di balik tautan berbagi, seumur tautannya). Yang menegakkan umur itu
+adalah barisnya di database, dan `db:purge` yang menyapunya — cocok dijalankan
+lewat cron.
 
 Migrasi berupa berkas SQL biasa di `db/migrations/`, dijalankan berurutan sesuai
 nama berkas, masing-masing dalam satu transaksi, dan dicatat di tabel
@@ -58,6 +65,7 @@ src/
 db/migrations/             # migrasi SQL
 scripts/migrate.mjs        # penjalan migrasi
 scripts/seed-library.mjs   # pengisi perpustakaan dekorasi
+scripts/purge.mjs          # penyapu berkas kedaluwarsa
   store/editor-store.ts    # state editor (Zustand)
   types/editor.ts          # model domain kanvas
 ```

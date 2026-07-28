@@ -1,5 +1,5 @@
 import { findShare, recordShareDownload } from "@/lib/db/shares";
-import { getPhotoStorage } from "@/lib/storage/photo-storage";
+import { getShareStorage } from "@/lib/storage/share-storage";
 
 export const runtime = "nodejs";
 
@@ -38,7 +38,7 @@ export async function GET(
   }
 
   const { share } = lookup;
-  const data = await getPhotoStorage().read(share.storageKey);
+  const data = await getShareStorage().read(share.storageKey);
   if (!data) return plain(404, "Berkas tidak ditemukan lagi.");
 
   await recordShareDownload(share.code);
