@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useReducedMotion } from "motion/react";
 
 import { ChapterArticle } from "@/components/materi/chapter-article";
@@ -9,6 +9,7 @@ import {
   MATERI_CHAPTER_IDS,
   MATERI_CHAPTERS,
 } from "@/lib/materi/chapters";
+import { useMateriProgress } from "@/hooks/use-materi-progress";
 import { useScrollSpy } from "@/hooks/use-scroll-spy";
 
 /**
@@ -24,6 +25,14 @@ import { useScrollSpy } from "@/hooks/use-scroll-spy";
 export function MateriShell() {
   const reduceMotion = useReducedMotion();
   const activeId = useScrollSpy(MATERI_CHAPTER_IDS);
+  const { completed, markComplete } = useMateriProgress();
+
+  // Reaching a chapter counts as having worked through it — mark it as the
+  // reader scrolls (or jumps) onto it, so the sidebar's progress reflects where
+  // they've been.
+  useEffect(() => {
+    if (activeId) markComplete(activeId);
+  }, [activeId, markComplete]);
 
   const scrollToChapter = useCallback(
     (id: string) => {
@@ -43,6 +52,7 @@ export function MateriShell() {
         <ChapterSidebar
           chapters={MATERI_CHAPTERS}
           activeId={activeId}
+          completedIds={completed}
           onSelect={scrollToChapter}
         />
       </div>
