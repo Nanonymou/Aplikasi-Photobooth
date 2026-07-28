@@ -1,7 +1,11 @@
 import "server-only";
 
 import { query } from "@/lib/db/client";
-import type { PageBackground } from "@/types/editor";
+import type {
+  PageBackground,
+  TextGradient,
+  TextShadow,
+} from "@/types/editor";
 
 /**
  * Reads over the decoration library.
@@ -353,5 +357,107 @@ export async function getTemplate(slug: string): Promise<TemplateDetail | null> 
     texts: row.texts,
     stickers: row.stickers,
     updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+/**
+ * A text style as the editor consumes it.
+ *
+ * Field names follow `TextObject`, not the column names, so applying a style is
+ * a spread onto a new text object rather than a translation step.
+ */
+export interface TextStyleSummary {
+  id: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  text: string;
+  fontFamily: string | null;
+  fontSize: number;
+  fontWeight: number;
+  letterSpacing: number;
+  lineHeight: number;
+  align: "left" | "center" | "right";
+  italic: boolean;
+  fill: string;
+  gradient: TextGradient | null;
+  stroke: string | null;
+  strokeWidth: number | null;
+  shadow: TextShadow | null;
+  curve: number;
+  isPremium: boolean;
+}
+
+interface TextStyleRow {
+  slug: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  sample_text: string;
+  font_family: string | null;
+  font_size: number;
+  font_weight: number;
+  letter_spacing: number;
+  line_height: number;
+  align: "left" | "center" | "right";
+  italic: boolean;
+  fill: string;
+  gradient: TextGradient | null;
+  stroke: string | null;
+  stroke_width: number | null;
+  shadow: TextShadow | null;
+  curve: number;
+  is_premium: boolean;
+  total: number;
+}
+
+export interface TextStyleListing {
+  textStyles: TextStyleSummary[];
+  total: number;
+}
+
+/** Text styles for the library panel. */
+export async function listTextStyles(
+  options: LibraryQuery = {},
+): Promise<TextStyleListing> {
+  const { limit, offset } = bounds(options);
+
+  const rows = await query<TextStyleRow>(
+    `select i.slug, i.label, c.slug as category, i.keywords, i.sample_text,
+            i.font_family, i.font_size, i.font_weight, i.letter_spacing,
+            i.line_height, i.align, i.italic, i.fill, i.gradient, i.stroke,
+            i.stroke_width, i.shadow, i.curve, i.is_premium,
+            count(*) over ()::int as total
+       from text_styles i
+       join library_categories c on c.id = i.category_id
+      where ${LIBRARY_FILTER}
+      order by i.position, i.label
+      limit $3 offset $4`,
+    [...filterValues(options), limit, offset],
+  );
+
+  return {
+    textStyles: rows.map((row) => ({
+      id: row.slug,
+      label: row.label,
+      category: row.category,
+      keywords: row.keywords,
+      text: row.sample_text,
+      fontFamily: row.font_family,
+      fontSize: row.font_size,
+      fontWeight: row.font_weight,
+      letterSpacing: row.letter_spacing,
+      lineHeight: row.line_height,
+      align: row.align,
+      italic: row.italic,
+      fill: row.fill,
+      gradient: row.gradient,
+      stroke: row.stroke,
+      strokeWidth: row.stroke_width,
+      shadow: row.shadow,
+      curve: row.curve,
+      isPremium: row.is_premium,
+    })),
+    total: rows[0]?.total ?? 0,
   };
 }
