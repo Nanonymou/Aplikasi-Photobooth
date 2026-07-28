@@ -23,6 +23,7 @@ export const metadata: Metadata = {
 export default function GuestSessionPage() {
   return (
     <EditorShell
+      showAccount={false}
       sessionBanner={<GuestSessionBanner />}
       topbarActions={
         <>

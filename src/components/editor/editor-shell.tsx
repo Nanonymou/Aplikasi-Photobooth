@@ -29,9 +29,12 @@ import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 export function EditorShell({
   sessionBanner,
   topbarActions,
+  showAccount,
 }: {
   sessionBanner?: ReactNode;
   topbarActions?: ReactNode;
+  /** Forwarded to the top bar; the guest page sets it false. */
+  showAccount?: boolean;
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   useEditorShortcuts();
@@ -44,6 +47,7 @@ export function EditorShell({
           inspectorOpen={inspectorOpen}
           onToggleInspector={() => setInspectorOpen((open) => !open)}
           actions={topbarActions}
+          showAccount={showAccount}
         />
 
         {sessionBanner}

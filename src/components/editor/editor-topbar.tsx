@@ -12,6 +12,7 @@ import {
   Undo2,
 } from "lucide-react";
 
+import { AccountMenu } from "@/components/auth/account-menu";
 import { ExportDialog } from "@/components/editor/export-dialog";
 import { QrDialog } from "@/components/editor/qr-dialog";
 import { SaveIndicator } from "@/components/editor/save-indicator";
@@ -73,12 +74,16 @@ export function EditorTopbar({
   inspectorOpen,
   onToggleInspector,
   actions,
+  showAccount = true,
 }: {
   inspectorOpen: boolean;
   onToggleInspector: () => void;
   /** Extra buttons at the start of the action cluster; the guest page's
    *  "save to account" lives here without the plain editor carrying it. */
   actions?: ReactNode;
+  /** The signed-in account menu, on by default; the guest page turns it off so
+   *  the "sesi tamu" framing never shows a signed-in profile. */
+  showAccount?: boolean;
 }) {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
@@ -188,6 +193,13 @@ export function EditorTopbar({
           <Download />
           <span className="hidden sm:inline">Ekspor</span>
         </Button>
+
+        {showAccount && (
+          <>
+            <Separator orientation="vertical" className="mx-0.5 h-6" />
+            <AccountMenu />
+          </>
+        )}
       </div>
 
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
