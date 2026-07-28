@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Info, Loader2, LogIn, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { Check, Info, Loader2, LogIn, TriangleAlert } from "lucide-react";
 
 import { PasswordField } from "@/components/auth/password-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthError, EMAIL, login } from "@/lib/auth/mock-auth";
+import { cn } from "@/lib/utils";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -14,6 +16,9 @@ export function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [welcome, setWelcome] = useState<string | null>(null);
+  // UI-only for now: when the real endpoint lands it decides how long the
+  // session sticks around. Kept here so the choice is made at sign-in time.
+  const [remember, setRemember] = useState(true);
 
   const valid = EMAIL.test(email.trim()) && password.length > 0;
 
@@ -77,6 +82,32 @@ export function LoginForm() {
           autoComplete="current-password"
           onEnter={submit}
         />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={remember}
+          onClick={() => setRemember((on) => !on)}
+          className="text-muted-foreground flex items-center gap-2 text-xs select-none"
+        >
+          <span
+            className={cn(
+              "border-input flex size-4 items-center justify-center rounded-[4px] border transition-colors",
+              remember && "bg-primary border-primary text-primary-foreground",
+            )}
+          >
+            {remember && <Check className="size-3" strokeWidth={3} />}
+          </span>
+          Ingat saya
+        </button>
+        <Link
+          href="/masuk-tautan"
+          className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+        >
+          Lupa kata sandi?
+        </Link>
       </div>
 
       {error && (
