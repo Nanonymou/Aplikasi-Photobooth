@@ -119,23 +119,55 @@ export const SSO_PROVIDERS: { id: SsoProvider; label: string }[] = [
   { id: "apple", label: "Apple" },
 ];
 
+/** The route the provider redirects back to once the guest has consented. */
+export const OAUTH_CALLBACK_PATH = "/masuk-sosial/callback";
+
+/** The provider's display name, or null if the id is not one we offer. */
+export function providerLabel(provider: string | null): string | null {
+  return SSO_PROVIDERS.find((p) => p.id === provider)?.label ?? null;
+}
+
 /**
- * Signs in through an identity provider.
+ * Where the SSO button sends the browser to begin auth.
  *
- * Stand-in for the OAuth round trip — `GET /api/auth/oauth/:provider` hands off
- * to Google or Apple, and their callback returns the linked account. Here it
- * only pauses and returns a canned account for the chosen provider, so the two
- * SSO buttons drive a real busy → signed-in flow with no real redirect. The
- * provider has already done the authenticating, so there is no wrong-credentials
- * branch to imitate; the button's own error path covers a failed round trip.
- * When the callback lands it replaces this body.
+ * The real button leaves for the provider's consent screen; the provider then
+ * redirects back to `OAUTH_CALLBACK_PATH` with an authorization `code`. There is
+ * no provider yet, so the mock resolves that first hop straight to our own
+ * callback carrying a demo code — the whole redirect round trip is exercised
+ * in-app, and swapping in the real authorize URL later is a one-line change.
  */
-export async function signInWithProvider(
-  provider: SsoProvider,
-): Promise<Account> {
+export function oauthAuthorizeUrl(provider: SsoProvider): string {
+  const query = new URLSearchParams({ provider, code: "demo" });
+  return `${OAUTH_CALLBACK_PATH}?${query.toString()}`;
+}
+
+/**
+ * Completes the OAuth round trip from the callback.
+ *
+ * Stand-in for the callback's code-for-session exchange — the backend swaps the
+ * provider's `code` for tokens, reads the profile, and links or creates the
+ * account. Here the query itself picks the outcome so every branch the callback
+ * can hit is reachable: the provider reporting a denial (`error`), an unknown
+ * provider, a missing or spent `code`, and the good path. When the endpoint
+ * lands it replaces this body.
+ */
+export async function completeOAuth(params: {
+  provider: string | null;
+  code: string | null;
+  error: string | null;
+}): Promise<Account> {
   await wait();
 
-  const label = SSO_PROVIDERS.find((p) => p.id === provider)?.label ?? provider;
+  const { provider, code, error } = params;
+  if (error) throw new AuthError("Masuk dibatalkan atau izin ditolak.");
+
+  const label = providerLabel(provider);
+  if (!label) throw new AuthError("Penyedia masuk tidak dikenali.");
+  if (!code) throw new AuthError("Callback tidak lengkap. Coba ulangi masuk.");
+  if (code.startsWith("invalid")) {
+    throw new AuthError("Sesi masuk tidak valid atau kedaluwarsa. Coba lagi.");
+  }
+
   return { name: `Pengguna ${label}`, email: `${provider}@contoh.id` };
 }
 
