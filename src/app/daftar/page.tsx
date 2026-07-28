@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { RegisterForm } from "@/components/auth/register-form";
+import { SocialLogin } from "@/components/auth/social-login";
 
 export const metadata: Metadata = {
   title: "Daftar — FrameStudio AI",
@@ -33,6 +34,7 @@ export default function RegisterPage() {
       }
     >
       <RegisterForm />
+      <SocialLogin dividerLabel="atau daftar dengan" />
     </AuthShell>
   );
 }

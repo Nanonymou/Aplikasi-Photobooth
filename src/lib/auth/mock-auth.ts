@@ -111,6 +111,34 @@ export async function sendMagicLink(email: string): Promise<void> {
   }
 }
 
+/** The identity providers offered on the auth screens. */
+export type SsoProvider = "google" | "apple";
+
+export const SSO_PROVIDERS: { id: SsoProvider; label: string }[] = [
+  { id: "google", label: "Google" },
+  { id: "apple", label: "Apple" },
+];
+
+/**
+ * Signs in through an identity provider.
+ *
+ * Stand-in for the OAuth round trip — `GET /api/auth/oauth/:provider` hands off
+ * to Google or Apple, and their callback returns the linked account. Here it
+ * only pauses and returns a canned account for the chosen provider, so the two
+ * SSO buttons drive a real busy → signed-in flow with no real redirect. The
+ * provider has already done the authenticating, so there is no wrong-credentials
+ * branch to imitate; the button's own error path covers a failed round trip.
+ * When the callback lands it replaces this body.
+ */
+export async function signInWithProvider(
+  provider: SsoProvider,
+): Promise<Account> {
+  await wait();
+
+  const label = SSO_PROVIDERS.find((p) => p.id === provider)?.label ?? provider;
+  return { name: `Pengguna ${label}`, email: `${provider}@contoh.id` };
+}
+
 /**
  * Ends the signed-in session.
  *

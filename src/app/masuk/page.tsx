@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
+import { SocialLogin } from "@/components/auth/social-login";
 
 export const metadata: Metadata = {
   title: "Masuk — FrameStudio AI",
@@ -33,6 +34,7 @@ export default function LoginPage() {
       }
     >
       <LoginForm />
+      <SocialLogin dividerLabel="atau masuk dengan" />
       <div className="border-editor-border border-t pt-3 text-center">
         <Link
           href="/masuk-tautan"
