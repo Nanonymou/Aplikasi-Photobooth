@@ -303,3 +303,55 @@ export async function listBackgrounds(
     total: rows[0]?.total ?? 0,
   };
 }
+
+/** A template's full composition, in the vocabulary the editor instantiates. */
+export interface TemplateDetail extends TemplateSummary {
+  slots: unknown[];
+  texts: unknown[];
+  stickers: unknown[];
+  updatedAt: string;
+}
+
+interface TemplateDetailRow extends TemplateSummaryRow {
+  slots: unknown[];
+  texts: unknown[];
+  stickers: unknown[];
+  updated_at: Date;
+}
+
+/**
+ * One template with everything on it.
+ *
+ * Drafts stay invisible here too: an unpublished template must not be
+ * reachable by guessing its slug just because the list hides it.
+ */
+export async function getTemplate(slug: string): Promise<TemplateDetail | null> {
+  const rows = await query<TemplateDetailRow>(
+    `select i.slug, i.label, c.slug as category, i.keywords, i.width, i.height,
+            i.background, jsonb_array_length(i.slots) as slot_count,
+            i.is_premium, i.slots, i.texts, i.stickers, i.updated_at
+       from design_templates i
+       join library_categories c on c.id = i.category_id
+      where i.slug = $1 and i.published_at is not null`,
+    [slug],
+  );
+
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.slug,
+    label: row.label,
+    category: row.category,
+    keywords: row.keywords,
+    width: row.width,
+    height: row.height,
+    background: row.background,
+    slotCount: row.slot_count,
+    isPremium: row.is_premium,
+    slots: row.slots,
+    texts: row.texts,
+    stickers: row.stickers,
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
