@@ -8,6 +8,10 @@
  *
  * The JPEG bytes are passed through untouched (`/DCTDecode`), so the file stays
  * as small as the JPEG the canvas produced.
+ *
+ * Returns bytes rather than a `Blob` so the same writer serves the browser
+ * (which wraps them for download) and the server renderer (which streams them);
+ * there is only one PDF layout in this codebase, and it belongs in one place.
  */
 
 const encoder = new TextEncoder();
@@ -32,7 +36,7 @@ export function jpegToPdf(
   pixelWidth: number,
   pixelHeight: number,
   dpi: number,
-): Blob {
+): Uint8Array {
   // PDF user space is 1/72 inch, whatever the image resolution is.
   const pageWidth = (pixelWidth / dpi) * 72;
   const pageHeight = (pixelHeight / dpi) * 72;
@@ -98,5 +102,12 @@ export function jpegToPdf(
     `trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
   );
 
-  return new Blob(chunks as BlobPart[], { type: "application/pdf" });
+  const pdf = new Uint8Array(length);
+  let cursor = 0;
+  for (const chunk of chunks) {
+    pdf.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+
+  return pdf;
 }

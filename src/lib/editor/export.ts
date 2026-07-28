@@ -347,14 +347,21 @@ export async function renderExport(
   if (format === "pdf") {
     const jpeg = await toBlob(canvas, "image/jpeg", quality);
     await report(0.85, "Membungkus halaman PDF…");
-    const blob = jpegToPdf(
+    const pdf = jpegToPdf(
       new Uint8Array(await jpeg.arrayBuffer()),
       canvas.width,
       canvas.height,
       dpiFor(scale),
     );
     await report(1, "Selesai");
-    return { blob, filename, width: canvas.width, height: canvas.height };
+    return {
+      // `slice()` hands Blob a plain ArrayBuffer, which is what its type asks
+      // for — a Uint8Array may be backed by a SharedArrayBuffer.
+      blob: new Blob([pdf.slice().buffer], { type: definition.mimeType }),
+      filename,
+      width: canvas.width,
+      height: canvas.height,
+    };
   }
 
   const blob = await toBlob(canvas, definition.mimeType, quality);

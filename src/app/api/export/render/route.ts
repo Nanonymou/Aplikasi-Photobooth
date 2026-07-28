@@ -1,19 +1,24 @@
+import { EXPORT_FORMATS, type ExportFormat } from "@/lib/editor/export";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { requireOwnerId } from "@/lib/api/owner";
 import { validateProject } from "@/lib/api/validate-project";
+import { convertRender } from "@/lib/render/convert";
 import {
   MAX_SCALE,
   MIN_SCALE,
   RenderTooLargeError,
   renderPage,
 } from "@/lib/render/render-page";
-import { getPhotoStorage } from "@/lib/storage/photo-storage";
+import { exportFilename } from "@/lib/editor/export";
 import type { CanvasPage } from "@/types/editor";
 
 export const runtime = "nodejs";
 
 /** 4× the page's design pixels, i.e. 300 DPI — what a print shop asks for. */
 const DEFAULT_SCALE = 4;
+const DEFAULT_QUALITY = 0.92;
+
+const FORMAT_IDS = EXPORT_FORMATS.map((format) => format.id);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -22,7 +27,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Generates a high-resolution file from a design.
  *
- *   { project, pageIndex?, scale? } → { key, url, width, height, bytes, dpi }
+ *   { project, pageIndex?, scale?, format?, quality?, transparent? }
+ *     → the file itself, with its size and DPI in `x-render-*` headers
  *
  * The editor exports by cropping its own canvas, which is exact but needs a
  * browser with the design open. This is for everything else: a print job, a
@@ -30,8 +36,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The page is rebuilt from the model and rasterised from vector, so 300 DPI is
  * genuinely 300 DPI rather than an enlargement of a screen-sized picture.
  *
- * The result lands in the same content-addressed storage as photos, so the URL
- * can be handed out directly.
+ * The file is streamed back rather than stored: an export is something the
+ * caller is about to save, not something the server needs to keep. Renders that
+ * must outlive the request — a share link, a QR someone scans tomorrow — get a
+ * home of their own with the temporary render store.
  */
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
@@ -54,6 +62,22 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError(400, "Bidang `pageIndex` di luar jangkauan desain.");
   }
 
+  const format = (body.value.format ?? "png") as ExportFormat;
+  if (!FORMAT_IDS.includes(format)) {
+    return jsonError(400, `Format harus salah satu dari: ${FORMAT_IDS.join(", ")}.`);
+  }
+
+  const rawQuality = body.value.quality ?? DEFAULT_QUALITY;
+  if (typeof rawQuality !== "number" || !Number.isFinite(rawQuality)) {
+    return jsonError(400, "Bidang `quality` harus angka 0–1.");
+  }
+  const quality = Math.min(1, Math.max(0, rawQuality));
+
+  const transparent = body.value.transparent ?? true;
+  if (typeof transparent !== "boolean") {
+    return jsonError(400, "Bidang `transparent` harus boolean.");
+  }
+
   const rawScale = body.value.scale ?? DEFAULT_SCALE;
   if (typeof rawScale !== "number" || !Number.isFinite(rawScale)) {
     return jsonError(400, "Bidang `scale` harus angka.");
@@ -64,24 +88,33 @@ export async function POST(request: Request): Promise<Response> {
     await requireOwnerId();
 
     const page = validated.project.pages[pageIndex] as CanvasPage;
+    const dpi = Math.round(72 * scale);
+
     const rendered = await renderPage(page, scale);
+    const file = await convertRender(rendered.data, {
+      format,
+      quality,
+      transparent,
+      dpi,
+    });
 
-    const storage = getPhotoStorage();
-    const stored = await storage.put(new Uint8Array(rendered.data), "png");
+    const filename = exportFilename(validated.project.title, file.extension);
 
-    return Response.json(
-      {
-        key: stored.key,
-        url: storage.url(stored.key),
-        width: rendered.width,
-        height: rendered.height,
-        bytes: stored.bytes,
-        scale,
-        // Design pixels are treated as 72 DPI, so the scale IS the DPI ratio.
-        dpi: Math.round(72 * scale),
+    return new Response(file.data as BodyInit, {
+      headers: {
+        "content-type": file.contentType,
+        "content-length": String(file.data.byteLength),
+        "content-disposition": `attachment; filename="${filename}"`,
+        // The pixel size and density are not in the bytes for every format, and
+        // a caller showing "4800×7200 @300dpi" should not have to decode the
+        // file to learn it.
+        "x-render-width": String(rendered.width),
+        "x-render-height": String(rendered.height),
+        "x-render-dpi": String(dpi),
+        "x-render-format": format,
+        "cache-control": "private, no-store",
       },
-      { status: 201 },
-    );
+    });
   } catch (error) {
     if (error instanceof RenderTooLargeError) {
       return jsonError(413, error.message);
