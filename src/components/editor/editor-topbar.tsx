@@ -12,7 +12,9 @@ import {
   Undo2,
 } from "lucide-react";
 
+import { ExportDialog } from "@/components/editor/export-dialog";
 import { SaveIndicator } from "@/components/editor/save-indicator";
+import { ShareDialog } from "@/components/editor/share-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -77,6 +79,8 @@ export function EditorTopbar({
   const redo = useEditorStore((state) => state.redo);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
+  const [exportOpen, setExportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <header className="bg-editor-chrome border-editor-border flex h-14 shrink-0 items-center gap-2 border-b px-3">
@@ -156,22 +160,30 @@ export function EditorTopbar({
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Bagikan hasil</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
+            <DropdownMenuItem onSelect={() => setShareOpen(true)}>
               <QrCode />
               Buat QR Code
             </DropdownMenuItem>
-            <DropdownMenuItem disabled>
+            <DropdownMenuItem onSelect={() => setShareOpen(true)}>
               <Share2 />
               Kirim ke media sosial
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+              <Download />
+              Unduh berkas…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button size="sm">
+        <Button size="sm" onClick={() => setExportOpen(true)}>
           <Download />
           <span className="hidden sm:inline">Ekspor</span>
         </Button>
       </div>
+
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} />
     </header>
   );
 }

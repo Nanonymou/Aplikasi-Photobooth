@@ -9,6 +9,7 @@ import { useObjectDrag } from "@/hooks/use-object-drag";
 import { STICKERS } from "@/lib/editor/decorations";
 import { STICKER_DRAG_TYPE } from "@/lib/editor/drag-payload";
 import { createId } from "@/lib/editor/id";
+import { registerStage } from "@/lib/editor/stage-registry";
 import {
   patternDataUri,
   transparencyCheckerDataUri,
@@ -243,6 +244,20 @@ export function CanvasStage() {
 
   const offsetX = (viewport.width - page.width * effectiveZoom) / 2 + pan.x;
   const offsetY = (viewport.height - page.height * effectiveZoom) / 2 + pan.y;
+
+  // Export runs from the top bar, so it needs the stage plus the transform that
+  // locates the page inside it.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    registerStage({
+      stage,
+      origin: { x: offsetX, y: offsetY },
+      zoom: effectiveZoom,
+    });
+    return () => registerStage(null);
+  }, [offsetX, offsetY, effectiveZoom]);
 
   const handleWheel = useCallback(
     (event: Konva.KonvaEventObject<WheelEvent>) => {
