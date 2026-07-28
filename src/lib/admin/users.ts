@@ -34,6 +34,8 @@ export interface AdminUser {
   status: UserStatus;
   /** Pre-formatted join date, so there is no locale/clock to hydrate. */
   joined: string;
+  /** ISO date for sorting; compares chronologically as plain text. */
+  joinedAt: string;
 }
 
 export const ADMIN_USERS: AdminUser[] = [
@@ -44,6 +46,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "admin",
     status: "active",
     joined: "2 Jan 2024",
+    joinedAt: "2024-01-02",
   },
   {
     id: "u2",
@@ -52,6 +55,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "editor",
     status: "active",
     joined: "18 Feb 2024",
+    joinedAt: "2024-02-18",
   },
   {
     id: "u3",
@@ -60,6 +64,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "editor",
     status: "active",
     joined: "30 Apr 2025",
+    joinedAt: "2025-04-30",
   },
   {
     id: "u4",
@@ -68,6 +73,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "editor",
     status: "invited",
     joined: "12 Jul 2026",
+    joinedAt: "2026-07-12",
   },
   {
     id: "u5",
@@ -76,6 +82,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "operator",
     status: "active",
     joined: "3 Mar 2025",
+    joinedAt: "2025-03-03",
   },
   {
     id: "u6",
@@ -84,6 +91,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "operator",
     status: "active",
     joined: "21 Nov 2024",
+    joinedAt: "2024-11-21",
   },
   {
     id: "u7",
@@ -92,6 +100,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "operator",
     status: "suspended",
     joined: "9 Sep 2024",
+    joinedAt: "2024-09-09",
   },
   {
     id: "u8",
@@ -100,6 +109,7 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "tamu",
     status: "active",
     joined: "1 Jul 2026",
+    joinedAt: "2026-07-01",
   },
   {
     id: "u9",
@@ -108,5 +118,6 @@ export const ADMIN_USERS: AdminUser[] = [
     role: "tamu",
     status: "active",
     joined: "14 Jun 2026",
+    joinedAt: "2026-06-14",
   },
 ];

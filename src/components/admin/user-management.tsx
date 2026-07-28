@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MoreHorizontal, Search } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  MoreHorizontal,
+  Search,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -66,13 +72,63 @@ function Badge({ className, children }: { className: string; children: string })
  * actions — changing a role, suspending — are their own RBAC tasks, so they show
  * as disabled entries rather than dead buttons.
  */
+type SortKey = "name" | "joined";
+type SortDir = "asc" | "desc";
+
+function SortHeader({
+  label,
+  sortBy,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  sortBy: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sortKey === sortBy;
+  const Icon = !active
+    ? ChevronsUpDown
+    : sortDir === "asc"
+      ? ChevronUp
+      : ChevronDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortBy)}
+      aria-label={`Urutkan berdasarkan ${label}`}
+      className={cn(
+        "flex items-center gap-1 font-medium",
+        active ? "text-foreground" : "hover:text-foreground",
+      )}
+    >
+      {label}
+      <Icon className="size-3.5" />
+    </button>
+  );
+}
+
 export function UserManagement() {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<RoleId | "all">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("joined");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // Names read best A→Z; dates newest-first.
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return ADMIN_USERS.filter((user) => {
+    const list = ADMIN_USERS.filter((user) => {
       if (role !== "all" && user.role !== role) return false;
       if (!q) return true;
       return (
@@ -80,7 +136,16 @@ export function UserManagement() {
         user.email.toLowerCase().includes(q)
       );
     });
-  }, [query, role]);
+
+    const sorted = [...list].sort((a, b) => {
+      const cmp =
+        sortKey === "name"
+          ? a.name.localeCompare(b.name, "id")
+          : a.joinedAt.localeCompare(b.joinedAt);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [query, role, sortKey, sortDir]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -121,11 +186,25 @@ export function UserManagement() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left text-xs">
-                <th className="px-4 py-2.5 font-medium">Pengguna</th>
+                <th className="px-4 py-2.5 font-medium">
+                  <SortHeader
+                    label="Pengguna"
+                    sortBy="name"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                </th>
                 <th className="px-4 py-2.5 font-medium">Peran</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="hidden px-4 py-2.5 font-medium sm:table-cell">
-                  Bergabung
+                  <SortHeader
+                    label="Bergabung"
+                    sortBy="joined"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                 </th>
                 <th className="px-4 py-2.5">
                   <span className="sr-only">Tindakan</span>
