@@ -34,6 +34,7 @@ lalu jalankan migrasinya:
 ```bash
 npm run db:migrate    # terapkan migrasi yang belum jalan
 npm run db:status     # lihat mana yang sudah/belum
+npm run db:seed       # isi perpustakaan dekorasi dari katalog di src/lib/editor/
 ```
 
 Migrasi berupa berkas SQL biasa di `db/migrations/`, dijalankan berurutan sesuai
@@ -56,6 +57,7 @@ src/
   lib/db/                  # pool koneksi, tipe baris, pemetaan baris ↔ model
 db/migrations/             # migrasi SQL
 scripts/migrate.mjs        # penjalan migrasi
+scripts/seed-library.mjs   # pengisi perpustakaan dekorasi
   store/editor-store.ts    # state editor (Zustand)
   types/editor.ts          # model domain kanvas
 ```

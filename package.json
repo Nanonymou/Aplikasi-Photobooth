@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "node scripts/migrate.mjs",
-    "db:status": "node scripts/migrate.mjs --status"
+    "db:status": "node scripts/migrate.mjs --status",
+    "db:seed": "node scripts/seed-library.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
