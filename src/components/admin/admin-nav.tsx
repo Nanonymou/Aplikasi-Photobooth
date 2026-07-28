@@ -6,6 +6,7 @@ import {
   ChartColumn,
   LayoutDashboard,
   LibraryBig,
+  Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const ITEMS: NavItem[] = [
   { href: "/admin/pengguna", label: "Pengguna", icon: Users },
   { href: "/admin/konten", label: "Konten", icon: LibraryBig },
   { href: "/admin/analitik", label: "Analitik", icon: ChartColumn },
+  { href: "/admin/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
 /**
