@@ -39,10 +39,20 @@ export function MateriShell() {
   }, [activeId, markComplete]);
 
   const scrollToChapter = useCallback(
-    (id: string, behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth") => {
+    (
+      id: string,
+      { behavior = reduceMotion ? "auto" : "smooth", focus = true }: {
+        behavior?: ScrollBehavior;
+        focus?: boolean;
+      } = {},
+    ) => {
       const element = document.getElementById(id);
       if (!element) return;
       element.scrollIntoView({ behavior, block: "start" });
+      // Carry keyboard and screen-reader focus to the chapter on a user jump —
+      // but not on the silent restore, which shouldn't grab focus at load. The
+      // scroll is already handled, so don't let focus() scroll a second time.
+      if (focus) element.focus({ preventScroll: true });
     },
     [reduceMotion],
   );
@@ -55,7 +65,7 @@ export function MateriShell() {
   useEffect(() => {
     const stored = readLastReadChapter();
     if (stored && stored !== MATERI_CHAPTERS[0].id) {
-      scrollToChapter(stored, "auto");
+      scrollToChapter(stored, { behavior: "auto", focus: false });
     }
     // Restore only on mount; scrollToChapter is stable enough for this intent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,7 +82,7 @@ export function MateriShell() {
 
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,18rem)_1fr]">
-      <div className="lg:sticky lg:top-6">
+      <div className="lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
         <ChapterSidebar
           chapters={MATERI_CHAPTERS}
           activeId={activeId}

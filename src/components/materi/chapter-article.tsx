@@ -33,17 +33,25 @@ export function ChapterArticle({
   return (
     <motion.article
       id={chapter.id}
+      // A focus target (not tabbable) so a sidebar / prev-next jump lands
+      // keyboard and screen-reader focus on the chapter, not just the viewport.
+      // Labelled by its own heading so it's announced on arrival.
+      tabIndex={-1}
+      aria-labelledby={`${chapter.id}-title`}
       initial={reduceMotion ? false : { opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="bg-card border-border flex scroll-mt-6 flex-col rounded-xl border"
+      className="bg-card border-border flex scroll-mt-6 flex-col rounded-xl border focus:outline-none"
     >
       <header className="border-border border-b px-5 py-4 sm:px-6">
         <p className="text-primary text-xs font-semibold tracking-wide uppercase">
           Bab {chapter.order}
         </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight text-balance sm:text-2xl">
+        <h2
+          id={`${chapter.id}-title`}
+          className="mt-1 text-xl font-semibold tracking-tight text-balance sm:text-2xl"
+        >
           {chapter.title}
         </h2>
         <p className="text-muted-foreground mt-1 text-sm text-pretty">

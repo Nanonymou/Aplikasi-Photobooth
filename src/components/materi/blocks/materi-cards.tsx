@@ -55,7 +55,7 @@ export function MateriCards({
           <motion.div
             key={item.id}
             variants={card}
-            className="bg-background border-border flex flex-col gap-2 rounded-xl border p-4"
+            className="bg-background border-border hover:border-primary/40 flex flex-col gap-2 rounded-xl border p-4 transition-colors"
           >
             <p className="text-sm font-semibold tracking-tight">{item.label}</p>
             {item.detail && (
@@ -94,7 +94,7 @@ export function MateriCards({
         <motion.li
           key={index}
           variants={card}
-          className="bg-background border-border flex items-center gap-3 rounded-xl border px-4 py-3"
+          className="bg-background border-border hover:border-primary/40 flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors"
         >
           <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-lg">
             <Check className="size-4" />

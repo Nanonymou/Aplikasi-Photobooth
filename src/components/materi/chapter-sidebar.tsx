@@ -93,7 +93,7 @@ export function ChapterSidebar({
                   <span className="block truncate text-sm font-medium">
                     {chapter.title}
                   </span>
-                  <span className="text-muted-foreground mt-0.5 block text-xs leading-snug text-pretty">
+                  <span className="text-muted-foreground mt-0.5 hidden text-xs leading-snug text-pretty lg:block">
                     {chapter.summary}
                   </span>
                 </span>
