@@ -8,12 +8,19 @@
 
 export type Role = "admin" | "editor" | "operator" | "tamu";
 
+/** Every role, most privileged first — for switchers and validation. */
+export const ROLES: Role[] = ["admin", "editor", "operator", "tamu"];
+
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   editor: "Editor",
   operator: "Operator",
   tamu: "Tamu",
 };
+
+export function isRole(value: unknown): value is Role {
+  return typeof value === "string" && (ROLES as string[]).includes(value);
+}
 
 /**
  * Whether a role is cleared for an area.

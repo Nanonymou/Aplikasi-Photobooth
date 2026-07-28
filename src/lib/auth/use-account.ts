@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { Account } from "@/lib/auth/mock-auth";
-import type { Role } from "@/lib/auth/roles";
+import { isRole, type Role } from "@/lib/auth/roles";
 
 /**
  * The signed-in user, on the client.
@@ -22,15 +22,58 @@ export interface Profile extends Account {
   role: Role;
 }
 
-const MOCK_PROFILE: Profile = {
+const BASE_PROFILE: Omit<Profile, "role"> = {
   name: "Rara Prawira",
   email: "rara@contoh.id",
   avatarUrl: null,
-  role: "admin",
 };
 
-/** The mock never changes after mount, so there is nothing to subscribe to. */
-const subscribe = () => () => {};
+/** The default mock role, and where a switch is persisted so it survives reloads. */
+const DEFAULT_ROLE: Role = "admin";
+const ROLE_KEY = "framestudio:mock-role:v1";
+
+/**
+ * The mock is a tiny store so the role can be switched at runtime — the demo
+ * that makes role-based navigation visible without editing code. Cached so
+ * `useSyncExternalStore` sees a stable reference, and rebuilt only on a switch.
+ */
+let cached: Profile | null = null;
+const listeners = new Set<() => void>();
+
+function readRole(): Role {
+  try {
+    const stored = window.localStorage.getItem(ROLE_KEY);
+    if (isRole(stored)) return stored;
+  } catch {
+    // Unreadable storage: fall back to the default role.
+  }
+  return DEFAULT_ROLE;
+}
+
+function clientSnapshot(): Profile {
+  if (!cached) cached = { ...BASE_PROFILE, role: readRole() };
+  return cached;
+}
+
+function subscribe(callback: () => void): () => void {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
+/**
+ * Switches the mock account's role and notifies every reader, so role-gated
+ * navigation re-renders at once. Frontend-only: the real session is set by the
+ * server at sign-in, not flipped in the client.
+ */
+export function setMockRole(role: Role): void {
+  cached = { ...BASE_PROFILE, role };
+  try {
+    window.localStorage.setItem(ROLE_KEY, role);
+  } catch {
+    // A blocked write only means the switch does not survive a reload; harmless.
+  }
+  listeners.forEach((listener) => listener());
+}
 
 /**
  * The current signed-in profile, or `null` during the server render.
@@ -40,7 +83,7 @@ const subscribe = () => () => {};
  * mounted, so nothing that depends on client-only state mismatches on hydration.
  */
 export function useAccount(): Profile | null {
-  return useSyncExternalStore(subscribe, () => MOCK_PROFILE, () => null);
+  return useSyncExternalStore(subscribe, clientSnapshot, () => null);
 }
 
 /**

@@ -5,6 +5,8 @@ import {
   CreditCard,
   Images,
   LogOut,
+  MonitorPlay,
+  Projector,
   ShieldCheck,
   Settings,
   UserRound,
@@ -20,7 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initials } from "@/lib/auth/initials";
-import { useAccount, type Profile } from "@/lib/auth/use-account";
+import { ROLE_LABELS, ROLES } from "@/lib/auth/roles";
+import { setMockRole, useAccount, type Profile } from "@/lib/auth/use-account";
 import { useLogout } from "@/lib/auth/use-logout";
 import { cn } from "@/lib/utils";
 
@@ -102,8 +105,9 @@ export function AccountMenu() {
 
         <DropdownMenuSeparator />
 
-        {/* Only admins get a way into the console — the app's main per-role
-            navigation difference. */}
+        {/* Destinations appear by role: the console for admins, the booth
+            surfaces for whoever runs an event. RoleGate hides what you cannot
+            reach, so the menu is the live shape of your access. */}
         <RoleGate allow={["admin"]}>
           <DropdownMenuItem asChild>
             <Link href="/admin">
@@ -111,8 +115,23 @@ export function AccountMenu() {
               Konsol admin
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
         </RoleGate>
+        <RoleGate allow={["operator", "admin"]}>
+          <DropdownMenuItem asChild>
+            <Link href="/kiosk">
+              <Projector />
+              Mode kiosk
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/slideshow">
+              <MonitorPlay />
+              Live slideshow
+            </Link>
+          </DropdownMenuItem>
+        </RoleGate>
+
+        <DropdownMenuSeparator />
 
         <DropdownMenuItem asChild>
           <Link href="/galeri">
@@ -135,6 +154,34 @@ export function AccountMenu() {
           <Settings />
           Pengaturan akun
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* Frontend demo: flip the mock account's role and watch the entries
+            above appear and disappear. The real role comes from the server. */}
+        <div className="px-2 py-1.5">
+          <p className="text-muted-foreground mb-1.5 text-[10px] font-medium tracking-wide uppercase">
+            Lihat sebagai · demo
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {ROLES.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setMockRole(role)}
+                aria-pressed={profile.role === role}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-xs transition-colors",
+                  profile.role === role
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:bg-accent",
+                )}
+              >
+                {ROLE_LABELS[role]}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <DropdownMenuSeparator />
 
