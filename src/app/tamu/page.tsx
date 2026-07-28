@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { EditorShell } from "@/components/editor/editor-shell";
 import { GuestSessionBanner } from "@/components/session/guest-session-banner";
+import { SaveToAccountButton } from "@/components/session/save-to-account";
 
 export const metadata: Metadata = {
   title: "Sesi tamu — FrameStudio AI",
@@ -19,5 +20,10 @@ export const metadata: Metadata = {
  * two never drift apart.
  */
 export default function GuestSessionPage() {
-  return <EditorShell sessionBanner={<GuestSessionBanner />} />;
+  return (
+    <EditorShell
+      sessionBanner={<GuestSessionBanner />}
+      topbarActions={<SaveToAccountButton />}
+    />
+  );
 }

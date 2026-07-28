@@ -22,10 +22,17 @@ import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
  * overlay above it, and the inspector is hidden (properties move into the panel).
  *
  * `sessionBanner` is an optional strip between the top bar and the workspace,
- * so a session-scoped entry (the anonymous guest page) can frame the editor
- * without the plain `/editor` route carrying anything it does not need.
+ * and `topbarActions` slots extra buttons into the top bar — both let a
+ * session-scoped entry (the anonymous guest page) frame the editor without the
+ * plain `/editor` route carrying anything it does not need.
  */
-export function EditorShell({ sessionBanner }: { sessionBanner?: ReactNode }) {
+export function EditorShell({
+  sessionBanner,
+  topbarActions,
+}: {
+  sessionBanner?: ReactNode;
+  topbarActions?: ReactNode;
+}) {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   useEditorShortcuts();
   useAutosave();
@@ -36,6 +43,7 @@ export function EditorShell({ sessionBanner }: { sessionBanner?: ReactNode }) {
         <EditorTopbar
           inspectorOpen={inspectorOpen}
           onToggleInspector={() => setInspectorOpen((open) => !open)}
+          actions={topbarActions}
         />
 
         {sessionBanner}

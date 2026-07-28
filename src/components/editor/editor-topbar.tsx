@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Aperture,
   Download,
@@ -72,9 +72,13 @@ function ProjectTitle() {
 export function EditorTopbar({
   inspectorOpen,
   onToggleInspector,
+  actions,
 }: {
   inspectorOpen: boolean;
   onToggleInspector: () => void;
+  /** Extra buttons at the start of the action cluster; the guest page's
+   *  "save to account" lives here without the plain editor carrying it. */
+  actions?: ReactNode;
 }) {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
@@ -134,6 +138,8 @@ export function EditorTopbar({
       <SaveIndicator className="ml-2 hidden lg:flex" />
 
       <div className="ml-auto flex items-center gap-1.5">
+        {actions}
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
