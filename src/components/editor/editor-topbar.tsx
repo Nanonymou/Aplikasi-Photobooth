@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { ExportDialog } from "@/components/editor/export-dialog";
+import { QrDialog } from "@/components/editor/qr-dialog";
 import { SaveIndicator } from "@/components/editor/save-indicator";
 import { ShareDialog } from "@/components/editor/share-dialog";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,7 @@ export function EditorTopbar({
   const canRedo = useCanRedo();
   const [exportOpen, setExportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   return (
     <header className="bg-editor-chrome border-editor-border flex h-14 shrink-0 items-center gap-2 border-b px-3">
@@ -160,7 +162,7 @@ export function EditorTopbar({
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Bagikan hasil</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setShareOpen(true)}>
+            <DropdownMenuItem onSelect={() => setQrOpen(true)}>
               <QrCode />
               Buat QR Code
             </DropdownMenuItem>
@@ -183,7 +185,12 @@ export function EditorTopbar({
       </div>
 
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} />
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        onShowQr={() => setQrOpen(true)}
+      />
+      <QrDialog open={qrOpen} onOpenChange={setQrOpen} />
     </header>
   );
 }

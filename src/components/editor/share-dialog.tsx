@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   Check,
   Copy,
@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Info,
   Loader2,
+  Maximize2,
   Share2,
   TriangleAlert,
 } from "lucide-react";
@@ -30,9 +31,9 @@ import {
   getQualityPreset,
   renderExport,
 } from "@/lib/editor/export";
+import { renderQrDataUrl } from "@/components/editor/qr-dialog";
 import {
   canShareFile,
-  mockQrModules,
   shareCaption,
   shareFile,
   shareLink,
@@ -42,37 +43,32 @@ import {
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 
-const QR_SIZE = 25;
-
-/** Draws a module grid as one path so the SVG stays small. */
+/** Small preview of the same code the QR dialog shows full size. */
 function QrPreview({ value }: { value: string }) {
-  const path = useMemo(() => {
-    const modules = mockQrModules(value, QR_SIZE);
-    let data = "";
-    modules.forEach((row, y) => {
-      row.forEach((filled, x) => {
-        if (filled) data += `M${x} ${y}h1v1h-1z`;
-      });
-    });
-    return data;
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const url = await renderQrDataUrl(value).catch(() => null);
+      if (!cancelled) setDataUrl(url);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
+  if (!dataUrl) {
+    return (
+      <div className="flex aspect-square items-center justify-center">
+        <Loader2 className="size-4 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
   return (
-    <svg
-      viewBox={`-2 -2 ${QR_SIZE + 4} ${QR_SIZE + 4}`}
-      className="size-full"
-      role="img"
-      aria-label="Pratinjau QR Code"
-    >
-      <rect
-        x={-2}
-        y={-2}
-        width={QR_SIZE + 4}
-        height={QR_SIZE + 4}
-        fill="#ffffff"
-      />
-      <path d={path} fill="#0f172a" shapeRendering="crispEdges" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element -- generated data URL, no loader involved
+    <img src={dataUrl} alt={`QR Code untuk ${value}`} className="w-full" />
   );
 }
 
@@ -104,7 +100,13 @@ async function renderSharePng(
   });
 }
 
-function ShareSheet({ onClose }: { onClose: () => void }) {
+function ShareSheet({
+  onClose,
+  onShowQr,
+}: {
+  onClose: () => void;
+  onShowQr: () => void;
+}) {
   const page = useActivePage();
   const projectId = useEditorStore((state) => state.project.id);
   const title = useEditorStore((state) => state.project.title);
@@ -211,9 +213,15 @@ function ShareSheet({ onClose }: { onClose: () => void }) {
           <div className="border-editor-border w-full overflow-hidden rounded-lg border bg-white p-2">
             <QrPreview value={link} />
           </div>
-          <figcaption className="text-muted-foreground text-center text-[10px] leading-relaxed">
-            Contoh tampilan QR
-          </figcaption>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onShowQr}
+            className="h-7 w-full text-[11px]"
+          >
+            <Maximize2 />
+            Perbesar QR
+          </Button>
         </figure>
 
         <div className="flex flex-col gap-3">
@@ -361,7 +369,7 @@ function ShareSheet({ onClose }: { onClose: () => void }) {
         <Info className="mt-0.5 size-3 shrink-0" />
         Instagram &amp; TikTok hanya menerima unggahan dari aplikasinya, jadi
         tombolnya menyimpan gambar + menyalin caption lalu membuka aplikasi.
-        Tautan dan QR sendiri masih contoh sampai layanan unggah aktif.
+        Tautan galerinya sendiri masih contoh sampai layanan unggah aktif.
       </p>
 
       {error && (
@@ -396,14 +404,22 @@ function ShareSheet({ onClose }: { onClose: () => void }) {
 export function ShareDialog({
   open,
   onOpenChange,
+  onShowQr,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onShowQr: () => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
-        <ShareSheet onClose={() => onOpenChange(false)} />
+        <ShareSheet
+          onClose={() => onOpenChange(false)}
+          onShowQr={() => {
+            onOpenChange(false);
+            onShowQr();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

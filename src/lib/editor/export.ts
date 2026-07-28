@@ -321,6 +321,16 @@ export async function renderExport(
   };
 }
 
+/** Saves an already-encoded data URL, e.g. a generated QR Code. */
+export function downloadDataUrl(dataUrl: string, filename: string): void {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

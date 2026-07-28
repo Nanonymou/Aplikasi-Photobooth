@@ -3,6 +3,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Kiosk mode: the QR card and everything inside it scale up once the card owns
+   the screen, so the second selector covers the descendants too. */
+@custom-variant fullscreen (&:fullscreen, :fullscreen &);
+
 :root {
   --radius: 0.625rem;
 
