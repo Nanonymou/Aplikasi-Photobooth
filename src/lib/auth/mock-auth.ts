@@ -63,6 +63,38 @@ export async function register(
 }
 
 /**
+ * Where a signed-in user lands. A single constant so the real dashboard, when
+ * it exists, is a one-line repoint rather than a hunt through call sites; for
+ * now the editor is the app's home.
+ */
+export const POST_LOGIN_REDIRECT = "/editor";
+
+/**
+ * Verifies a magic-link token.
+ *
+ * Stand-in for `GET /api/auth/magic-link/verify?token=…`: the backend looks the
+ * token's hash up, checks it is unused and unexpired, consumes it, and starts a
+ * session. Here the token string itself picks the outcome so every branch — a
+ * missing token, an expired one, a forged one, a good one — is reachable from
+ * the callback page. When the endpoint lands it replaces this body.
+ */
+export async function verifyMagicLink(
+  token: string | null,
+): Promise<Account> {
+  await wait();
+
+  if (!token) throw new AuthError("Tautan tidak lengkap.");
+  if (token.startsWith("expired")) {
+    throw new AuthError("Tautan ini sudah kedaluwarsa. Minta yang baru.");
+  }
+  if (token.startsWith("invalid")) {
+    throw new AuthError("Tautan tidak valid atau sudah dipakai.");
+  }
+
+  return { name: "Tamu", email: "" };
+}
+
+/**
  * Sends a one-time sign-in link to an email.
  *
  * Stand-in for `POST /api/auth/magic-link { email }`: the backend mints a short-

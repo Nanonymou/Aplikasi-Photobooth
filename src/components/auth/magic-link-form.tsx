@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Info, Loader2, Mail, MailCheck, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,13 @@ export function MagicLinkForm() {
         <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-relaxed">
           <Info className="mt-0.5 size-3 shrink-0" />
           Layanan masih disiapkan — ini pratinjau alurnya, jadi belum ada email
-          sungguhan yang dikirim.
+          sungguhan yang dikirim.{" "}
+          <Link
+            href="/masuk-tautan/verifikasi?token=demo"
+            className="text-foreground underline underline-offset-2"
+          >
+            Buka tautan (pratinjau)
+          </Link>
         </p>
       </div>
     );
