@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { EditorShell } from "@/components/editor/editor-shell";
+import { EndSessionButton } from "@/components/session/end-session";
 import { GuestSessionBanner } from "@/components/session/guest-session-banner";
 import { SaveToAccountButton } from "@/components/session/save-to-account";
 
@@ -23,7 +24,12 @@ export default function GuestSessionPage() {
   return (
     <EditorShell
       sessionBanner={<GuestSessionBanner />}
-      topbarActions={<SaveToAccountButton />}
+      topbarActions={
+        <>
+          <EndSessionButton />
+          <SaveToAccountButton />
+        </>
+      }
     />
   );
 }

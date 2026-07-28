@@ -112,6 +112,19 @@ export async function sendMagicLink(email: string): Promise<void> {
 }
 
 /**
+ * Ends the signed-in session.
+ *
+ * Stand-in for `POST /api/auth/logout`: the backend clears the session cookie so
+ * the device is no longer authenticated. Here it only pauses — there is no real
+ * cookie yet — but the call sits in the flow so "sign out" already awaits the
+ * server the way it will. Wiping the guest's device-local work is a separate,
+ * client-only step the caller runs alongside this.
+ */
+export async function logout(): Promise<void> {
+  await wait();
+}
+
+/**
  * Moves a device's guest work into the account that just signed in.
  *
  * Stand-in for `POST /api/account/claim { sessionCode }`, run right after auth:
