@@ -45,6 +45,25 @@ export async function POST(
     return jsonError(400, "Bidang `mirrored` harus boolean.");
   }
 
+  const sessionId = body.value.sessionId ?? null;
+  if (
+    sessionId !== null &&
+    (typeof sessionId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        sessionId,
+      ))
+  ) {
+    return jsonError(400, "Bidang `sessionId` harus uuid sesi foto.");
+  }
+
+  const position = body.value.position ?? null;
+  if (
+    position !== null &&
+    (typeof position !== "number" || !Number.isInteger(position) || position < 0)
+  ) {
+    return jsonError(400, "Bidang `position` harus bilangan bulat >= 0.");
+  }
+
   const capturedAtRaw = body.value.capturedAt;
   let capturedAt: string | null = null;
   if (capturedAtRaw !== undefined && capturedAtRaw !== null) {
@@ -76,6 +95,8 @@ export async function POST(
       bytes: data.byteLength,
       mirrored,
       capturedAt,
+      sessionId,
+      position,
     });
 
     return Response.json(record, { status: 201 });
