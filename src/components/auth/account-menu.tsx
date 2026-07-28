@@ -10,7 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { initials, useAccount, type Profile } from "@/lib/auth/use-account";
+import { initials } from "@/lib/auth/initials";
+import { useAccount, type Profile } from "@/lib/auth/use-account";
 import { useLogout } from "@/lib/auth/use-logout";
 import { cn } from "@/lib/utils";
 
