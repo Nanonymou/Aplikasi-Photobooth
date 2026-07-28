@@ -7,39 +7,44 @@ import { Button } from "@/components/ui/button";
 import type { MateriChapter } from "@/lib/materi/chapters";
 
 /**
- * The content area for the active chapter.
+ * One chapter in the continuous Materi reader.
  *
- * Renders one chapter at a time — a header with its number, title, and pacing,
- * then each section's heading, lead paragraphs, and bullets. A light fade on
- * chapter change keeps the switch from feeling like a page reload. Prev/next
- * buttons walk the same ordered list the sidebar shows. The presentation here is
- * deliberately plain; the richer card / accordion / timeline treatment lands in a
- * later task, but this already reads the real material shape.
+ * Each chapter is an anchor (`id`) the sidebar and scroll-spy target, so the
+ * article sits in a scrollable column with its siblings rather than swapping in
+ * and out. `scroll-mt` keeps its heading clear of the top edge after a
+ * scroll-to. A one-shot fade as it enters the viewport gives the light motion the
+ * brief asks for without re-animating on every scroll. The footer walks to the
+ * neighbouring chapter through the same scroll-to the sidebar uses.
  */
-export function MateriReader({
+export function ChapterArticle({
   chapter,
-  hasPrev,
-  hasNext,
-  onPrev,
-  onNext,
+  prevId,
+  nextId,
+  onNavigate,
 }: {
   chapter: MateriChapter;
-  hasPrev: boolean;
-  hasNext: boolean;
-  onPrev: () => void;
-  onNext: () => void;
+  prevId?: string;
+  nextId?: string;
+  onNavigate: (id: string) => void;
 }) {
   const reduceMotion = useReducedMotion();
 
   return (
-    <article className="bg-card border-border flex min-w-0 flex-col rounded-xl border">
+    <motion.article
+      id={chapter.id}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="bg-card border-border flex scroll-mt-6 flex-col rounded-xl border"
+    >
       <header className="border-border border-b px-5 py-4 sm:px-6">
         <p className="text-primary text-xs font-semibold tracking-wide uppercase">
           Bab {chapter.order}
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight text-balance sm:text-2xl">
+        <h2 className="mt-1 text-xl font-semibold tracking-tight text-balance sm:text-2xl">
           {chapter.title}
-        </h1>
+        </h2>
         <p className="text-muted-foreground mt-1 text-sm text-pretty">
           {chapter.summary}
         </p>
@@ -48,18 +53,12 @@ export function MateriReader({
         </p>
       </header>
 
-      <motion.div
-        key={chapter.id}
-        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="flex flex-col gap-8 px-5 py-6 sm:px-6"
-      >
+      <div className="flex flex-col gap-8 px-5 py-6 sm:px-6">
         {chapter.sections.map((section) => (
           <section key={section.id} className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold tracking-tight">
+            <h3 className="text-base font-semibold tracking-tight">
               {section.heading}
-            </h2>
+            </h3>
 
             {section.paragraphs?.map((paragraph, index) => (
               <p
@@ -88,23 +87,27 @@ export function MateriReader({
             )}
           </section>
         ))}
-      </motion.div>
+      </div>
 
       <footer className="border-border flex items-center justify-between gap-3 border-t px-5 py-4 sm:px-6">
         <Button
           variant="outline"
           size="sm"
-          onClick={onPrev}
-          disabled={!hasPrev}
+          onClick={() => prevId && onNavigate(prevId)}
+          disabled={!prevId}
         >
           <ArrowLeft />
           Sebelumnya
         </Button>
-        <Button size="sm" onClick={onNext} disabled={!hasNext}>
+        <Button
+          size="sm"
+          onClick={() => nextId && onNavigate(nextId)}
+          disabled={!nextId}
+        >
           Selanjutnya
           <ArrowRight />
         </Button>
       </footer>
-    </article>
+    </motion.article>
   );
 }

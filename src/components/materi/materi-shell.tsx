@@ -1,36 +1,41 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback } from "react";
+import { useReducedMotion } from "motion/react";
 
+import { ChapterArticle } from "@/components/materi/chapter-article";
 import { ChapterSidebar } from "@/components/materi/chapter-sidebar";
-import { MateriReader } from "@/components/materi/materi-reader";
-import { MATERI_CHAPTERS } from "@/lib/materi/chapters";
+import {
+  MATERI_CHAPTER_IDS,
+  MATERI_CHAPTERS,
+} from "@/lib/materi/chapters";
+import { useScrollSpy } from "@/hooks/use-scroll-spy";
 
 /**
- * The Materi screen: chapter rail beside the content area.
+ * The Materi screen: chapter rail beside one continuous, scrollable reader.
  *
- * Owns which chapter is active — the sidebar reports taps, the reader renders the
- * selection, and prev/next step through the ordered list from either side. On a
- * wide screen the two sit side by side; on mobile the rail stacks above the
- * content. Everything runs on the seed material for now; the backend phase will
- * feed the same chapter shape from the database.
+ * Every chapter is rendered stacked so the material reads top to bottom. Tapping
+ * a chapter — in the sidebar or via a chapter's prev/next — smoothly scrolls it
+ * into view, and a scroll-spy keeps the sidebar's active mark in sync with
+ * whatever the reader is currently on, from either direction. On a wide screen
+ * the rail sticks beside the content; on mobile it stacks above. Content is seed
+ * material for now; the backend phase feeds the same chapter shape from the DB.
  */
 export function MateriShell() {
-  const [activeId, setActiveId] = useState(MATERI_CHAPTERS[0].id);
+  const reduceMotion = useReducedMotion();
+  const activeId = useScrollSpy(MATERI_CHAPTER_IDS);
 
-  const activeIndex = useMemo(
-    () => MATERI_CHAPTERS.findIndex((chapter) => chapter.id === activeId),
-    [activeId],
+  const scrollToChapter = useCallback(
+    (id: string) => {
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    },
+    [reduceMotion],
   );
-
-  const chapter = MATERI_CHAPTERS[activeIndex] ?? MATERI_CHAPTERS[0];
-  const hasPrev = activeIndex > 0;
-  const hasNext = activeIndex < MATERI_CHAPTERS.length - 1;
-
-  function goTo(index: number) {
-    const next = MATERI_CHAPTERS[index];
-    if (next) setActiveId(next.id);
-  }
 
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,18rem)_1fr]">
@@ -38,17 +43,21 @@ export function MateriShell() {
         <ChapterSidebar
           chapters={MATERI_CHAPTERS}
           activeId={activeId}
-          onSelect={setActiveId}
+          onSelect={scrollToChapter}
         />
       </div>
 
-      <MateriReader
-        chapter={chapter}
-        hasPrev={hasPrev}
-        hasNext={hasNext}
-        onPrev={() => goTo(activeIndex - 1)}
-        onNext={() => goTo(activeIndex + 1)}
-      />
+      <div className="flex flex-col gap-4">
+        {MATERI_CHAPTERS.map((chapter, index) => (
+          <ChapterArticle
+            key={chapter.id}
+            chapter={chapter}
+            prevId={MATERI_CHAPTERS[index - 1]?.id}
+            nextId={MATERI_CHAPTERS[index + 1]?.id}
+            onNavigate={scrollToChapter}
+          />
+        ))}
+      </div>
     </div>
   );
 }

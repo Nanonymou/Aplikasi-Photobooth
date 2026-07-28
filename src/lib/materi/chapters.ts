@@ -348,3 +348,11 @@ export const MATERI_TOTAL_MINUTES = MATERI_CHAPTERS.reduce(
   (sum, chapter) => sum + chapter.minutes,
   0,
 );
+
+/**
+ * Chapter ids in reading order, as a stable reference.
+ *
+ * Handed to the scroll-spy and used as scroll-into-view targets. Kept at module
+ * scope so the observer isn't rebuilt on every render.
+ */
+export const MATERI_CHAPTER_IDS = MATERI_CHAPTERS.map((chapter) => chapter.id);
