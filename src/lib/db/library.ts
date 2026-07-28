@@ -241,3 +241,65 @@ export async function listStickers(
     total: rows[0]?.total ?? 0,
   };
 }
+
+export interface BackgroundSummary {
+  id: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  /** The value a page's background is set to, verbatim. */
+  background: PageBackground;
+  isPremium: boolean;
+}
+
+interface BackgroundRow {
+  slug: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  background: PageBackground;
+  is_premium: boolean;
+  total: number;
+}
+
+export interface BackgroundListing {
+  backgrounds: BackgroundSummary[];
+  total: number;
+}
+
+/**
+ * Backgrounds for the library panel.
+ *
+ * The row already holds a complete `PageBackground`, so applying one is a
+ * straight assignment on the client — no shape to reconstruct, nothing to fetch
+ * afterwards.
+ */
+export async function listBackgrounds(
+  options: LibraryQuery = {},
+): Promise<BackgroundListing> {
+  const { limit, offset } = bounds(options);
+
+  const rows = await query<BackgroundRow>(
+    `select i.slug, i.label, c.slug as category, i.keywords, i.background,
+            i.is_premium,
+            count(*) over ()::int as total
+       from backgrounds i
+       join library_categories c on c.id = i.category_id
+      where ${LIBRARY_FILTER}
+      order by i.position, i.label
+      limit $3 offset $4`,
+    [...filterValues(options), limit, offset],
+  );
+
+  return {
+    backgrounds: rows.map((row) => ({
+      id: row.slug,
+      label: row.label,
+      category: row.category,
+      keywords: row.keywords,
+      background: row.background,
+      isPremium: row.is_premium,
+    })),
+    total: rows[0]?.total ?? 0,
+  };
+}
