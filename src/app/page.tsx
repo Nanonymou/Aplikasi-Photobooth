@@ -20,12 +20,17 @@ export default function Home() {
         </p>
       </div>
 
-      <Button asChild size="lg">
-        <Link href="/editor">
-          Buka editor
-          <ArrowRight />
-        </Link>
-      </Button>
+      <div className="flex flex-col items-center gap-3">
+        <Button asChild size="lg">
+          <Link href="/tamu">
+            Mulai sebagai tamu
+            <ArrowRight />
+          </Link>
+        </Button>
+        <p className="text-muted-foreground text-xs">
+          Tanpa akun — karyamu tersimpan di perangkat ini.
+        </p>
+      </div>
     </main>
   );
 }
