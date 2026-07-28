@@ -6,6 +6,7 @@ import {
   ChartColumn,
   LayoutDashboard,
   LibraryBig,
+  Palette,
   Settings,
   Users,
   type LucideIcon,
@@ -27,6 +28,7 @@ const ITEMS: NavItem[] = [
   { href: "/admin/pengguna", label: "Pengguna", icon: Users },
   { href: "/admin/konten", label: "Konten", icon: LibraryBig },
   { href: "/admin/analitik", label: "Analitik", icon: ChartColumn },
+  { href: "/admin/branding", label: "Branding", icon: Palette },
   { href: "/admin/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
