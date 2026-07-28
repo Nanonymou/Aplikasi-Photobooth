@@ -3,8 +3,12 @@ import type { EditorProject } from "@/types/editor";
 /**
  * Versioned key: bumping it retires incompatible saves instead of trying to
  * migrate half-understood data from an older build.
+ *
+ * Exported so the autosave hook can tell this key apart from every other one in
+ * a cross-tab `storage` event.
  */
-const STORAGE_KEY = "framestudio:project:v1";
+export const PROJECT_STORAGE_KEY = "framestudio:project:v1";
+const STORAGE_KEY = PROJECT_STORAGE_KEY;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
