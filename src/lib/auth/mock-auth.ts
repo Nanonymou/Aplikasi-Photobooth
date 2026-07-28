@@ -61,3 +61,17 @@ export async function register(
 
   return { name: name.trim(), email: email.trim() };
 }
+
+/**
+ * Moves a device's guest work into the account that just signed in.
+ *
+ * Stand-in for `POST /api/account/claim { sessionCode }`, run right after auth:
+ * the backend takes every design and photo stamped with the anonymous
+ * `owner_id` behind that session and re-stamps it with the account's. Here it
+ * only pauses; the flow around it — sign in, then claim, then confirm — is the
+ * real thing being built.
+ */
+export async function claimSession(sessionCode: string): Promise<void> {
+  await wait();
+  void sessionCode;
+}
