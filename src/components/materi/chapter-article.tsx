@@ -3,6 +3,7 @@
 import { ArrowLeft, ArrowRight, Clock } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
+import { SectionView } from "@/components/materi/blocks/section-view";
 import { Button } from "@/components/ui/button";
 import type { MateriChapter } from "@/lib/materi/chapters";
 
@@ -55,37 +56,7 @@ export function ChapterArticle({
 
       <div className="flex flex-col gap-8 px-5 py-6 sm:px-6">
         {chapter.sections.map((section) => (
-          <section key={section.id} className="flex flex-col gap-3">
-            <h3 className="text-base font-semibold tracking-tight">
-              {section.heading}
-            </h3>
-
-            {section.paragraphs?.map((paragraph, index) => (
-              <p
-                key={index}
-                className="text-muted-foreground text-sm leading-relaxed text-pretty"
-              >
-                {paragraph}
-              </p>
-            ))}
-
-            {section.bullets && section.bullets.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {section.bullets.map((bullet, index) => (
-                  <li
-                    key={index}
-                    className="text-foreground/90 flex gap-2.5 text-sm leading-relaxed"
-                  >
-                    <span
-                      aria-hidden
-                      className="bg-primary/60 mt-2 size-1.5 shrink-0 rounded-full"
-                    />
-                    <span className="text-pretty">{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <SectionView key={section.id} section={section} />
         ))}
       </div>
 

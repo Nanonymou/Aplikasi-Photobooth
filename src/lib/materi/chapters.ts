@@ -2,20 +2,51 @@
  * The training material, modelled from the JSA & HIRADC source document.
  *
  * The DOCX the QHSE team used to hand around is split here into ordered chapters
- * (`bab`), each a list of sections. This is the shape the Materi screen reads
- * from — a chapter sidebar walks the list, the content area renders whichever one
- * is active. It's mock/seed data for now; the backend phase will serve the same
- * shape from Postgres, so components should depend on these types, not the array.
+ * (`bab`), each a list of sections. Every section carries a `variant` that says
+ * how it should be presented — as a callout, a card grid, an accordion, a
+ * timeline, or plain prose — so the same content reads as an interactive lesson
+ * rather than a flat document. This is mock/seed data for now; the backend phase
+ * will serve the same shape from Postgres, so components should depend on these
+ * types, not the array.
  */
+
+/** How a section renders. Drives which block component the reader picks. */
+export type MateriVariant =
+  | "prose"
+  | "callout"
+  | "cards"
+  | "accordion"
+  | "timeline";
+
+/** Tint of a callout ("ilustrasi") box. */
+export type CalloutTone = "info" | "tip" | "warning";
+
+/** A structured entry inside a cards / accordion / timeline section. */
+export interface MateriItem {
+  id: string;
+  /** Card title, accordion trigger, or timeline step title. */
+  label: string;
+  /** Supporting sentence shown under the label. */
+  detail?: string;
+  /** Bullet examples inside the item. */
+  points?: string[];
+}
 
 /** One heading-and-body block inside a chapter. */
 export interface MateriSection {
   id: string;
   heading: string;
-  /** Lead paragraphs shown above any list. */
+  variant: MateriVariant;
+  /** Lead line shown under the heading, before the body. */
+  intro?: string;
+  /** Prose / callout paragraphs. */
   paragraphs?: string[];
-  /** Bullet points — steps, examples, or a checklist. */
+  /** Simple bullets — used by `prose`, or as plain cards by `cards`. */
   bullets?: string[];
+  /** Structured items — used by `cards`, `accordion`, and `timeline`. */
+  items?: MateriItem[];
+  /** Callout tint; only read by the `callout` variant. */
+  tone?: CalloutTone;
 }
 
 /** A chapter (bab) of the training material. */
@@ -42,15 +73,18 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
       {
         id: "makna-training",
         heading: "Makna Training",
+        variant: "callout",
+        tone: "info",
         paragraphs: [
           "Training Penyusunan dan Pengisian JSA (Job Safety Analysis) dan HIRADC (Hazard Identification, Risk Assessment and Determining Control) merupakan pelatihan teknis yang bertujuan meningkatkan kompetensi Tim QHSE dalam mengidentifikasi bahaya, menilai tingkat risiko, serta menentukan tindakan pengendalian yang efektif sebelum suatu pekerjaan dilaksanakan.",
-          "Pelatihan ini bertujuan agar setiap personel QHSE mampu menyusun dokumen JSA dan HIRADC secara benar, konsisten, dan sesuai dengan standar perusahaan sehingga dapat digunakan sebagai dasar pengendalian risiko di seluruh aktivitas operasional.",
+          "Setiap personel QHSE diharapkan mampu menyusun dokumen JSA dan HIRADC secara benar, konsisten, dan sesuai standar perusahaan sebagai dasar pengendalian risiko di seluruh aktivitas operasional.",
         ],
       },
       {
         id: "tujuan-training",
         heading: "Tujuan Training",
-        paragraphs: ["Setelah mengikuti pelatihan, peserta mampu:"],
+        variant: "cards",
+        intro: "Setelah mengikuti pelatihan, peserta mampu:",
         bullets: [
           "Memahami fungsi JSA dan HIRADC.",
           "Menjelaskan perbedaan JSA dan HIRADC.",
@@ -65,7 +99,8 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
       {
         id: "kompetensi",
         heading: "Kompetensi yang Harus Dikuasai",
-        paragraphs: ["Setelah training peserta mampu membuat sendiri:"],
+        variant: "cards",
+        intro: "Setelah training peserta mampu membuat sendiri:",
         bullets: [
           "JSA Menggoreng",
           "JSA Pemotongan Ayam",
@@ -89,17 +124,19 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
       {
         id: "apa-itu-jsa",
         heading: "Apa itu JSA?",
-        paragraphs: ["Job Safety Analysis adalah metode yang digunakan untuk:"],
+        variant: "prose",
+        intro: "Job Safety Analysis adalah metode yang digunakan untuk:",
         bullets: [
           "Menguraikan suatu pekerjaan menjadi beberapa langkah kerja.",
           "Mengidentifikasi bahaya pada setiap langkah.",
           "Menentukan tindakan pengendalian.",
         ],
+        paragraphs: ["JSA digunakan sebelum pekerjaan dilakukan."],
       },
       {
         id: "tujuan-jsa",
         heading: "Tujuan JSA",
-        paragraphs: ["JSA digunakan sebelum pekerjaan dilakukan, dengan tujuan:"],
+        variant: "cards",
         bullets: [
           "Mencegah kecelakaan kerja.",
           "Menentukan SOP yang aman.",
@@ -118,21 +155,33 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
     minutes: 5,
     sections: [
       {
-        id: "apa-itu-hiradc",
+        id: "tahap-hiradc",
         heading: "Apa itu HIRADC?",
-        paragraphs: [
-          "HIRADC merupakan singkatan dari Hazard Identification → Risk Assessment → Determining Control.",
-        ],
-        bullets: [
-          "Hazard Identification — mengenali potensi bahaya.",
-          "Risk Assessment — menilai besarnya risiko.",
-          "Determining Control — menentukan pengendalian.",
+        variant: "timeline",
+        intro: "HIRADC berjalan dalam tiga tahap berurutan:",
+        items: [
+          {
+            id: "hazard-identification",
+            label: "Hazard Identification",
+            detail: "Mengenali potensi bahaya pada setiap aktivitas.",
+          },
+          {
+            id: "risk-assessment",
+            label: "Risk Assessment",
+            detail: "Menilai besarnya risiko dari bahaya yang teridentifikasi.",
+          },
+          {
+            id: "determining-control",
+            label: "Determining Control",
+            detail: "Menentukan pengendalian yang tepat untuk menekan risiko.",
+          },
         ],
       },
       {
         id: "penilaian-hiradc",
         heading: "Yang Dinilai HIRADC",
-        paragraphs: ["HIRADC digunakan untuk menilai:"],
+        variant: "cards",
+        intro: "HIRADC digunakan untuk menilai:",
         bullets: [
           "Potensi bahaya.",
           "Besarnya risiko.",
@@ -149,25 +198,33 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
     minutes: 4,
     sections: [
       {
-        id: "fokus-jsa",
-        heading: "JSA",
-        bullets: [
-          "Berfokus pada langkah pekerjaan.",
-          "Lebih rinci per langkah kerja.",
-          "Digunakan saat pekerjaan dilakukan.",
-          "Digunakan sebagai panduan kerja.",
-          "Cocok untuk pekerjaan non-routine.",
-        ],
-      },
-      {
-        id: "fokus-hiradc",
-        heading: "HIRADC",
-        bullets: [
-          "Berfokus pada seluruh aktivitas.",
-          "Lebih ringkas per aktivitas.",
-          "Digunakan untuk penilaian risiko.",
-          "Digunakan sebagai dasar pengendalian.",
-          "Cocok untuk pekerjaan routine.",
+        id: "perbandingan",
+        heading: "JSA vs HIRADC",
+        variant: "cards",
+        intro: "Keduanya saling melengkapi, tetapi berbeda fokus dan pemakaian:",
+        items: [
+          {
+            id: "jsa",
+            label: "JSA",
+            detail: "Panduan kerja yang rinci per langkah pekerjaan.",
+            points: [
+              "Berfokus pada langkah pekerjaan.",
+              "Lebih rinci per langkah kerja.",
+              "Digunakan saat pekerjaan dilakukan.",
+              "Cocok untuk pekerjaan non-routine.",
+            ],
+          },
+          {
+            id: "hiradc",
+            label: "HIRADC",
+            detail: "Dasar penilaian risiko untuk seluruh aktivitas.",
+            points: [
+              "Berfokus pada seluruh aktivitas.",
+              "Lebih ringkas per aktivitas.",
+              "Digunakan untuk penilaian risiko.",
+              "Cocok untuk pekerjaan routine.",
+            ],
+          },
         ],
       },
     ],
@@ -182,9 +239,9 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
       {
         id: "kepala-jsa",
         heading: "Bagian yang Harus Diisi",
-        paragraphs: [
+        variant: "prose",
+        intro:
           "Mengacu pada template perusahaan, bagian yang harus diisi meliputi:",
-        ],
         bullets: [
           "Nama pekerjaan",
           "Nomor JSA",
@@ -196,51 +253,66 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
         ],
       },
       {
-        id: "kolom-1",
-        heading: "Kolom 1 — Urutan Langkah Pekerjaan",
-        paragraphs: ["Satu aktivitas = satu langkah kerja. Contoh:"],
-        bullets: [
-          "Menyiapkan APD",
-          "Menyiapkan alat",
-          "Mengisi minyak",
-          "Menggoreng",
+        id: "kolom-utama",
+        heading: "Tiga Kolom Utama",
+        variant: "accordion",
+        intro: "Kemudian isi tiga kolom utama berikut:",
+        items: [
+          {
+            id: "kolom-1",
+            label: "Kolom 1 — Urutan Langkah Pekerjaan",
+            detail: "Satu aktivitas = satu langkah kerja. Contoh:",
+            points: [
+              "Menyiapkan APD",
+              "Menyiapkan alat",
+              "Mengisi minyak",
+              "Menggoreng",
+            ],
+          },
+          {
+            id: "kolom-2",
+            label: "Kolom 2 — Bahaya / Risiko Setiap Langkah",
+            detail:
+              "Tuliskan bahaya yang benar-benar mungkin terjadi pada langkah tersebut. Contoh:",
+            points: [
+              "Terpeleset",
+              "Terkena panas",
+              "Luka sayat",
+              "Terkena cipratan minyak",
+              "Kebakaran",
+              "Kontak dengan peralatan panas",
+            ],
+          },
+          {
+            id: "kolom-3",
+            label: "Kolom 3 — Pengendalian",
+            detail: "Gunakan Hirarki Pengendalian Risiko. Misalnya:",
+            points: [
+              "SOP",
+              "APD",
+              "Housekeeping",
+              "Pemeriksaan alat",
+              "Safety Sign",
+              "Inspeksi",
+              "Pelatihan",
+            ],
+          },
         ],
       },
       {
-        id: "kolom-2",
-        heading: "Kolom 2 — Bahaya / Risiko Setiap Langkah",
+        id: "catatan-pengendalian",
+        heading: "Catatan Penting",
+        variant: "callout",
+        tone: "warning",
         paragraphs: [
-          "Tuliskan bahaya yang benar-benar mungkin terjadi pada langkah tersebut. Contoh:",
-        ],
-        bullets: [
-          "Terpeleset",
-          "Terkena panas",
-          "Luka sayat",
-          "Terkena cipratan minyak",
-          "Kebakaran",
-          "Kontak dengan peralatan panas",
-        ],
-      },
-      {
-        id: "kolom-3",
-        heading: "Kolom 3 — Pengendalian",
-        paragraphs: [
-          "Gunakan Hirarki Pengendalian Risiko. Jangan langsung menulis \"gunakan APD\" apabila masih ada pengendalian yang lebih efektif. Misalnya:",
-        ],
-        bullets: [
-          "SOP",
-          "APD",
-          "Housekeeping",
-          "Pemeriksaan alat",
-          "Safety Sign",
-          "Inspeksi",
-          "Pelatihan",
+          "Jangan langsung menulis \"gunakan APD\" apabila masih ada pengendalian yang lebih efektif. APD adalah pengendalian terakhir dalam hirarki.",
         ],
       },
       {
         id: "latihan-jsa",
         heading: "Latihan JSA",
-        paragraphs: ["Peserta diminta membuat JSA untuk:"],
+        variant: "cards",
+        intro: "Peserta diminta membuat JSA untuk:",
         bullets: [
           "Penggantian lampu di area kitchen",
           "Pengangkatan chiller",
@@ -260,7 +332,8 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
       {
         id: "komponen-hiradc",
         heading: "Komponen HIRADC",
-        paragraphs: ["HIRADC terdiri dari:"],
+        variant: "cards",
+        intro: "HIRADC terdiri dari komponen berikut:",
         bullets: [
           "Sub Activity",
           "Condition",
@@ -272,71 +345,79 @@ export const MATERI_CHAPTERS: MateriChapter[] = [
         ],
       },
       {
-        id: "langkah-1",
-        heading: "Langkah 1 — Sub Activity",
-        paragraphs: ["Tuliskan aktivitas. Contoh:"],
-        bullets: [
-          "Penerimaan bahan",
-          "Butchering",
-          "Cooking",
-          "Packing",
-          "Laundry",
-          "Housekeeping",
-        ],
-      },
-      {
-        id: "langkah-2",
-        heading: "Langkah 2 — Condition",
-        paragraphs: ["Pilih kondisi sesuai ketentuan perusahaan:"],
-        bullets: ["Routine", "Non Routine", "Emergency"],
-      },
-      {
-        id: "langkah-3",
-        heading: "Langkah 3 — Source of Hazard",
-        paragraphs: ["Identifikasi sumber bahaya. Contoh:"],
-        bullets: [
-          "Bahaya fisik",
-          "Bahaya kimia",
-          "Bahaya biologis",
-          "Bahaya ergonomi",
-          "Bahaya listrik",
-          "Bahaya panas",
-          "Bahaya kebakaran",
-        ],
-      },
-      {
-        id: "langkah-4",
-        heading: "Langkah 4 — Consequences",
-        paragraphs: ["Apa akibatnya? Contoh:"],
-        bullets: [
-          "Luka sayat",
-          "Luka bakar",
-          "Patah tulang",
-          "Terpeleset",
-          "Gangguan pernapasan",
-          "Kontaminasi makanan",
-        ],
-      },
-      {
-        id: "langkah-5",
-        heading: "Langkah 5 — Risk Assessment",
-        paragraphs: [
-          "Gunakan matriks perusahaan. Risk = Severity × Likelihood.",
-          "Severity 1–5: Sangat ringan, Ringan, Sedang, Berat, Fatal.",
-          "Likelihood 1–5: Sangat jarang, Jarang, Kadang, Sering, Sangat sering.",
-          "Contoh: S = 4, L = 3 → Risk = 12 → Kategori HIGH.",
-        ],
-      },
-      {
-        id: "langkah-6",
-        heading: "Langkah 6 — Menentukan Pengendalian",
-        paragraphs: ["Gunakan urutan Hirarki Pengendalian Risiko:"],
-        bullets: [
-          "Eliminasi — menghilangkan bahaya.",
-          "Substitusi — mengganti alat.",
-          "Engineering — guarding, ventilasi, pelindung mesin.",
-          "Administrative — SOP, training, inspection, safety sign, permit.",
-          "APD — sarung tangan, masker, safety shoes, hairnet.",
+        id: "langkah-hiradc",
+        heading: "Enam Langkah Pengisian",
+        variant: "timeline",
+        intro: "Isi HIRADC mengikuti urutan langkah berikut:",
+        items: [
+          {
+            id: "langkah-1",
+            label: "Sub Activity",
+            detail: "Tuliskan aktivitasnya. Contoh:",
+            points: [
+              "Penerimaan bahan",
+              "Butchering",
+              "Cooking",
+              "Packing",
+              "Laundry",
+              "Housekeeping",
+            ],
+          },
+          {
+            id: "langkah-2",
+            label: "Condition",
+            detail: "Pilih kondisi sesuai ketentuan perusahaan:",
+            points: ["Routine", "Non Routine", "Emergency"],
+          },
+          {
+            id: "langkah-3",
+            label: "Source of Hazard",
+            detail: "Identifikasi sumber bahaya. Contoh:",
+            points: [
+              "Bahaya fisik",
+              "Bahaya kimia",
+              "Bahaya biologis",
+              "Bahaya ergonomi",
+              "Bahaya listrik",
+              "Bahaya panas",
+              "Bahaya kebakaran",
+            ],
+          },
+          {
+            id: "langkah-4",
+            label: "Consequences",
+            detail: "Apa akibatnya? Contoh:",
+            points: [
+              "Luka sayat",
+              "Luka bakar",
+              "Patah tulang",
+              "Terpeleset",
+              "Gangguan pernapasan",
+              "Kontaminasi makanan",
+            ],
+          },
+          {
+            id: "langkah-5",
+            label: "Risk Assessment",
+            detail:
+              "Gunakan matriks perusahaan: Risk = Severity × Likelihood. Contoh: S = 4, L = 3 → Risk = 12 → kategori HIGH.",
+            points: [
+              "Severity 1–5: Sangat ringan, Ringan, Sedang, Berat, Fatal.",
+              "Likelihood 1–5: Sangat jarang, Jarang, Kadang, Sering, Sangat sering.",
+            ],
+          },
+          {
+            id: "langkah-6",
+            label: "Determining Control",
+            detail: "Gunakan urutan Hirarki Pengendalian Risiko:",
+            points: [
+              "Eliminasi — menghilangkan bahaya.",
+              "Substitusi — mengganti alat.",
+              "Engineering — guarding, ventilasi, pelindung mesin.",
+              "Administrative — SOP, training, inspection, safety sign, permit.",
+              "APD — sarung tangan, masker, safety shoes, hairnet.",
+            ],
+          },
         ],
       },
     ],
