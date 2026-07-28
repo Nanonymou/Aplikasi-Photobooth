@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ChartColumn,
   LayoutDashboard,
   LibraryBig,
   Users,
@@ -24,6 +25,7 @@ const ITEMS: NavItem[] = [
   { href: "/admin", label: "Dasbor", icon: LayoutDashboard, exact: true },
   { href: "/admin/pengguna", label: "Pengguna", icon: Users },
   { href: "/admin/konten", label: "Konten", icon: LibraryBig },
+  { href: "/admin/analitik", label: "Analitik", icon: ChartColumn },
 ];
 
 /**
