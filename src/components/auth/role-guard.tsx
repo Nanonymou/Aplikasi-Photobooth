@@ -1,21 +1,12 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldX } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Forbidden } from "@/components/auth/forbidden";
 import { useAccount } from "@/lib/auth/use-account";
-import { hasRequiredRole, ROLE_LABELS, type Role } from "@/lib/auth/roles";
-
-function Centered({ children }: { children: ReactNode }) {
-  return (
-    <main className="bg-background flex min-h-dvh flex-col items-center justify-center px-6 py-12 text-center">
-      {children}
-    </main>
-  );
-}
+import { hasRequiredRole, type Role } from "@/lib/auth/roles";
 
 /**
  * A role gate for a route subtree.
@@ -24,9 +15,9 @@ function Centered({ children }: { children: ReactNode }) {
  * never sees the guarded UI. Three outcomes: no session yet (the hook's null,
  * covering both the server render and a signed-out user) shows a spinner and, if
  * it persists, sends the user to sign in; a signed-in account without the role
- * gets a plain "access denied" rather than a silent redirect, so the block is
- * legible; a cleared account gets through. This is the client half — the real
- * defense is the server checking the same role before it ever ships the page.
+ * gets the shared "access denied" screen rather than a silent redirect, so the
+ * block is legible; a cleared account gets through. This is the client half — the
+ * real defense is the server checking the same role before it ever ships the page.
  */
 export function RoleGuard({
   allow,
@@ -49,35 +40,14 @@ export function RoleGuard({
 
   if (profile === null) {
     return (
-      <Centered>
+      <main className="bg-background flex min-h-dvh flex-col items-center justify-center px-6 py-12 text-center">
         <Loader2 className="text-muted-foreground size-6 animate-spin" />
-      </Centered>
+      </main>
     );
   }
 
   if (!hasRequiredRole(profile.role, allow)) {
-    const allowedLabels = allow.map((role) => ROLE_LABELS[role]).join(", ");
-    return (
-      <Centered>
-        <div className="flex max-w-sm flex-col items-center gap-4">
-          <span className="bg-destructive/10 text-destructive flex size-12 items-center justify-center rounded-full">
-            <ShieldX className="size-6" />
-          </span>
-          <div className="flex flex-col gap-1">
-            <h1 className="text-lg font-semibold tracking-tight">
-              Akses ditolak
-            </h1>
-            <p className="text-muted-foreground text-sm text-pretty">
-              Halaman ini hanya untuk peran {allowedLabels || "tertentu"}. Akunmu
-              masuk sebagai {ROLE_LABELS[profile.role]}.
-            </p>
-          </div>
-          <Button asChild size="sm">
-            <Link href="/">Kembali ke beranda</Link>
-          </Button>
-        </div>
-      </Centered>
-    );
+    return <Forbidden allow={allow} role={profile.role} />;
   }
 
   return <>{children}</>;
