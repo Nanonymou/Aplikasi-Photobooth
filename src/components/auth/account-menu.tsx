@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, ShieldCheck, Settings, UserRound } from "lucide-react";
+import {
+  CreditCard,
+  Images,
+  LogOut,
+  ShieldCheck,
+  Settings,
+  UserRound,
+} from "lucide-react";
 
 import { RoleGate } from "@/components/auth/role-gate";
 import { Button } from "@/components/ui/button";
@@ -106,6 +113,19 @@ export function AccountMenu() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </RoleGate>
+
+        <DropdownMenuItem asChild>
+          <Link href="/galeri">
+            <Images />
+            Galeri saya
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/langganan">
+            <CreditCard />
+            Langganan
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuItem disabled>
           <UserRound />
