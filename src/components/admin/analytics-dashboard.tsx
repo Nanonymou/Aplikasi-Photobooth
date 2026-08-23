@@ -1,13 +1,22 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import {
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { CalendarRange, TrendingDown, TrendingUp } from "lucide-react";
 
 import { AreaChart } from "@/components/admin/area-chart";
 import { BarChart } from "@/components/admin/bar-chart";
+import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  analyticsFor,
+  analyticsForDays,
+  daysInRange,
+  MAX_RANGE_DAYS,
+  MIN_RANGE_DAYS,
   PERIODS,
   type Breakdown,
   type Kpi,
@@ -80,6 +89,47 @@ function BreakdownList({
   );
 }
 
+/** `YYYY-MM-DD` for a date, in local time — what `<input type="date">` speaks. */
+function isoDate(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function shiftDays(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return isoDate(date);
+}
+
+const dateLabel = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+function formatDate(iso: string): string {
+  return dateLabel.format(new Date(`${iso}T00:00:00`));
+}
+
+/**
+ * Today's date, or `null` on the server.
+ *
+ * A date picker needs a clock, and a clock read during render would disagree
+ * between the server pass and hydration. Reading it through `useSyncExternalStore`
+ * keeps the first paint date-free and fills it in once mounted — the same shape
+ * the guest session uses. Cached so the snapshot is a stable reference.
+ */
+let todayCache: string | null = null;
+const subscribeToday = () => () => {};
+
+function useToday(): string | null {
+  return useSyncExternalStore(
+    subscribeToday,
+    () => (todayCache ??= isoDate(new Date())),
+    () => null,
+  );
+}
+
 /**
  * The frame every chart shares: a titled card, an optional figure on the right,
  * and the window's span labelled under the plot so a bare curve has a time axis.
@@ -87,12 +137,13 @@ function BreakdownList({
 function ChartCard({
   title,
   note,
-  days,
+  span,
   children,
 }: {
   title: string;
   note?: string;
-  days: number;
+  /** The window's ends, already worded — relative for presets, dates for a range. */
+  span: { start: string; end: string };
   children: ReactNode;
 }) {
   return (
@@ -107,27 +158,66 @@ function ChartCard({
       </div>
       <div className="p-4">
         {children}
-        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-          <span>{days} hari lalu</span>
-          <span>Hari ini</span>
+        <div className="text-muted-foreground mt-2 flex justify-between gap-2 text-xs">
+          <span>{span.start}</span>
+          <span>{span.end}</span>
         </div>
       </div>
     </section>
   );
 }
 
+/** A preset window, or a hand-picked pair of dates. */
+type RangeMode = Period | "custom";
+
 /**
- * The analytics view, scoped to a period.
+ * The analytics view, scoped to a range.
  *
- * One control drives everything: pick a window and the KPIs, all three charts,
- * and the breakdowns recompute from the same mock source, so the interaction is
- * real before the API. Sessions and user growth read as trends, so they get
- * areas; downloads are per-day counts, so they get bars. Every chart is plain
- * SVG — no chart dependency.
+ * One control drives everything: pick a window — a preset, or a custom start and
+ * end — and the KPIs, all three charts, and the breakdowns recompute from the
+ * same mock source, so the interaction is real before the API. A custom range is
+ * only adopted once it is usable (in order, within bounds); until then the last
+ * good window stays on screen rather than blanking the report mid-edit. Sessions
+ * and user growth read as trends, so they get areas; downloads are per-day
+ * counts, so they get bars. Every chart is plain SVG — no chart dependency.
  */
 export function AnalyticsDashboard() {
-  const [period, setPeriod] = useState<Period>("30d");
-  const data = useMemo(() => analyticsFor(period), [period]);
+  const today = useToday();
+  const [mode, setMode] = useState<RangeMode>("30d");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const presetDays =
+    PERIODS.find((p) => p.id === mode)?.days ?? PERIODS[1].days;
+  const customDays = mode === "custom" ? daysInRange(from, to) : null;
+
+  // While a custom range is half-typed or out of bounds it resolves to nothing;
+  // the report then holds the last window that did resolve. Remembering it during
+  // render (not in an effect) keeps the charts from flashing a stale frame first.
+  const [lastGoodDays, setLastGoodDays] = useState(PERIODS[1].days);
+  const resolved = mode === "custom" ? customDays : presetDays;
+  const days = resolved ?? lastGoodDays;
+  if (resolved !== null && resolved !== lastGoodDays) setLastGoodDays(resolved);
+
+  const rangeInvalid =
+    mode === "custom" && from !== "" && to !== "" && customDays === null;
+
+  // Preset windows end today, so they read relatively; a custom one names its ends.
+  const span =
+    mode === "custom" && customDays !== null
+      ? { start: formatDate(from), end: formatDate(to) }
+      : { start: `${days} hari lalu`, end: "Hari ini" };
+
+  function startCustom() {
+    setMode("custom");
+    // Seed with the window already on screen, so the picker opens somewhere sane.
+    if (today && !from && !to) {
+      setFrom(shiftDays(today, -(presetDays - 1)));
+      setTo(today);
+    }
+  }
+
+  const data = useMemo(() => analyticsForDays(days), [days]);
   const peak = useMemo(
     () => Math.max(...data.sessions.map((point) => point.value)),
     [data],
@@ -143,19 +233,64 @@ export function AnalyticsDashboard() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-end">
+        {mode === "custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="date"
+              value={from}
+              max={to || today || undefined}
+              onChange={(event) => setFrom(event.target.value)}
+              aria-label="Tanggal mulai"
+              className="h-8 w-auto text-xs"
+            />
+            <span className="text-muted-foreground text-xs">—</span>
+            <Input
+              type="date"
+              value={to}
+              min={from || undefined}
+              max={today || undefined}
+              onChange={(event) => setTo(event.target.value)}
+              aria-label="Tanggal akhir"
+              className="h-8 w-auto text-xs"
+            />
+            <span
+              className={
+                rangeInvalid
+                  ? "text-destructive text-xs"
+                  : "text-muted-foreground text-xs tabular-nums"
+              }
+              aria-live="polite"
+            >
+              {rangeInvalid
+                ? `Rentang ${MIN_RANGE_DAYS}–${MAX_RANGE_DAYS} hari, akhir setelah mulai.`
+                : customDays !== null
+                  ? `${customDays} hari`
+                  : "Pilih tanggal"}
+            </span>
+          </div>
+        )}
+
         <div className="min-w-0 overflow-x-auto">
           <ToggleGroup
             type="single"
             variant="outline"
-            value={period}
-            onValueChange={(value) => value && setPeriod(value as Period)}
+            value={mode}
+            onValueChange={(value) => {
+              if (!value) return;
+              if (value === "custom") startCustom();
+              else setMode(value as Period);
+            }}
           >
             {PERIODS.map(({ id, label }) => (
               <ToggleGroupItem key={id} value={id} className="whitespace-nowrap">
                 {label}
               </ToggleGroupItem>
             ))}
+            <ToggleGroupItem value="custom" className="whitespace-nowrap">
+              <CalendarRange className="size-3.5" />
+              Kustom
+            </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </div>
@@ -169,7 +304,7 @@ export function AnalyticsDashboard() {
       <ChartCard
         title="Sesi foto harian"
         note={`Puncak ${peak.toLocaleString("id-ID")}`}
-        days={data.days}
+        span={span}
       >
         <AreaChart points={data.sessions} gradientId="chart-sessions" />
       </ChartCard>
@@ -178,7 +313,7 @@ export function AnalyticsDashboard() {
         <ChartCard
           title="Pengguna baru"
           note={`${totalUsers.toLocaleString("id-ID")} akun`}
-          days={data.days}
+          span={span}
         >
           <AreaChart points={data.newUsers} gradientId="chart-users" />
         </ChartCard>
@@ -186,7 +321,7 @@ export function AnalyticsDashboard() {
         <ChartCard
           title="Unduhan harian"
           note={`${totalDownloads.toLocaleString("id-ID")} berkas`}
-          days={data.days}
+          span={span}
         >
           <BarChart points={data.downloads} />
         </ChartCard>

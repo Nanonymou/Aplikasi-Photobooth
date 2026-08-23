@@ -99,9 +99,33 @@ function kpi(id: string, label: string, points: Point[]): Kpi {
   return { id, label, value: numberFormat.format(sum(points)), delta, trend };
 }
 
+/** Bounds a custom range is held to: enough points to plot, not so many to crawl. */
+export const MIN_RANGE_DAYS = 2;
+export const MAX_RANGE_DAYS = 365;
+
+/** Whole days covered by an inclusive `from`–`to` pair, or null if unusable. */
+export function daysInRange(from: string, to: string): number | null {
+  const start = Date.parse(from);
+  const end = Date.parse(to);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+
+  const days = Math.round((end - start) / 86_400_000) + 1;
+  if (days < MIN_RANGE_DAYS || days > MAX_RANGE_DAYS) return null;
+  return days;
+}
+
 export function analyticsFor(period: Period): AnalyticsData {
   const { days } = PERIODS.find((p) => p.id === period) ?? PERIODS[1];
+  return analyticsForDays(days);
+}
 
+/**
+ * The same report for an arbitrary window.
+ *
+ * Presets are just named day counts, so the report is generated from the count
+ * itself and a custom range needs no second code path — only a different number.
+ */
+export function analyticsForDays(days: number): AnalyticsData {
   const sessions = series(days, 120, 45, 2.1);
   const designs = series(days, 70, 28, 1.4);
   const exportsSeries = series(days, 40, 18, 0.9);
