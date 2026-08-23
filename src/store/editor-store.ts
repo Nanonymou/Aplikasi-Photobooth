@@ -121,6 +121,13 @@ export interface EditorState {
   setSlotFilter: (slotIds: string[], filterId: string) => void;
   /** Replaces the active page's visual effects (weather and the like). */
   setPageEffects: (effectIds: string[]) => void;
+  /** Adds an effect to the active page, or removes it if already on. */
+  togglePageEffect: (effectId: string) => void;
+  /**
+   * Strips every look from the active page — slot filters and page effects
+   * together — so "start over on the styling" is one action and one undo step.
+   */
+  clearLooks: () => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */
   fillNextEmptySlot: (src: string) => string | null;
   moveObject: (id: string, toIndex: number) => void;
@@ -425,6 +432,36 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         withActivePage(state.project, state.activePageId, (page) => ({
           ...page,
           effects: effectIds,
+        })),
+      ),
+    ),
+
+  togglePageEffect: (effectId) => {
+    const state = get();
+    const page = state.project.pages.find(
+      (candidate) => candidate.id === state.activePageId,
+    );
+    const current = page?.effects ?? [];
+
+    state.setPageEffects(
+      current.includes(effectId)
+        ? current.filter((id) => id !== effectId)
+        : [...current, effectId],
+    );
+  },
+
+  clearLooks: () =>
+    set((state) =>
+      commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          effects: [],
+          objects: page.objects.map((object) =>
+            object.kind === "slot" && object.photo
+              ? { ...object, photo: { ...object.photo, filter: "none" } }
+              : object,
+          ),
         })),
       ),
     ),

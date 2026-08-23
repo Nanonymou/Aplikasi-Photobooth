@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { demoShotSource } from "@/lib/camera/demo-shots";
 import {
   EFFECT_CATEGORIES,
   effectsByCategory,
@@ -16,41 +17,10 @@ import {
   type PhotoFilter,
   type VisualEffect,
 } from "@/lib/editor/filters";
+import { useLooks } from "@/hooks/use-looks";
 import { cn } from "@/lib/utils";
-import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { PhotoSlotObject } from "@/types/editor";
 
 type Tab = "filter" | "effect";
-
-/**
- * Which photos the panel is aiming at, and what to preview on.
- *
- * Selecting a slot narrows the target to it; with nothing selected the panel
- * treats the page as one strip and filters every filled slot, which is what a
- * photostrip almost always wants. A filter shown on a grey square tells you
- * nothing, so the swatches preview the first photo actually being targeted (a
- * sample only when the page has none).
- */
-function useFilterTarget() {
-  const page = useActivePage();
-  const selectedIds = useEditorStore((state) => state.selectedIds);
-
-  const filled = page.objects.filter(
-    (object): object is PhotoSlotObject =>
-      object.kind === "slot" && object.photo !== null,
-  );
-  const selected = filled.filter((slot) => selectedIds.includes(slot.id));
-  const targets = selected.length > 0 ? selected : filled;
-
-  return {
-    targets,
-    /** True when the aim came from a selection rather than the whole page. */
-    fromSelection: selected.length > 0,
-    previewSrc: targets[0]?.photo?.src ?? demoShotSource(0),
-    /** The filter already on the target, so the grid opens on what is applied. */
-    appliedFilterId: targets[0]?.photo?.filter ?? "none",
-  };
-}
 
 /**
  * The family selector both tabs share: a scrolling row of chips, so a look is
@@ -198,15 +168,21 @@ function EffectSwatch({
  * picking is done by eye rather than by reading names. Filters and effects sit
  * behind one switch because they answer the same question but stack differently —
  * one filter at a time (they replace each other), any number of effects (they
- * layer). Selection lives here; applying the picked look to the canvas is the
- * next task in this feature, so the panel says so plainly instead of pretending.
+ * layer). The panel owns no look state of its own: `useLooks` holds it, so the
+ * swatches always mark what the canvas actually carries.
  */
 export function FilterPanel() {
-  const { targets, fromSelection, previewSrc, appliedFilterId } =
-    useFilterTarget();
-  const setSlotFilter = useEditorStore((state) => state.setSlotFilter);
-  const setPageEffects = useEditorStore((state) => state.setPageEffects);
-  const page = useActivePage();
+  const {
+    targets,
+    fromSelection,
+    previewSrc,
+    filterId,
+    effectIds,
+    applyFilter,
+    toggleEffect,
+    clear,
+    hasLooks,
+  } = useLooks();
 
   const [tab, setTab] = useState<Tab>("filter");
   const [category, setCategory] = useState<FilterCategory>("dasar");
@@ -214,32 +190,9 @@ export function FilterPanel() {
   const [effectCategory, setEffectCategory] =
     useState<EffectCategory>("partikel");
 
-  // The canvas is the source of truth for which filter is on: the grid marks
-  // what the targeted photo actually carries, not a copy kept beside it.
-  const filterId = appliedFilterId;
   const shownFilters = filtersByCategory(category);
   const shownEffects = effectsByCategory(effectCategory);
   const activeFilter = PHOTO_FILTERS.find((filter) => filter.id === filterId);
-
-  function applyFilter(id: string) {
-    if (targets.length === 0) return;
-    setSlotFilter(
-      targets.map((slot) => slot.id),
-      id,
-    );
-  }
-
-  // Effects live on the page, so the canvas — not a copy in this panel — is what
-  // the swatches read back.
-  const effectIds = page.effects ?? [];
-
-  function toggleEffect(id: string) {
-    setPageEffects(
-      effectIds.includes(id)
-        ? effectIds.filter((item) => item !== id)
-        : [...effectIds, id],
-    );
-  }
 
   return (
     <>
@@ -337,6 +290,18 @@ export function FilterPanel() {
           </>
         )}
       </div>
+
+      {/* One control strips both halves of the look, in one undo step — the
+          reason filters and effects share a state layer at all. */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={clear}
+        disabled={!hasLooks}
+      >
+        <RotateCcw />
+        Hapus semua filter &amp; efek
+      </Button>
     </>
   );
 }
