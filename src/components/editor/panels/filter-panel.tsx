@@ -5,10 +5,13 @@ import { useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { demoShotSource } from "@/lib/camera/demo-shots";
 import {
+  EFFECT_CATEGORIES,
+  effectsByCategory,
   FILTER_CATEGORIES,
   filtersByCategory,
   PHOTO_FILTERS,
   VISUAL_EFFECTS,
+  type EffectCategory,
   type FilterCategory,
   type PhotoFilter,
   type VisualEffect,
@@ -47,6 +50,44 @@ function useFilterTarget() {
     /** The filter already on the target, so the grid opens on what is applied. */
     appliedFilterId: targets[0]?.photo?.filter ?? "none",
   };
+}
+
+/**
+ * The family selector both tabs share: a scrolling row of chips, so a look is
+ * found by intent rather than by scanning every name in one long wall.
+ */
+function CategoryChips<T extends string>({
+  options,
+  value,
+  onPick,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onPick: (id: T) => void;
+}) {
+  return (
+    <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5">
+      {options.map(({ id, label }) => {
+        const on = value === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onPick(id)}
+            aria-pressed={on}
+            className={cn(
+              "focus-visible:ring-ring/50 shrink-0 rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px]",
+              on
+                ? "border-primary bg-primary/10 text-primary font-medium"
+                : "border-editor-border text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function FilterSwatch({
@@ -167,12 +208,16 @@ export function FilterPanel() {
 
   const [tab, setTab] = useState<Tab>("filter");
   const [category, setCategory] = useState<FilterCategory>("dasar");
+  // Weather opens first: it is the group people come to this tab looking for.
+  const [effectCategory, setEffectCategory] =
+    useState<EffectCategory>("partikel");
   const [effectIds, setEffectIds] = useState<string[]>([]);
 
   // The canvas is the source of truth for which filter is on: the grid marks
   // what the targeted photo actually carries, not a copy kept beside it.
   const filterId = appliedFilterId;
   const shownFilters = filtersByCategory(category);
+  const shownEffects = effectsByCategory(effectCategory);
   const activeFilter = PHOTO_FILTERS.find((filter) => filter.id === filterId);
 
   function applyFilter(id: string) {
@@ -210,29 +255,11 @@ export function FilterPanel() {
 
       {tab === "filter" ? (
         <>
-          {/* Families, so a look is found by intent rather than by scanning
-              every name in one long wall. */}
-          <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5">
-            {FILTER_CATEGORIES.map(({ id, label }) => {
-              const on = category === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setCategory(id)}
-                  aria-pressed={on}
-                  className={cn(
-                    "focus-visible:ring-ring/50 shrink-0 rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px]",
-                    on
-                      ? "border-primary bg-primary/10 text-primary font-medium"
-                      : "border-editor-border text-muted-foreground hover:bg-accent",
-                  )}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <CategoryChips
+            options={FILTER_CATEGORIES}
+            value={category}
+            onPick={setCategory}
+          />
 
           <div className="grid grid-cols-3 gap-2">
             {shownFilters.map((filter) => (
@@ -247,23 +274,33 @@ export function FilterPanel() {
           </div>
         </>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {VISUAL_EFFECTS.map((effect) => (
-            <EffectSwatch
-              key={effect.id}
-              effect={effect}
-              src={previewSrc}
-              active={effectIds.includes(effect.id)}
-              onPick={() => toggleEffect(effect.id)}
-            />
-          ))}
-        </div>
+        <>
+          <CategoryChips
+            options={EFFECT_CATEGORIES}
+            value={effectCategory}
+            onPick={setEffectCategory}
+          />
+
+          <div className="grid grid-cols-3 gap-2">
+            {shownEffects.map((effect) => (
+              <EffectSwatch
+                key={effect.id}
+                effect={effect}
+                src={previewSrc}
+                active={effectIds.includes(effect.id)}
+                onPick={() => toggleEffect(effect.id)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       <p className="text-muted-foreground text-[11px] leading-relaxed">
         {tab === "filter"
           ? `${shownFilters.length} filter di kategori ini. Satu filter aktif sekaligus — memilih yang lain menggantikannya.`
-          : "Efek bisa ditumpuk. Ketuk lagi untuk mematikannya."}
+          : effectCategory === "partikel"
+            ? `${shownEffects.length} efek cuaca — dari gerimis sampai salju lebat. Bisa ditumpuk; ketuk lagi untuk mematikan.`
+            : `${shownEffects.length} efek di kategori ini. Bisa ditumpuk; ketuk lagi untuk mematikan.`}
       </p>
 
       <div className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-3 text-[11px] leading-relaxed">
