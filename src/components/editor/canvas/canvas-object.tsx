@@ -14,6 +14,10 @@ import {
 import { useFilteredImage } from "@/hooks/use-filtered-image";
 import { useImage } from "@/hooks/use-image";
 import { getFilter } from "@/lib/editor/filters";
+import {
+  gradientFillProps,
+  gradientStrokeProps,
+} from "@/lib/editor/gradient";
 import { resolveFontFamily } from "@/lib/editor/fonts";
 import { coverScale, traceSlotPath } from "@/lib/editor/slot-shape";
 import { EXPORT_CHROME } from "@/lib/editor/stage-registry";
@@ -95,6 +99,13 @@ function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
           height={object.height}
           cornerRadius={object.width * 0.03}
           fill={object.borderColor}
+          {...(object.borderGradient
+            ? gradientFillProps(
+                object.borderGradient,
+                object.width,
+                object.height,
+              )
+            : {})}
           listening={false}
         />
       )}
@@ -153,6 +164,15 @@ function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
           }}
           stroke={object.borderColor}
           strokeWidth={object.borderWidth}
+          // A gradient border overrides the flat colour; Konva ignores the
+          // gradient props when they are absent, so the plain path is untouched.
+          {...(object.borderGradient
+            ? gradientStrokeProps(
+                object.borderGradient,
+                object.width,
+                object.height,
+              )
+            : {})}
           listening={false}
         />
       )}
@@ -206,31 +226,11 @@ function textPaint(object: TextObject) {
     .join(" ");
 
   const gradient = object.gradient
-    ? (() => {
-        // Same angle convention as CSS: 0deg points up, growing clockwise.
-        const radians = ((object.gradient.angle - 90) * Math.PI) / 180;
-        const dx = Math.cos(radians);
-        const dy = Math.sin(radians);
-        const height = object.fontSize * object.lineHeight;
-        const length = Math.abs(object.width * dx) + Math.abs(height * dy);
-
-        return {
-          fillLinearGradientStartPoint: {
-            x: object.width / 2 - (dx * length) / 2,
-            y: height / 2 - (dy * length) / 2,
-          },
-          fillLinearGradientEndPoint: {
-            x: object.width / 2 + (dx * length) / 2,
-            y: height / 2 + (dy * length) / 2,
-          },
-          fillLinearGradientColorStops: [
-            0,
-            object.gradient.from,
-            1,
-            object.gradient.to,
-          ],
-        };
-      })()
+    ? gradientFillProps(
+        object.gradient,
+        object.width,
+        object.fontSize * object.lineHeight,
+      )
     : {};
 
   return {

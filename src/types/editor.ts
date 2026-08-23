@@ -91,6 +91,11 @@ export interface PhotoSlotObject extends BaseObject {
    * without the field reads as "off" rather than needing a migration.
    */
   shadow?: SlotShadow;
+  /**
+   * Gradient painted along the border instead of `borderColor`. Absent falls
+   * back to the flat colour, so the plain case stays the simple one.
+   */
+  borderGradient?: LinearGradient;
 }
 
 /** A drop shadow cast by a photo slot. */
@@ -112,12 +117,16 @@ export interface ImageObject extends BaseObject {
   cornerRadius: number;
 }
 
-export interface TextGradient {
+/** A two-stop linear gradient, used by text fills and slot borders alike. */
+export interface LinearGradient {
   from: string;
   to: string;
   /** Degrees, clockwise from "to top", matching CSS `linear-gradient`. */
   angle: number;
 }
+
+/** The name text objects have always used for it. */
+export type TextGradient = LinearGradient;
 
 export interface TextShadow {
   color: string;

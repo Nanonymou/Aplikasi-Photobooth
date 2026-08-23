@@ -11,7 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { PhotoSlotObject, SlotShadow } from "@/types/editor";
+import type {
+  LinearGradient,
+  PhotoSlotObject,
+  SlotShadow,
+} from "@/types/editor";
 
 /** What a shadow starts as when it is switched on. */
 const DEFAULT_SHADOW: SlotShadow = {
@@ -21,6 +25,21 @@ const DEFAULT_SHADOW: SlotShadow = {
   color: "#0f172a",
   opacity: 0.3,
 };
+
+/** What a border gradient starts as — a visible sweep, not two near-identical hues. */
+const DEFAULT_GRADIENT: LinearGradient = {
+  from: "#a855f7",
+  to: "#38bdf8",
+  angle: 135,
+};
+
+/** Ready-made sweeps, so a good pair is one tap rather than two colour pickers. */
+const GRADIENT_PRESETS: { label: string; gradient: LinearGradient }[] = [
+  { label: "Senja", gradient: { from: "#fb7185", to: "#fbbf24", angle: 135 } },
+  { label: "Samudra", gradient: { from: "#38bdf8", to: "#34d399", angle: 135 } },
+  { label: "Ungu", gradient: { from: "#a855f7", to: "#ec4899", angle: 135 } },
+  { label: "Emas", gradient: { from: "#fde68a", to: "#d97706", angle: 135 } },
+];
 
 /**
  * Live adjustment of existing frames.
@@ -68,6 +87,7 @@ export function FrameAdjust() {
   }
 
   const shadow = lead.shadow;
+  const gradient = lead.borderGradient;
 
   return (
     <>
@@ -88,11 +108,64 @@ export function FrameAdjust() {
           max={60}
           onChange={(borderWidth) => patch({ borderWidth })}
         />
-        <ColorField
-          label="Warna bingkai"
-          value={lead.borderColor}
-          onChange={(borderColor) => patch({ borderColor })}
-        />
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs">Gradasi bingkai</span>
+          <Switch
+            checked={Boolean(gradient)}
+            onCheckedChange={(on) =>
+              patch({ borderGradient: on ? DEFAULT_GRADIENT : undefined })
+            }
+            aria-label="Aktifkan gradasi bingkai"
+          />
+        </div>
+        {gradient ? (
+          <>
+            <div className="flex gap-1.5">
+              {GRADIENT_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() =>
+                    patch({
+                      borderGradient: { ...preset.gradient, angle: gradient.angle },
+                    })
+                  }
+                  title={preset.label}
+                  aria-label={`Gradasi ${preset.label}`}
+                  className="border-editor-border hover:border-primary/60 h-7 flex-1 rounded-md border transition-colors"
+                  style={{
+                    background: `linear-gradient(${preset.gradient.angle}deg, ${preset.gradient.from}, ${preset.gradient.to})`,
+                  }}
+                />
+              ))}
+            </div>
+            <ColorField
+              label="Gradasi dari"
+              value={gradient.from}
+              onChange={(from) => patch({ borderGradient: { ...gradient, from } })}
+            />
+            <ColorField
+              label="Gradasi ke"
+              value={gradient.to}
+              onChange={(to) => patch({ borderGradient: { ...gradient, to } })}
+            />
+            <SliderField
+              label="Arah gradasi"
+              value={gradient.angle}
+              min={0}
+              max={360}
+              suffix="°"
+              onChange={(angle) => patch({ borderGradient: { ...gradient, angle } })}
+            />
+          </>
+        ) : (
+          <ColorField
+            label="Warna bingkai"
+            value={lead.borderColor}
+            onChange={(borderColor) => patch({ borderColor })}
+          />
+        )}
         <SliderField
           label="Sudut membulat"
           value={lead.cornerRadius}
@@ -170,6 +243,7 @@ export function FrameAdjust() {
             borderWidth: 0,
             cornerRadius: 0,
             shadow: undefined,
+            borderGradient: undefined,
           })
         }
       >
