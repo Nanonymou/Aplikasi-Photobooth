@@ -68,6 +68,12 @@ export interface SlotPhoto {
   offsetY: number;
   /** Cover-scale multiplier; 1 = exactly fills the slot. */
   scale: number;
+  /**
+   * Id of the colour filter applied to this photo (see `lib/editor/filters`).
+   * Absent or `"none"` means untouched — the filter is stored by id, not as a
+   * baked pixel change, so it stays reversible and re-renders at export size.
+   */
+  filter?: string;
 }
 
 /** A cut-out in the frame that a photo drops into. */

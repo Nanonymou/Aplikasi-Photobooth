@@ -20,24 +20,33 @@ import type { PhotoSlotObject } from "@/types/editor";
 type Tab = "filter" | "effect";
 
 /**
- * The image a swatch is previewed on.
+ * Which photos the panel is aiming at, and what to preview on.
  *
- * A filter shown on a grey square tells you nothing, so the swatches preview a
- * real photo: the one in the selected slot when there is one, else the first
- * filled slot on the page, else a sample. That way what the grid shows is what
- * the picked photo will look like.
+ * Selecting a slot narrows the target to it; with nothing selected the panel
+ * treats the page as one strip and filters every filled slot, which is what a
+ * photostrip almost always wants. A filter shown on a grey square tells you
+ * nothing, so the swatches preview the first photo actually being targeted (a
+ * sample only when the page has none).
  */
-function usePreviewSource(): string {
+function useFilterTarget() {
   const page = useActivePage();
   const selectedIds = useEditorStore((state) => state.selectedIds);
 
-  const slots = page.objects.filter(
-    (object): object is PhotoSlotObject => object.kind === "slot",
+  const filled = page.objects.filter(
+    (object): object is PhotoSlotObject =>
+      object.kind === "slot" && object.photo !== null,
   );
-  const selected = slots.find((slot) => selectedIds.includes(slot.id));
-  const filled = selected?.photo ? selected : slots.find((slot) => slot.photo);
+  const selected = filled.filter((slot) => selectedIds.includes(slot.id));
+  const targets = selected.length > 0 ? selected : filled;
 
-  return filled?.photo?.src ?? demoShotSource(0);
+  return {
+    targets,
+    /** True when the aim came from a selection rather than the whole page. */
+    fromSelection: selected.length > 0,
+    previewSrc: targets[0]?.photo?.src ?? demoShotSource(0),
+    /** The filter already on the target, so the grid opens on what is applied. */
+    appliedFilterId: targets[0]?.photo?.filter ?? "none",
+  };
 }
 
 function FilterSwatch({
@@ -152,14 +161,27 @@ function EffectSwatch({
  * next task in this feature, so the panel says so plainly instead of pretending.
  */
 export function FilterPanel() {
-  const src = usePreviewSource();
+  const { targets, fromSelection, previewSrc, appliedFilterId } =
+    useFilterTarget();
+  const setSlotFilter = useEditorStore((state) => state.setSlotFilter);
+
   const [tab, setTab] = useState<Tab>("filter");
   const [category, setCategory] = useState<FilterCategory>("dasar");
-  const [filterId, setFilterId] = useState("none");
   const [effectIds, setEffectIds] = useState<string[]>([]);
 
+  // The canvas is the source of truth for which filter is on: the grid marks
+  // what the targeted photo actually carries, not a copy kept beside it.
+  const filterId = appliedFilterId;
   const shownFilters = filtersByCategory(category);
   const activeFilter = PHOTO_FILTERS.find((filter) => filter.id === filterId);
+
+  function applyFilter(id: string) {
+    if (targets.length === 0) return;
+    setSlotFilter(
+      targets.map((slot) => slot.id),
+      id,
+    );
+  }
 
   function toggleEffect(id: string) {
     setEffectIds((current) =>
@@ -217,9 +239,9 @@ export function FilterPanel() {
               <FilterSwatch
                 key={filter.id}
                 filter={filter}
-                src={src}
+                src={previewSrc}
                 active={filterId === filter.id}
-                onPick={() => setFilterId(filter.id)}
+                onPick={() => applyFilter(filter.id)}
               />
             ))}
           </div>
@@ -230,7 +252,7 @@ export function FilterPanel() {
             <EffectSwatch
               key={effect.id}
               effect={effect}
-              src={src}
+              src={previewSrc}
               active={effectIds.includes(effect.id)}
               onPick={() => toggleEffect(effect.id)}
             />
@@ -245,22 +267,33 @@ export function FilterPanel() {
       </p>
 
       <div className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-3 text-[11px] leading-relaxed">
-        Pilihanmu:{" "}
-        <span className="text-foreground font-medium">
-          {activeFilter?.label}
-        </span>
-        {effectIds.length > 0 && (
+        {targets.length === 0 ? (
+          "Belum ada foto di halaman ini. Isi slot dulu, lalu pilih filternya."
+        ) : (
           <>
-            {" "}
-            +{" "}
+            Filter:{" "}
             <span className="text-foreground font-medium">
-              {effectIds
-                .map((id) => VISUAL_EFFECTS.find((e) => e.id === id)?.label)
-                .join(", ")}
+              {activeFilter?.label}
             </span>
+            {effectIds.length > 0 && (
+              <>
+                {" "}
+                + efek{" "}
+                <span className="text-foreground font-medium">
+                  {effectIds
+                    .map((id) => VISUAL_EFFECTS.find((e) => e.id === id)?.label)
+                    .join(", ")}
+                </span>
+              </>
+            )}
+            .{" "}
+            {fromSelection
+              ? `Diterapkan ke ${targets.length} slot terpilih.`
+              : `Diterapkan ke ${targets.length} foto di halaman ini — pilih satu slot untuk menyasar satu foto saja.`}
+            {effectIds.length > 0 &&
+              " Efek visual di kanvas menyusul di tugas berikutnya."}
           </>
         )}
-        . Menerapkannya ke foto di kanvas menyusul di tugas berikutnya.
       </div>
     </>
   );

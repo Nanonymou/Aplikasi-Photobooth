@@ -114,6 +114,11 @@ export interface EditorState {
     templateId?: string | null;
   }) => void;
   setSlotPhoto: (slotId: string, photo: SlotPhoto | null) => void;
+  /**
+   * Sets the colour filter on given slots, skipping empty ones. Passing several
+   * ids is one history entry, so "filter the whole strip" undoes in one step.
+   */
+  setSlotFilter: (slotIds: string[], filterId: string) => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */
   fillNextEmptySlot: (src: string) => string | null;
   moveObject: (id: string, toIndex: number) => void;
@@ -410,6 +415,22 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     })),
 
   setSlotPhoto: (slotId, photo) => get().updateObject(slotId, { photo }),
+
+  setSlotFilter: (slotIds, filterId) =>
+    set((state) => {
+      const targets = new Set(slotIds);
+      return commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          objects: page.objects.map((object) =>
+            targets.has(object.id) && object.kind === "slot" && object.photo
+              ? { ...object, photo: { ...object.photo, filter: filterId } }
+              : object,
+          ),
+        })),
+      );
+    }),
 
   fillNextEmptySlot: (src) => {
     const state = get();

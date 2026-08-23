@@ -11,7 +11,9 @@ import {
   TextPath,
 } from "react-konva";
 
+import { useFilteredImage } from "@/hooks/use-filtered-image";
 import { useImage } from "@/hooks/use-image";
+import { getFilter } from "@/lib/editor/filters";
 import { resolveFontFamily } from "@/lib/editor/fonts";
 import { coverScale, traceSlotPath } from "@/lib/editor/slot-shape";
 import { EXPORT_CHROME } from "@/lib/editor/stage-registry";
@@ -38,7 +40,10 @@ interface ObjectProps<T extends CanvasObject> {
 const EMOJI_BOX_RATIO = 0.72;
 
 function SlotContents({ object }: ObjectProps<PhotoSlotObject>) {
-  const image = useImage(object.photo?.src);
+  const image = useFilteredImage(
+    object.photo?.src,
+    getFilter(object.photo?.filter ?? "none").css,
+  );
 
   if (!object.photo || !image) {
     return (
