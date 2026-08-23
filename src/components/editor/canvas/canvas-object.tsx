@@ -99,6 +99,32 @@ function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
         />
       )}
 
+      {/* The shadow is cast by a filled copy of the slot's own outline, drawn
+          behind it: shadowing the clipped group directly would shadow every
+          shape inside it, and shadowing the photo would trace the photo's
+          rectangle rather than the slot's cut-out. */}
+      {object.shadow && (
+        <Shape
+          sceneFunc={(ctx, shape) => {
+            traceSlotPath(
+              ctx,
+              object.shape,
+              object.width,
+              object.height,
+              object.cornerRadius,
+            );
+            ctx.fillShape(shape);
+          }}
+          fill={object.borderWidth > 0 ? object.borderColor : object.fill}
+          shadowColor={object.shadow.color}
+          shadowBlur={object.shadow.blur}
+          shadowOffsetX={object.shadow.offsetX}
+          shadowOffsetY={object.shadow.offsetY}
+          shadowOpacity={object.shadow.opacity}
+          listening={false}
+        />
+      )}
+
       <Group
         clipFunc={(ctx) =>
           traceSlotPath(

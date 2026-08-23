@@ -5,7 +5,11 @@ import { Minus, Plus, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Slider } from "@/components/ui/slider";
+import { FrameAdjust } from "@/components/editor/panels/frame-adjust";
+import {
+  PanelSection,
+  SliderField,
+} from "@/components/editor/panels/panel-fields";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import {
   buildSingleSlot,
@@ -18,28 +22,6 @@ import { SLOT_SHAPES, slotPathData } from "@/lib/editor/slot-shape";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type { CanvasPage, SlotShape } from "@/types/editor";
-
-function PanelSection({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
-          {title}
-        </h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 function Stepper({
   label,
@@ -80,44 +62,6 @@ function Stepper({
           <Plus />
         </Button>
       </div>
-    </div>
-  );
-}
-
-function SliderField({
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  suffix = "px",
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  suffix?: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs">{label}</span>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {Math.round(value)}
-          {suffix}
-        </span>
-      </div>
-      <Slider
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={([next]) => onChange(next)}
-        aria-label={label}
-      />
     </div>
   );
 }
@@ -212,16 +156,17 @@ export function FramePanel() {
     replaceSlots(buildSlotGrid(page, options, existingPhotos));
   }
 
-  function applyStyleToSelection() {
+  /**
+   * Recuts existing slots to the chosen shape. Border and corners are not
+   * included: those are live controls in the adjustment section below, and
+   * having two places set the same property is how a panel becomes confusing.
+   */
+  function applyShapeToSelection() {
     beginInteraction();
     updateObjects(
       selectedSlots.map((slot) => ({
         id: slot.id,
-        patch: {
-          shape: options.shape,
-          cornerRadius: options.cornerRadius,
-          borderWidth: options.borderWidth,
-        },
+        patch: { shape: options.shape },
       })),
     );
     endInteraction();
@@ -315,20 +260,6 @@ export function FramePanel() {
           max={300}
           onChange={(margin) => patch({ margin })}
         />
-        <SliderField
-          label="Sudut membulat"
-          value={options.cornerRadius}
-          min={0}
-          max={120}
-          onChange={(cornerRadius) => patch({ cornerRadius })}
-        />
-        <SliderField
-          label="Tebal bingkai"
-          value={options.borderWidth}
-          min={0}
-          max={40}
-          onChange={(borderWidth) => patch({ borderWidth })}
-        />
       </PanelSection>
 
       <Separator />
@@ -346,8 +277,8 @@ export function FramePanel() {
           Tambah 1 slot
         </Button>
         {selectedSlots.length > 0 && (
-          <Button variant="secondary" onClick={applyStyleToSelection}>
-            Terapkan gaya ke {selectedSlots.length} slot terpilih
+          <Button variant="secondary" onClick={applyShapeToSelection}>
+            Terapkan bentuk ke {selectedSlots.length} slot terpilih
           </Button>
         )}
       </div>
@@ -357,6 +288,11 @@ export function FramePanel() {
         ini. Teks dan stiker tetap aman, dan foto yang sudah diambil dipindahkan
         ke slot baru sesuai urutan.
       </p>
+
+      <Separator />
+
+      {/* Everything above builds slots; this styles the ones already there. */}
+      <FrameAdjust />
     </div>
   );
 }

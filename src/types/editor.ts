@@ -86,6 +86,23 @@ export interface PhotoSlotObject extends BaseObject {
   /** Placeholder fill shown while the slot is empty. */
   fill: string;
   photo: SlotPhoto | null;
+  /**
+   * Drop shadow behind the slot. Absent means no shadow — an older project
+   * without the field reads as "off" rather than needing a migration.
+   */
+  shadow?: SlotShadow;
+}
+
+/** A drop shadow cast by a photo slot. */
+export interface SlotShadow {
+  /** Softness of the edge, in design px. */
+  blur: number;
+  /** Offset from the slot, in design px. */
+  offsetX: number;
+  offsetY: number;
+  color: string;
+  /** 0–1. */
+  opacity: number;
 }
 
 /** A free-floating image (not bound to a slot). */
