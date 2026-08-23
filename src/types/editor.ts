@@ -15,6 +15,7 @@ export type PanelId =
   | "template"
   | "frame"
   | "photo"
+  | "filter"
   | "text"
   | "sticker"
   | "background"

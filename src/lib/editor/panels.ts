@@ -7,6 +7,7 @@ import {
   Sparkles,
   Sticker,
   Type,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,6 +40,12 @@ export const EDITOR_PANELS: PanelDefinition[] = [
     label: "Foto",
     icon: Camera,
     hint: "Ambil dari webcam atau unggah",
+  },
+  {
+    id: "filter",
+    label: "Filter",
+    icon: Wand2,
+    hint: "Filter warna dan efek visual",
   },
   { id: "text", label: "Teks", icon: Type, hint: "Judul, caption, dan tanggal" },
   {

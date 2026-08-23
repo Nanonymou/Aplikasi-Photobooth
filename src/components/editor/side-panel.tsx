@@ -9,6 +9,7 @@ import {
   TextPanel,
 } from "@/components/editor/panels/decoration-panels";
 import { AiPanel } from "@/components/editor/panels/ai-panel";
+import { FilterPanel } from "@/components/editor/panels/filter-panel";
 import { FramePanel } from "@/components/editor/panels/frame-panel";
 import { LayersPanel } from "@/components/editor/panels/layers-panel";
 import { TemplatePanel } from "@/components/editor/panels/template-panel";
@@ -55,6 +56,9 @@ function PanelBody({ panel }: { panel: PanelId }) {
           </PanelPlaceholder>
         </>
       );
+
+    case "filter":
+      return <FilterPanel />;
 
     case "text":
       return <TextPanel />;
