@@ -124,6 +124,11 @@ export interface VisualEffect {
   blend: "screen" | "overlay" | "soft-light" | "multiply" | "lighten";
   /** 0–1 starting strength; the strength control is a later task. */
   opacity: number;
+  /**
+   * Present on weather effects: the description the CSS preview was generated
+   * from, which the canvas re-uses to draw and animate the real particle field.
+   */
+  particle?: ParticleSpec;
 }
 
 /**
@@ -145,6 +150,8 @@ export interface ParticleSpec {
   tilt: number;
   /** Streak length in px; 0 keeps the speck round (snow, confetti). */
   streak: number;
+  /** How fast the field falls on the canvas, in design px per second. */
+  speed: number;
 }
 
 /**
@@ -170,6 +177,19 @@ export function particleOverlay(spec: ParticleSpec): string {
  * scales; leaks and glow are large soft gradients — enough to read correctly in
  * a preview and to hand the renderer a real description rather than a name.
  */
+/**
+ * Particle descriptions, shared by the CSS preview and the canvas renderer, so
+ * a swatch and the animated field are the same field at different sizes.
+ */
+const PARTICLE_SPECS = {
+  "gerimis": { size: 0.8, spacing: 14, color: "rgba(255,255,255,0.3)", tilt: 12, streak: 1, speed: 520 },
+  "rain": { size: 1, spacing: 9, color: "rgba(255,255,255,0.35)", tilt: 15, streak: 1, speed: 760 },
+  "badai": { size: 1.4, spacing: 6, color: "rgba(255,255,255,0.45)", tilt: 22, streak: 1, speed: 1050 },
+  "snow": { size: 1.4, spacing: 14, color: "rgba(255,255,255,0.9)", tilt: 0, streak: 0, speed: 90 },
+  "salju-lebat": { size: 2.2, spacing: 9, color: "rgba(255,255,255,0.95)", tilt: 0, streak: 0, speed: 130 },
+  "kelopak": { size: 2, spacing: 18, color: "rgba(251,113,133,0.8)", tilt: 0, streak: 0, speed: 70 },
+} satisfies Record<string, ParticleSpec>;
+
 export const VISUAL_EFFECTS: VisualEffect[] = [
   // Cuaca — generated from a particle description, densest last.
   {
@@ -177,13 +197,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Gerimis",
     category: "partikel",
     hint: "Hujan halus dan renggang",
-    overlay: particleOverlay({
-      size: 0.8,
-      spacing: 14,
-      color: "rgba(255,255,255,0.3)",
-      tilt: 12,
-      streak: 1,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["gerimis"]),
+    particle: PARTICLE_SPECS["gerimis"],
     blend: "screen",
     opacity: 0.4,
   },
@@ -192,13 +207,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Hujan",
     category: "partikel",
     hint: "Guratan hujan tipis",
-    overlay: particleOverlay({
-      size: 1,
-      spacing: 9,
-      color: "rgba(255,255,255,0.35)",
-      tilt: 15,
-      streak: 1,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["rain"]),
+    particle: PARTICLE_SPECS["rain"],
     blend: "screen",
     opacity: 0.45,
   },
@@ -207,13 +217,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Hujan deras",
     category: "partikel",
     hint: "Rapat dan miring tajam",
-    overlay: particleOverlay({
-      size: 1.4,
-      spacing: 6,
-      color: "rgba(255,255,255,0.45)",
-      tilt: 22,
-      streak: 1,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["badai"]),
+    particle: PARTICLE_SPECS["badai"],
     blend: "screen",
     opacity: 0.55,
   },
@@ -222,13 +227,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Salju",
     category: "partikel",
     hint: "Butiran salju berjatuhan",
-    overlay: particleOverlay({
-      size: 1.4,
-      spacing: 14,
-      color: "rgba(255,255,255,0.9)",
-      tilt: 0,
-      streak: 0,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["snow"]),
+    particle: PARTICLE_SPECS["snow"],
     blend: "screen",
     opacity: 0.7,
   },
@@ -237,13 +237,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Salju lebat",
     category: "partikel",
     hint: "Butiran besar dan rapat",
-    overlay: particleOverlay({
-      size: 2.2,
-      spacing: 9,
-      color: "rgba(255,255,255,0.95)",
-      tilt: 0,
-      streak: 0,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["salju-lebat"]),
+    particle: PARTICLE_SPECS["salju-lebat"],
     blend: "screen",
     opacity: 0.8,
   },
@@ -252,13 +247,8 @@ export const VISUAL_EFFECTS: VisualEffect[] = [
     label: "Kelopak",
     category: "partikel",
     hint: "Guguran kelopak merah muda",
-    overlay: particleOverlay({
-      size: 2,
-      spacing: 18,
-      color: "rgba(251,113,133,0.8)",
-      tilt: 0,
-      streak: 0,
-    }),
+    overlay: particleOverlay(PARTICLE_SPECS["kelopak"]),
+    particle: PARTICLE_SPECS["kelopak"],
     blend: "lighten",
     opacity: 0.75,
   },

@@ -119,6 +119,8 @@ export interface EditorState {
    * ids is one history entry, so "filter the whole strip" undoes in one step.
    */
   setSlotFilter: (slotIds: string[], filterId: string) => void;
+  /** Replaces the active page's visual effects (weather and the like). */
+  setPageEffects: (effectIds: string[]) => void;
   /** Fills the first empty slot on the page; returns its id, or null if full. */
   fillNextEmptySlot: (src: string) => string | null;
   moveObject: (id: string, toIndex: number) => void;
@@ -415,6 +417,17 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     })),
 
   setSlotPhoto: (slotId, photo) => get().updateObject(slotId, { photo }),
+
+  setPageEffects: (effectIds) =>
+    set((state) =>
+      commit(
+        state,
+        withActivePage(state.project, state.activePageId, (page) => ({
+          ...page,
+          effects: effectIds,
+        })),
+      ),
+    ),
 
   setSlotFilter: (slotIds, filterId) =>
     set((state) => {

@@ -32,6 +32,7 @@ import type {
 import { CanvasObjectNode } from "./canvas-object";
 import { TextEditorOverlay } from "./text-editor-overlay";
 import { MIN_OBJECT_SIZE, SelectionTransformer } from "./selection-transformer";
+import { WeatherLayer } from "./weather-layer";
 
 /** Breathing room between the page edge and the viewport when zoom-to-fit runs. */
 const FIT_PADDING = 48;
@@ -498,6 +499,10 @@ export function CanvasStage() {
                   onDragEnd={drag.onDragEnd}
                 />
               ))}
+
+              {/* Weather falls over the finished artwork, so it is drawn after
+                  every object but before the editing chrome. */}
+              <WeatherLayer page={page} />
 
               {drag.guides.map((guide) => (
                 <Line

@@ -187,6 +187,12 @@ export interface CanvasPage {
   height: number;
   background: PageBackground;
   objects: CanvasObject[];
+  /**
+   * Ids of visual effects laid over the whole page (see `lib/editor/filters`).
+   * Weather belongs to the scene rather than to one photo — snow falls across
+   * the strip, not inside a single slot — so it is stored per page.
+   */
+  effects?: string[];
 }
 
 export interface EditorProject {

@@ -205,13 +205,14 @@ export function FilterPanel() {
   const { targets, fromSelection, previewSrc, appliedFilterId } =
     useFilterTarget();
   const setSlotFilter = useEditorStore((state) => state.setSlotFilter);
+  const setPageEffects = useEditorStore((state) => state.setPageEffects);
+  const page = useActivePage();
 
   const [tab, setTab] = useState<Tab>("filter");
   const [category, setCategory] = useState<FilterCategory>("dasar");
   // Weather opens first: it is the group people come to this tab looking for.
   const [effectCategory, setEffectCategory] =
     useState<EffectCategory>("partikel");
-  const [effectIds, setEffectIds] = useState<string[]>([]);
 
   // The canvas is the source of truth for which filter is on: the grid marks
   // what the targeted photo actually carries, not a copy kept beside it.
@@ -228,11 +229,15 @@ export function FilterPanel() {
     );
   }
 
+  // Effects live on the page, so the canvas — not a copy in this panel — is what
+  // the swatches read back.
+  const effectIds = page.effects ?? [];
+
   function toggleEffect(id: string) {
-    setEffectIds((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
+    setPageEffects(
+      effectIds.includes(id)
+        ? effectIds.filter((item) => item !== id)
+        : [...effectIds, id],
     );
   }
 
@@ -327,8 +332,8 @@ export function FilterPanel() {
             {fromSelection
               ? `Diterapkan ke ${targets.length} slot terpilih.`
               : `Diterapkan ke ${targets.length} foto di halaman ini — pilih satu slot untuk menyasar satu foto saja.`}
-            {effectIds.length > 0 &&
-              " Efek visual di kanvas menyusul di tugas berikutnya."}
+            {effectIds.some((id) => !VISUAL_EFFECTS.find((e) => e.id === id)?.particle) &&
+              " Efek cahaya dan tekstur di kanvas menyusul."}
           </>
         )}
       </div>
