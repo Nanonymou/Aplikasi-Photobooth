@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { AreaChart } from "@/components/admin/area-chart";
+import { BarChart } from "@/components/admin/bar-chart";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   analyticsFor,
@@ -80,17 +81,63 @@ function BreakdownList({
 }
 
 /**
+ * The frame every chart shares: a titled card, an optional figure on the right,
+ * and the window's span labelled under the plot so a bare curve has a time axis.
+ */
+function ChartCard({
+  title,
+  note,
+  days,
+  children,
+}: {
+  title: string;
+  note?: string;
+  days: number;
+  children: ReactNode;
+}) {
+  return (
+    <section className="bg-card border-border flex flex-col rounded-xl border">
+      <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {note && (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {note}
+          </span>
+        )}
+      </div>
+      <div className="p-4">
+        {children}
+        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
+          <span>{days} hari lalu</span>
+          <span>Hari ini</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
  * The analytics view, scoped to a period.
  *
- * One control drives everything: pick a window and the KPIs, the trend chart, and
- * the breakdowns all recompute from the same mock source, so the interaction is
- * real before the API. The chart is drawn in plain SVG, no chart dependency.
+ * One control drives everything: pick a window and the KPIs, all three charts,
+ * and the breakdowns recompute from the same mock source, so the interaction is
+ * real before the API. Sessions and user growth read as trends, so they get
+ * areas; downloads are per-day counts, so they get bars. Every chart is plain
+ * SVG — no chart dependency.
  */
 export function AnalyticsDashboard() {
   const [period, setPeriod] = useState<Period>("30d");
   const data = useMemo(() => analyticsFor(period), [period]);
   const peak = useMemo(
     () => Math.max(...data.sessions.map((point) => point.value)),
+    [data],
+  );
+  const totalUsers = useMemo(
+    () => data.newUsers.reduce((sum, point) => sum + point.value, 0),
+    [data],
+  );
+  const totalDownloads = useMemo(
+    () => data.downloads.reduce((sum, point) => sum + point.value, 0),
     [data],
   );
 
@@ -119,24 +166,35 @@ export function AnalyticsDashboard() {
         ))}
       </div>
 
-      <section className="bg-card border-border flex flex-col rounded-xl border">
-        <div className="border-border flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">Sesi foto harian</h2>
-          <span className="text-muted-foreground text-xs tabular-nums">
-            Puncak {peak.toLocaleString("id-ID")}
-          </span>
-        </div>
-        <div className="p-4">
-          <AreaChart points={data.sessions} />
-          <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-            <span>{data.days} hari lalu</span>
-            <span>Hari ini</span>
-          </div>
-        </div>
-      </section>
+      <ChartCard
+        title="Sesi foto harian"
+        note={`Puncak ${peak.toLocaleString("id-ID")}`}
+        days={data.days}
+      >
+        <AreaChart points={data.sessions} gradientId="chart-sessions" />
+      </ChartCard>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Pengguna baru"
+          note={`${totalUsers.toLocaleString("id-ID")} akun`}
+          days={data.days}
+        >
+          <AreaChart points={data.newUsers} gradientId="chart-users" />
+        </ChartCard>
+
+        <ChartCard
+          title="Unduhan harian"
+          note={`${totalDownloads.toLocaleString("id-ID")} berkas`}
+          days={data.days}
+        >
+          <BarChart points={data.downloads} />
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <BreakdownList title="Template terpopuler" items={data.topTemplates} />
+        <BreakdownList title="Format unduhan" items={data.formats} />
         <BreakdownList title="Sumber kunjungan" items={data.sources} />
       </div>
     </div>

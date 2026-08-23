@@ -44,6 +44,12 @@ export interface AnalyticsData {
   kpis: Kpi[];
   /** Daily photo sessions across the window — the main chart. */
   sessions: Point[];
+  /** Daily new accounts — the user-growth chart. */
+  newUsers: Point[];
+  /** Daily exports leaving the booth — the downloads chart. */
+  downloads: Point[];
+  /** Which file formats those downloads were, as percentages. */
+  formats: Breakdown[];
   topTemplates: Breakdown[];
   sources: Breakdown[];
 }
@@ -123,6 +129,14 @@ export function analyticsFor(period: Period): AnalyticsData {
       kpi("users", "Pengguna baru", newUsers),
     ],
     sessions,
+    newUsers,
+    downloads: exportsSeries,
+    formats: [
+      source("PNG", 48),
+      source("JPEG", 31),
+      source("PDF", 14),
+      source("WEBP", 7),
+    ],
     topTemplates: [
       template("Lebaran 2026", 1240),
       template("Wisuda Klasik", 880),
