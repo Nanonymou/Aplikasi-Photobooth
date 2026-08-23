@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { FRAME_TEXTURES, getTexture } from "@/lib/editor/textures";
+import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import type {
   LinearGradient,
@@ -88,6 +90,7 @@ export function FrameAdjust() {
 
   const shadow = lead.shadow;
   const gradient = lead.borderGradient;
+  const texture = getTexture(lead.borderTexture);
 
   return (
     <>
@@ -119,7 +122,53 @@ export function FrameAdjust() {
             aria-label="Aktifkan gradasi bingkai"
           />
         </div>
-        {gradient ? (
+        {/* A border is one material: texture wins over gradient, gradient over
+            the flat colour, so only the winning control is offered. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs">Tekstur bingkai</span>
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              type="button"
+              onClick={() => patch({ borderTexture: undefined })}
+              aria-pressed={!texture}
+              className={cn(
+                "focus-visible:ring-ring/50 h-9 rounded-md border text-[10px] outline-none focus-visible:ring-[3px]",
+                texture
+                  ? "border-editor-border text-muted-foreground hover:bg-accent"
+                  : "border-primary bg-primary/10 text-primary font-medium",
+              )}
+            >
+              Tanpa
+            </button>
+            {FRAME_TEXTURES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => patch({ borderTexture: item.id })}
+                aria-pressed={texture?.id === item.id}
+                title={item.label}
+                aria-label={`Tekstur ${item.label}`}
+                className={cn(
+                  "focus-visible:ring-ring/50 h-9 overflow-hidden rounded-md border outline-none focus-visible:ring-[3px]",
+                  texture?.id === item.id
+                    ? "border-primary ring-primary/40 ring-2"
+                    : "border-editor-border hover:border-primary/60",
+                )}
+                style={{
+                  background: `linear-gradient(135deg, ${item.base}, ${item.accent})`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {texture ? (
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            Bingkai memakai tekstur{" "}
+            <span className="text-foreground font-medium">{texture.label}</span>
+            . Pilih &ldquo;Tanpa&rdquo; untuk kembali ke warna atau gradasi.
+          </p>
+        ) : gradient ? (
           <>
             <div className="flex gap-1.5">
               {GRADIENT_PRESETS.map((preset) => (
@@ -244,6 +293,7 @@ export function FrameAdjust() {
             cornerRadius: 0,
             shadow: undefined,
             borderGradient: undefined,
+            borderTexture: undefined,
           })
         }
       >

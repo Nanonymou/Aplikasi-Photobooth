@@ -96,6 +96,12 @@ export interface PhotoSlotObject extends BaseObject {
    * back to the flat colour, so the plain case stays the simple one.
    */
   borderGradient?: LinearGradient;
+  /**
+   * Id of a texture the border is stroked with (see `lib/editor/textures`).
+   * Takes precedence over the gradient, which takes precedence over the flat
+   * colour — a border is one material, and the most specific choice wins.
+   */
+  borderTexture?: string;
 }
 
 /** A drop shadow cast by a photo slot. */

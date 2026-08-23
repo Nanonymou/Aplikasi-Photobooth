@@ -18,6 +18,7 @@ import {
   gradientFillProps,
   gradientStrokeProps,
 } from "@/lib/editor/gradient";
+import { getTexture, textureTile } from "@/lib/editor/textures";
 import { resolveFontFamily } from "@/lib/editor/fonts";
 import { coverScale, traceSlotPath } from "@/lib/editor/slot-shape";
 import { EXPORT_CHROME } from "@/lib/editor/stage-registry";
@@ -89,6 +90,8 @@ function SlotContents({ object }: ObjectProps<PhotoSlotObject>) {
 }
 
 function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
+  const texture = getTexture(object.borderTexture);
+
   return (
     <>
       {/* A polaroid's photo window is inset, so the surrounding paper is drawn
@@ -160,6 +163,26 @@ function PhotoSlot({ object }: ObjectProps<PhotoSlotObject>) {
               object.height,
               object.cornerRadius,
             );
+
+            // A textured border is stroked with a repeating tile. Canvas takes
+            // a CanvasPattern as a stroke style directly, so the border follows
+            // the slot's real outline — hearts and hexagons included — instead
+            // of needing a separate ring shape built per shape.
+            if (texture) {
+              const pattern = ctx.createPattern(
+                textureTile(texture),
+                "repeat",
+              );
+              if (pattern) {
+                ctx.save();
+                ctx.strokeStyle = pattern;
+                ctx.lineWidth = object.borderWidth;
+                ctx.stroke();
+                ctx.restore();
+                return;
+              }
+            }
+
             ctx.strokeShape(shape);
           }}
           stroke={object.borderColor}
