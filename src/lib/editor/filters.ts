@@ -12,28 +12,83 @@
  * one source rather than each hard-coding its own list.
  */
 
+/**
+ * Filter families, in the order the panel offers them.
+ *
+ * Categories are how a photographer actually looks for a treatment — "something
+ * cinematic", "something black and white" — so the list is grouped rather than a
+ * flat wall of a few dozen names.
+ */
+export type FilterCategory =
+  | "dasar"
+  | "potret"
+  | "sinematik"
+  | "vintage"
+  | "monokrom";
+
+export const FILTER_CATEGORIES: { id: FilterCategory; label: string }[] = [
+  { id: "dasar", label: "Dasar" },
+  { id: "potret", label: "Potret" },
+  { id: "sinematik", label: "Sinematik" },
+  { id: "vintage", label: "Vintage" },
+  { id: "monokrom", label: "Monokrom" },
+];
+
 export interface PhotoFilter {
   id: string;
   label: string;
+  category: FilterCategory;
   /** A CSS `filter` value; empty means the untouched photo. */
   css: string;
 }
 
-/** Ordered as the panel shows them: the original first, then warm → cool → mono. */
+/**
+ * The catalogue, grouped by family. Each entry is a stack of CSS primitives
+ * tuned to a look a photographer would recognise, not a random tint: portrait
+ * treatments keep skin warm and contrast gentle, cinematic ones crush contrast
+ * and push a colour cast, vintage leans on sepia, monochrome varies where the
+ * black point sits.
+ */
 export const PHOTO_FILTERS: PhotoFilter[] = [
-  { id: "none", label: "Asli", css: "" },
-  { id: "cerah", label: "Cerah", css: "brightness(1.12) contrast(1.05)" },
-  { id: "lembut", label: "Lembut", css: "brightness(1.06) saturate(0.9) contrast(0.95)" },
-  { id: "hangat", label: "Hangat", css: "sepia(0.25) saturate(1.25) hue-rotate(-10deg)" },
-  { id: "senja", label: "Senja", css: "sepia(0.4) saturate(1.4) hue-rotate(-18deg) brightness(1.05)" },
-  { id: "dingin", label: "Dingin", css: "saturate(1.1) hue-rotate(15deg) brightness(1.03)" },
-  { id: "drama", label: "Drama", css: "contrast(1.35) saturate(1.15) brightness(0.95)" },
-  { id: "matte", label: "Matte", css: "contrast(0.88) saturate(0.85) brightness(1.08)" },
-  { id: "vintage", label: "Vintage", css: "sepia(0.45) contrast(1.1) saturate(0.8)" },
-  { id: "retro", label: "Retro", css: "sepia(0.3) hue-rotate(-25deg) saturate(1.5) contrast(1.1)" },
-  { id: "sepia", label: "Sepia", css: "sepia(0.85)" },
-  { id: "mono", label: "Hitam putih", css: "grayscale(1) contrast(1.1)" },
+  // Dasar — the original plus honest corrections.
+  { id: "none", label: "Asli", category: "dasar", css: "" },
+  { id: "cerah", label: "Cerah", category: "dasar", css: "brightness(1.12) contrast(1.05)" },
+  { id: "lembut", label: "Lembut", category: "dasar", css: "brightness(1.06) saturate(0.9) contrast(0.95)" },
+  { id: "tajam", label: "Tajam", category: "dasar", css: "contrast(1.2) saturate(1.1)" },
+  { id: "pudar", label: "Pudar", category: "dasar", css: "contrast(0.85) brightness(1.12) saturate(0.8)" },
+
+  // Potret — flattering skin: warm, gentle contrast, never crushed.
+  { id: "hangat", label: "Hangat", category: "potret", css: "sepia(0.25) saturate(1.25) hue-rotate(-10deg)" },
+  { id: "madu", label: "Madu", category: "potret", css: "sepia(0.3) saturate(1.3) brightness(1.06) contrast(0.98)" },
+  { id: "porselen", label: "Porselen", category: "potret", css: "brightness(1.1) saturate(0.88) contrast(0.92)" },
+  { id: "senja", label: "Senja", category: "potret", css: "sepia(0.4) saturate(1.4) hue-rotate(-18deg) brightness(1.05)" },
+  { id: "blush", label: "Blush", category: "potret", css: "saturate(1.15) hue-rotate(-8deg) brightness(1.05) contrast(0.97)" },
+
+  // Sinematik — a colour cast plus lifted or crushed contrast.
+  { id: "teal-orange", label: "Teal orange", category: "sinematik", css: "contrast(1.2) saturate(1.3) hue-rotate(-12deg)" },
+  { id: "drama", label: "Drama", category: "sinematik", css: "contrast(1.35) saturate(1.15) brightness(0.95)" },
+  { id: "noir-biru", label: "Noir biru", category: "sinematik", css: "contrast(1.25) saturate(0.9) hue-rotate(20deg) brightness(0.95)" },
+  { id: "matte", label: "Matte", category: "sinematik", css: "contrast(0.88) saturate(0.85) brightness(1.08)" },
+  { id: "dingin", label: "Dingin", category: "sinematik", css: "saturate(1.1) hue-rotate(15deg) brightness(1.03)" },
+
+  // Vintage — sepia-led, film-stock colour shifts.
+  { id: "vintage", label: "Vintage", category: "vintage", css: "sepia(0.45) contrast(1.1) saturate(0.8)" },
+  { id: "retro", label: "Retro", category: "vintage", css: "sepia(0.3) hue-rotate(-25deg) saturate(1.5) contrast(1.1)" },
+  { id: "polaroid", label: "Polaroid", category: "vintage", css: "sepia(0.35) contrast(0.9) brightness(1.1) saturate(1.1)" },
+  { id: "sepia", label: "Sepia", category: "vintage", css: "sepia(0.85)" },
+  { id: "kodak", label: "Kodak", category: "vintage", css: "sepia(0.2) saturate(1.45) contrast(1.08) hue-rotate(-6deg)" },
+
+  // Monokrom — where the black point and contrast sit.
+  { id: "mono", label: "Hitam putih", category: "monokrom", css: "grayscale(1) contrast(1.1)" },
+  { id: "mono-lembut", label: "Mono lembut", category: "monokrom", css: "grayscale(1) contrast(0.9) brightness(1.1)" },
+  { id: "mono-keras", label: "Mono keras", category: "monokrom", css: "grayscale(1) contrast(1.6) brightness(0.95)" },
+  { id: "mono-hangat", label: "Mono hangat", category: "monokrom", css: "grayscale(1) sepia(0.3) contrast(1.1)" },
 ];
+
+/** Filters in one family, in catalogue order. */
+export function filtersByCategory(category: FilterCategory): PhotoFilter[] {
+  return PHOTO_FILTERS.filter((filter) => filter.category === category);
+}
 
 export const DEFAULT_FILTER = PHOTO_FILTERS[0];
 

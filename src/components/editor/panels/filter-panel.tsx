@@ -5,8 +5,11 @@ import { useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { demoShotSource } from "@/lib/camera/demo-shots";
 import {
+  FILTER_CATEGORIES,
+  filtersByCategory,
   PHOTO_FILTERS,
   VISUAL_EFFECTS,
+  type FilterCategory,
   type PhotoFilter,
   type VisualEffect,
 } from "@/lib/editor/filters";
@@ -151,8 +154,12 @@ function EffectSwatch({
 export function FilterPanel() {
   const src = usePreviewSource();
   const [tab, setTab] = useState<Tab>("filter");
+  const [category, setCategory] = useState<FilterCategory>("dasar");
   const [filterId, setFilterId] = useState("none");
   const [effectIds, setEffectIds] = useState<string[]>([]);
+
+  const shownFilters = filtersByCategory(category);
+  const activeFilter = PHOTO_FILTERS.find((filter) => filter.id === filterId);
 
   function toggleEffect(id: string) {
     setEffectIds((current) =>
@@ -180,17 +187,43 @@ export function FilterPanel() {
       </ToggleGroup>
 
       {tab === "filter" ? (
-        <div className="grid grid-cols-3 gap-2">
-          {PHOTO_FILTERS.map((filter) => (
-            <FilterSwatch
-              key={filter.id}
-              filter={filter}
-              src={src}
-              active={filterId === filter.id}
-              onPick={() => setFilterId(filter.id)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Families, so a look is found by intent rather than by scanning
+              every name in one long wall. */}
+          <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5">
+            {FILTER_CATEGORIES.map(({ id, label }) => {
+              const on = category === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setCategory(id)}
+                  aria-pressed={on}
+                  className={cn(
+                    "focus-visible:ring-ring/50 shrink-0 rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px]",
+                    on
+                      ? "border-primary bg-primary/10 text-primary font-medium"
+                      : "border-editor-border text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {shownFilters.map((filter) => (
+              <FilterSwatch
+                key={filter.id}
+                filter={filter}
+                src={src}
+                active={filterId === filter.id}
+                onPick={() => setFilterId(filter.id)}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {VISUAL_EFFECTS.map((effect) => (
@@ -207,14 +240,14 @@ export function FilterPanel() {
 
       <p className="text-muted-foreground text-[11px] leading-relaxed">
         {tab === "filter"
-          ? "Satu filter aktif sekaligus — memilih yang lain menggantikannya."
+          ? `${shownFilters.length} filter di kategori ini. Satu filter aktif sekaligus — memilih yang lain menggantikannya.`
           : "Efek bisa ditumpuk. Ketuk lagi untuk mematikannya."}
       </p>
 
       <div className="border-editor-border text-muted-foreground rounded-lg border border-dashed p-3 text-[11px] leading-relaxed">
         Pilihanmu:{" "}
         <span className="text-foreground font-medium">
-          {PHOTO_FILTERS.find((f) => f.id === filterId)?.label}
+          {activeFilter?.label}
         </span>
         {effectIds.length > 0 && (
           <>
