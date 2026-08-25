@@ -101,6 +101,28 @@ export function planRank(id: PlanId): number {
   return PLANS.findIndex((plan) => plan.id === id);
 }
 
+/**
+ * The tier directly above this one, or null at the top.
+ *
+ * One step, not the most expensive one: somebody on Gratis is being asked to
+ * try Pro, and a free account shown the Studio price is being shown a number
+ * that has nothing to do with them.
+ */
+export function nextPlan(id: PlanId): Plan | null {
+  return PLANS[planRank(id) + 1] ?? null;
+}
+
+/**
+ * What a year on this plan saves if it is billed yearly.
+ *
+ * Stated as the total rather than the monthly difference, because that is the
+ * number the choice is actually about — "Rp10.000 lebih murah per bulan" is the
+ * same fact made to sound smaller.
+ */
+export function yearlySaving(plan: Plan): number {
+  return (plan.priceMonthly - plan.priceYearly) * 12;
+}
+
 export function priceFor(plan: Plan, cycle: BillingCycle): number {
   return cycle === "yearly" ? plan.priceYearly : plan.priceMonthly;
 }

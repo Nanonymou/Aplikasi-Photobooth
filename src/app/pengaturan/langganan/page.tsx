@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PlanComparison } from "@/components/settings/plan-comparison";
 import { SectionHeading } from "@/components/settings/section-heading";
 import { SubscriptionStatus } from "@/components/settings/subscription-status";
+import { UpgradeOffer } from "@/components/settings/upgrade-offer";
 
 export const metadata: Metadata = {
   title: "Langganan — FrameStudio AI",
@@ -25,6 +26,7 @@ export default function SubscriptionSettingsPage() {
       />
 
       <SubscriptionStatus />
+      <UpgradeOffer />
       <PlanComparison />
     </>
   );
