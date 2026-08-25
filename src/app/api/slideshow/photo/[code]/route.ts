@@ -1,4 +1,4 @@
-import { withPermission } from "@/lib/api/authorize";
+import { withFeature } from "@/lib/api/features";
 import { findShare } from "@/lib/db/shares";
 import { getShareStorage } from "@/lib/storage/share-storage";
 
@@ -24,9 +24,9 @@ function plain(status: number, message: string): Response {
  * The share's own rules still decide: expired and revoked shares are refused,
  * so pulling a link takes it off the projector on the next redraw.
  */
-export const GET = withPermission(
+export const GET = withFeature(
   "booth.slideshow",
-  async (_viewer, _request: Request, context: RouteContext<"/api/slideshow/photo/[code]">) => {
+  async (_access, _request: Request, context: RouteContext<"/api/slideshow/photo/[code]">) => {
     const { code } = await context.params;
 
     const lookup = await findShare(code);

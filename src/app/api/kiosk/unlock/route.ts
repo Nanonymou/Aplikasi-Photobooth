@@ -1,4 +1,4 @@
-import { withPermission } from "@/lib/api/authorize";
+import { withFeature } from "@/lib/api/features";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { checkExitPin, PIN_PATTERN } from "@/lib/db/event-branding";
 
@@ -68,10 +68,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * PIN is set (that is `GET /api/kiosk/config`, which requires the same
  * permission). A wrong PIN and an unconfigured booth look identical here.
  */
-export const POST = withPermission(
+export const POST = withFeature(
   "booth.kiosk",
-  async (viewer, request: Request) => {
-    const wait = locked(viewer.profile.id);
+  async (context, request: Request) => {
+    const actor = context.viewer;
+    if (!actor) return jsonError(401, "Masuk dulu untuk melanjutkan.");
+
+    const wait = locked(actor.profile.id);
     if (wait > 0) {
       return jsonError(
         429,
@@ -91,14 +94,14 @@ export const POST = withPermission(
 
     try {
       if (await checkExitPin(pin)) {
-        failures.delete(viewer.profile.id);
+        failures.delete(actor.profile.id);
         return Response.json(
           { unlocked: true },
           { headers: { "cache-control": "private, no-store" } },
         );
       }
 
-      const remaining = recordFailure(viewer.profile.id);
+      const remaining = recordFailure(actor.profile.id);
       return jsonError(401, "PIN salah.", { attemptsRemaining: remaining });
     } catch (error) {
       console.error("POST /api/kiosk/unlock failed", error);

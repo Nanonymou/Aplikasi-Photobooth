@@ -1,4 +1,4 @@
-import { withPermission } from "@/lib/api/authorize";
+import { withFeature } from "@/lib/api/features";
 import { jsonError } from "@/lib/api/http";
 import { listSlides, slideLimit } from "@/lib/db/slideshow";
 
@@ -21,7 +21,7 @@ export const runtime = "nodejs";
  * nobody's idea of a source of truth and a minute of drift is a slide that
  * either repeats forever or is never shown.
  */
-export const GET = withPermission("booth.slideshow", async (_viewer, request: Request) => {
+export const GET = withFeature("booth.slideshow", async (_context, request: Request) => {
   const params = new URL(request.url).searchParams;
   const since = params.get("since");
 

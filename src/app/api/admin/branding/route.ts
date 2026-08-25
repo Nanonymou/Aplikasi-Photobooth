@@ -1,4 +1,4 @@
-import { withPermission } from "@/lib/api/authorize";
+import { withFeature } from "@/lib/api/features";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
   getBranding,
@@ -80,7 +80,7 @@ function parse(body: Record<string, unknown>): Parsed {
  * types into, not a place to read a secret back out of, and the value itself
  * has no reason to travel to a browser at all.
  */
-export const GET = withPermission("admin.branding.manage", async () => {
+export const GET = withFeature("event.branding", async () => {
   try {
     return Response.json(
       { branding: await getBranding() },
@@ -99,9 +99,9 @@ export const GET = withPermission("admin.branding.manage", async () => {
  * form shows a colour picker: a body without it is a client that lost a field,
  * not one that had nothing to say about it.
  */
-export const PUT = withPermission(
-  "admin.branding.manage",
-  async (viewer, request: Request) => {
+export const PUT = withFeature(
+  "event.branding",
+  async (context, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
     if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
@@ -109,8 +109,11 @@ export const PUT = withPermission(
     const parsed = parse(body.value);
     if ("error" in parsed) return jsonError(400, parsed.error);
 
+    const actor = context.viewer;
+    if (!actor) return jsonError(401, "Masuk dulu untuk melanjutkan.");
+
     try {
-      const branding = await saveBranding(parsed.update, viewer.profile.id);
+      const branding = await saveBranding(parsed.update, actor.profile.id);
       return Response.json(
         { branding },
         { headers: { "cache-control": "private, no-store" } },

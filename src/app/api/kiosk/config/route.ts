@@ -1,4 +1,4 @@
-import { withPermission } from "@/lib/api/authorize";
+import { withFeature } from "@/lib/api/features";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
   getKioskConfig,
@@ -78,7 +78,7 @@ function parse(body: Record<string, unknown>): Parsed {
  * (`POST /api/kiosk/unlock`) rather than shipped for the client to compare.
  * `pinSet` is all the screen needs — enough to know whether to offer the pad.
  */
-export const GET = withPermission("booth.kiosk", async () => {
+export const GET = withFeature("booth.kiosk", async () => {
   try {
     return Response.json(
       { config: await getKioskConfig() },
@@ -97,9 +97,9 @@ export const GET = withPermission("booth.kiosk", async () => {
  * setup screen shows no colour picker, and a field an editor cannot see is one
  * it has no business overwriting.
  */
-export const PUT = withPermission(
+export const PUT = withFeature(
   "booth.kiosk",
-  async (viewer, request: Request) => {
+  async (context, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
     if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
@@ -107,8 +107,14 @@ export const PUT = withPermission(
     const parsed = parse(body.value);
     if ("error" in parsed) return jsonError(400, parsed.error);
 
+    // Unreachable while the feature requires a permission — a permission needs a
+    // viewer — but stated rather than asserted, so a future feature without one
+    // fails here instead of writing `undefined` into the audit column.
+    const actor = context.viewer;
+    if (!actor) return jsonError(401, "Masuk dulu untuk melanjutkan.");
+
     try {
-      await saveBranding(parsed.update, viewer.profile.id);
+      await saveBranding(parsed.update, actor.profile.id);
       return Response.json(
         { config: await getKioskConfig() },
         { headers: { "cache-control": "private, no-store" } },
