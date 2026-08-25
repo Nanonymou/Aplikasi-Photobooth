@@ -122,3 +122,57 @@ export async function startCheckout(
   void plan;
   void cycle;
 }
+
+/**
+ * The plans, side by side.
+ *
+ * The feature lists above are sales copy — one plan says "Semua fitur Pro" and
+ * means nine things — which reads well on a pricing card and cannot be compared
+ * row by row. This is the same promises arranged so they can be: one row per
+ * capability, one cell per plan, every cell traceable to a line in the lists
+ * above rather than invented here.
+ *
+ * Storage is deliberately absent. Two plans state a figure and the free tier
+ * states none, so a row for it would be two facts and a guess — it stays in the
+ * feature lists, where a plan speaks only for itself.
+ */
+export interface ComparisonRow {
+  label: string;
+  /** One cell per plan, in `PLANS` order. `true`/`false` render as a tick or a dash. */
+  cells: Record<PlanId, string | boolean>;
+}
+
+export const PLAN_COMPARISON: ComparisonRow[] = [
+  {
+    label: "Desain tersimpan",
+    cells: { gratis: "5", pro: "Tak terbatas", studio: "Tak terbatas" },
+  },
+  {
+    label: "Kualitas ekspor",
+    cells: { gratis: "Standar", pro: "HD", studio: "HD" },
+  },
+  {
+    label: "Tanpa watermark",
+    cells: { gratis: false, pro: true, studio: true },
+  },
+  {
+    label: "Template & stiker",
+    cells: { gratis: "Dasar", pro: "Semua", studio: "Semua" },
+  },
+  {
+    label: "Alat AI",
+    cells: { gratis: false, pro: true, studio: true },
+  },
+  {
+    label: "Mode kiosk & slideshow",
+    cells: { gratis: false, pro: false, studio: true },
+  },
+  {
+    label: "Branding acara",
+    cells: { gratis: false, pro: false, studio: true },
+  },
+  {
+    label: "Anggota tim",
+    cells: { gratis: "1", pro: "1", studio: "5" },
+  },
+];

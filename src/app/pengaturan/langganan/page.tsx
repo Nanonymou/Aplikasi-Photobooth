@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { CreditCard } from "lucide-react";
 
+import { PlanComparison } from "@/components/settings/plan-comparison";
 import { SectionHeading } from "@/components/settings/section-heading";
-import { SectionPlaceholder } from "@/components/settings/section-placeholder";
+import { SubscriptionStatus } from "@/components/settings/subscription-status";
 
 export const metadata: Metadata = {
   title: "Langganan — FrameStudio AI",
@@ -24,9 +24,8 @@ export default function SubscriptionSettingsPage() {
         description="Paket yang sedang kamu pakai, dan seberapa banyak yang sudah terpakai."
       />
 
-      <SectionPlaceholder icon={CreditCard}>
-        Status paket dan tabel perbandingannya menyusul di tugas berikutnya.
-      </SectionPlaceholder>
+      <SubscriptionStatus />
+      <PlanComparison />
     </>
   );
 }
