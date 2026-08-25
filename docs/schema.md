@@ -31,6 +31,7 @@ semuanya bertanya lewat sana.
 | --- | --- |
 | `user_profiles` (0012) | Satu baris per akun: email, nama tampilan, avatar, `role`, penyedia login. |
 | `role_permissions` (0014) | Kebijakan akses: peran mana boleh melakukan apa. |
+| `role_changes` (0023) | Riwayat: siapa mengubah peran siapa, dan kapan. |
 | `subscriptions` (0020) | Paket akun, siklus tagihan, status, dan periode berjalan. |
 
 Beberapa keputusan yang disengaja:
@@ -43,6 +44,11 @@ Beberapa keputusan yang disengaja:
 - **Id akun diturunkan dari email**, bukan acak (`accountIdForEmail`). Baris yang
   disemai `db:seed:roles` dan baris yang dicari saat masuk harus baris yang sama,
   dan satu-satunya hal yang dimiliki kedua sisi adalah alamatnya.
+- **`role_changes` hanya bisa ditambah.** Sebuah kolom yang ditimpa cuma ingat
+  nilai terakhirnya, padahal pertanyaan yang menyusul setiap kejutan adalah
+  "sejak kapan akun ini admin, dan atas tangan siapa". Tidak ada jalur update,
+  dan tidak ada foreign key — catatan promosi harus hidup lebih lama daripada
+  akun penerimanya maupun admin yang memberikannya.
 - **Semua pendaftar berperan `tamu`.** Admin pertama datang dari
   `npm run db:seed:roles`, karena konsolnya dijaga izin yang hanya dipunyai
   admin.

@@ -237,6 +237,8 @@ export class LastAdminError extends Error {
 export async function changeUserRole(
   userId: string,
   role: UserRole,
+  /** Who is doing it. Null when nothing with an account is — a script, a sweep. */
+  actorId: string | null = null,
 ): Promise<UserProfile | null> {
   return transaction(async (client) => {
     const { rows: admins } = await client.query<{ id: string }>(
@@ -261,6 +263,55 @@ export async function changeUserRole(
       [userId, role],
     );
 
+    // In the same transaction as the change itself: a promotion that happened
+    // without a line in the log, or a line without the promotion, would each be
+    // worse than neither.
+    await client.query(
+      `insert into role_changes (subject_id, actor_id, from_role, to_role)
+       values ($1, $2, $3, $4)`,
+      [userId, actorId, target.role, role],
+    );
+
     return toProfile(updated[0]);
   });
+}
+
+export interface RoleChange {
+  from: UserRole;
+  to: UserRole;
+  actorId: string | null;
+  at: string;
+}
+
+/**
+ * How this account's role got to where it is, newest first.
+ *
+ * Bounded rather than complete: the console shows a history, not an archive,
+ * and an account that has been promoted and demoted forty times has a story its
+ * last few rows already tell.
+ */
+export async function roleHistory(
+  userId: string,
+  limit = 20,
+): Promise<RoleChange[]> {
+  const rows = await query<{
+    from_role: UserRole;
+    to_role: UserRole;
+    actor_id: string | null;
+    created_at: Date;
+  }>(
+    `select from_role, to_role, actor_id, created_at
+       from role_changes
+      where subject_id = $1
+      order by created_at desc, id desc
+      limit $2`,
+    [userId, limit],
+  );
+
+  return rows.map((row) => ({
+    from: row.from_role,
+    to: row.to_role,
+    actorId: row.actor_id,
+    at: row.created_at.toISOString(),
+  }));
 }

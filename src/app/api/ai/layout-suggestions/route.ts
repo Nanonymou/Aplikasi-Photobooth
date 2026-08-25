@@ -24,6 +24,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * and slot rectangles taken from published templates that hold the same number
  * of photos. The second is the reason this is a request rather than a local
  * function — the client cannot know what a designer already made work.
+ *
+ * Deliberately open, unlike its neighbours in `/api/ai`. Those three change a
+ * photo and are what the Pro plan sells as "Alat AI"; this one reads published
+ * templates — already public — and hands back geometry derived from numbers the
+ * caller supplied. There is nothing here to charge for and nothing to protect.
  */
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
@@ -55,7 +60,10 @@ export async function POST(request: Request): Promise<Response> {
     slotCount < 1 ||
     slotCount > MAX_SLOTS
   ) {
-    return jsonError(400, `Bidang \`slotCount\` harus bilangan 1–${MAX_SLOTS}.`);
+    return jsonError(
+      400,
+      `Bidang \`slotCount\` harus bilangan 1–${MAX_SLOTS}.`,
+    );
   }
 
   try {

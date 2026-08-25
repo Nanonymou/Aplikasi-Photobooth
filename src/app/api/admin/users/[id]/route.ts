@@ -2,7 +2,9 @@ import { withPermission } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
   changeUserRole,
+  getUserProfile,
   LastAdminError,
+  roleHistory,
   type UserRole,
 } from "@/lib/db/user-profiles";
 
@@ -58,7 +60,11 @@ export const PATCH = withPermission(
     }
 
     try {
-      const updated = await changeUserRole(id, role as UserRole);
+      const updated = await changeUserRole(
+        id,
+        role as UserRole,
+        viewer.profile.id,
+      );
       if (!updated) return jsonError(404, "Pengguna tidak ditemukan.");
 
       return Response.json(
@@ -71,6 +77,35 @@ export const PATCH = withPermission(
       }
       console.error(`PATCH /api/admin/users/${id} failed`, error);
       return jsonError(500, "Peran gagal diubah.");
+    }
+  },
+);
+
+/**
+ * One account, with how its role got to where it is.
+ *
+ * The history is the point of the endpoint. A role on its own is a fact with no
+ * provenance, and "when did this become an admin, and at whose hand" is the
+ * question that follows every surprise — so the console can answer it without
+ * anyone opening a database.
+ */
+export const GET = withPermission(
+  "admin.users.manage",
+  async (_viewer, _request: Request, context: RouteContext<"/api/admin/users/[id]">) => {
+    const { id } = await context.params;
+    if (!UUID.test(id)) return jsonError(404, "Pengguna tidak ditemukan.");
+
+    try {
+      const profile = await getUserProfile(id);
+      if (!profile) return jsonError(404, "Pengguna tidak ditemukan.");
+
+      return Response.json(
+        { user: profile, history: await roleHistory(id) },
+        { headers: { "cache-control": "private, no-store" } },
+      );
+    } catch (error) {
+      console.error(`GET /api/admin/users/${id} failed`, error);
+      return jsonError(500, "Data pengguna gagal dimuat.");
     }
   },
 );
