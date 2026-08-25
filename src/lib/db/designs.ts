@@ -1,6 +1,7 @@
 import "server-only";
 
 import { query, transaction } from "@/lib/db/client";
+import { getGalleryDesign, type GalleryDesign } from "@/lib/db/gallery";
 import { projectToPageWrites, rowsToProject } from "@/lib/db/mappers";
 import {
   ensureGuestSession,
@@ -313,4 +314,107 @@ export async function designBelongsTo(
   );
 
   return rows.length > 0;
+}
+
+/**
+ * Renames a design.
+ *
+ * Scoped by owner in the WHERE clause rather than checked first: a separate
+ * "is this yours" read would leave a window in which it stops being, and a
+ * rename that touches no row is already the answer the caller needs.
+ */
+export async function renameDesign(
+  owners: string[],
+  designId: string,
+  title: string,
+): Promise<GalleryDesign | null> {
+  const rows = await query<{ id: string }>(
+    `update designs
+        set title = $3
+      where id = $1
+        and owner_id = any($2::uuid[])
+        and deleted_at is null
+     returning id`,
+    [designId, owners, title.trim()],
+  );
+
+  return rows[0] ? getGalleryDesign(owners, designId) : null;
+}
+
+/**
+ * Removes a design from the gallery.
+ *
+ * Soft: the row is stamped, not deleted. A design carries the photos of people
+ * who are no longer at the booth, and "I deleted the wrong one" is a sentence
+ * somebody says about every gallery ever built. The sweep decides when the rows
+ * actually go; this decides when they stop being yours to see.
+ */
+export async function deleteDesign(
+  owners: string[],
+  designId: string,
+): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `update designs
+        set deleted_at = now()
+      where id = $1
+        and owner_id = any($2::uuid[])
+        and deleted_at is null
+     returning id`,
+    [designId, owners],
+  );
+
+  return rows.length > 0;
+}
+
+/**
+ * Copies a design, pages and all.
+ *
+ * The copy is made in the database rather than by round-tripping the project
+ * through the caller: a design is megabytes of inline photos, and sending them
+ * out only to have them sent back is the most expensive possible way to say
+ * "again". It belongs to the same owner the original does — duplicating on a
+ * browser that has since claimed a session must not quietly move the copy to a
+ * different identity than its original.
+ */
+export async function duplicateDesign(
+  owners: string[],
+  designId: string,
+): Promise<GalleryDesign | null> {
+  const copyId = await transaction(async (client) => {
+    const { rows: source } = await client.query<{
+      id: string;
+      owner_id: string;
+      title: string;
+    }>(
+      `select id, owner_id, title from designs
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null`,
+      [designId, owners],
+    );
+
+    const original = source[0];
+    if (!original) return null;
+
+    const { rows: created } = await client.query<{ id: string }>(
+      `insert into designs (owner_id, title)
+       values ($1, $2)
+       returning id`,
+      [original.owner_id, `${original.title} (salinan)`.slice(0, 200)],
+    );
+    const copy = created[0];
+
+    await client.query(
+      `insert into design_pages
+         (design_id, id, position, name, template_id, width, height,
+          background_type, background, objects)
+       select $2, id, position, name, template_id, width, height,
+              background_type, background, objects
+         from design_pages
+        where design_id = $1`,
+      [designId, copy.id],
+    );
+
+    return copy.id;
+  });
+
+  return copyId ? getGalleryDesign(owners, copyId) : null;
 }

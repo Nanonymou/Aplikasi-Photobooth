@@ -3,9 +3,11 @@ import { getOwnerId } from "@/lib/api/owner";
 import { callerOwners } from "@/lib/api/scope";
 import { validateProject } from "@/lib/api/validate-project";
 import {
+  deleteDesign,
   DesignConflictError,
   DesignNotFoundError,
   loadDesign,
+  renameDesign,
   saveDesign,
 } from "@/lib/db/designs";
 
@@ -123,5 +125,95 @@ export async function PUT(
 
     console.error(`PUT /api/designs/${id} failed`, error);
     return jsonError(500, "Desain gagal disimpan.");
+  }
+}
+
+/** Matches the column's own limit, so a rename fails here rather than in SQL. */
+const MAX_TITLE = 200;
+
+/**
+ * Renames a design.
+ *
+ * Only the title. Everything else about a design is its artwork, and artwork
+ * arrives through PUT with a version to check against — a PATCH that quietly
+ * accepted pages would be an autosave with the optimistic lock removed.
+ *
+ * A design that is not the caller's answers 404 rather than 403: telling a
+ * stranger "this exists, but not for you" hands them the one fact they could
+ * not otherwise learn.
+ */
+export async function PATCH(
+  request: Request,
+  context: RouteContext<"/api/designs/[id]">,
+): Promise<Response> {
+  const { id } = await context.params;
+
+  const body = await readJsonBody(request);
+  if (!body.ok) return body.response;
+  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+
+  const extra = Object.keys(body.value).filter((key) => key !== "title");
+  if (extra.length > 0) {
+    return jsonError(
+      400,
+      `Hanya judul yang bisa diubah di sini: ${extra.join(", ")} ditolak.`,
+    );
+  }
+
+  const title = body.value.title;
+  if (typeof title !== "string" || title.trim().length === 0) {
+    return jsonError(400, "Judul wajib diisi.");
+  }
+  if (title.trim().length > MAX_TITLE) {
+    return jsonError(400, `Judul melebihi ${MAX_TITLE} karakter.`);
+  }
+
+  try {
+    const owners = await callerOwners();
+    const design = await renameDesign(owners, id, title);
+    if (!design) return jsonError(404, "Desain tidak ditemukan.");
+
+    return Response.json({ design }, { headers: { "cache-control": PRIVATE } });
+  } catch (error) {
+    if (isRecord(error) && error.code === "22P02") {
+      return jsonError(404, "Desain tidak ditemukan.");
+    }
+    console.error(`PATCH /api/designs/${id} failed`, error);
+    return jsonError(500, "Judul gagal diubah.");
+  }
+}
+
+/**
+ * Removes a design.
+ *
+ * Soft: the row is stamped, not dropped. A design carries the photos of people
+ * who are no longer at the booth, and "I deleted the wrong one" is a sentence
+ * somebody says about every gallery ever built. The sweep decides when the rows
+ * actually go; this decides when they stop being yours to see.
+ *
+ * A second delete of the same id answers 404, which is the honest reply to
+ * "remove this" when it is already gone.
+ */
+export async function DELETE(
+  _request: Request,
+  context: RouteContext<"/api/designs/[id]">,
+): Promise<Response> {
+  const { id } = await context.params;
+
+  try {
+    const owners = await callerOwners();
+    const removed = await deleteDesign(owners, id);
+    if (!removed) return jsonError(404, "Desain tidak ditemukan.");
+
+    return Response.json(
+      { deleted: id },
+      { headers: { "cache-control": PRIVATE } },
+    );
+  } catch (error) {
+    if (isRecord(error) && error.code === "22P02") {
+      return jsonError(404, "Desain tidak ditemukan.");
+    }
+    console.error(`DELETE /api/designs/${id} failed`, error);
+    return jsonError(500, "Desain gagal dihapus.");
   }
 }
