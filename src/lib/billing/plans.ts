@@ -21,6 +21,15 @@ export interface Plan {
   /** Rupiah per month, billed yearly (the discounted rate). */
   priceYearly: number;
   features: string[];
+  /**
+   * The parts of the feature list a machine can check.
+   *
+   * The strings above are copy — they change with a marketing decision and read
+   * differently in every language. These are the same promises in a form an
+   * endpoint can answer with, so "5 desain tersimpan" and the number the status
+   * card fills its bar from cannot drift apart. `null` means no limit.
+   */
+  limits: { designs: number | null };
   /** The tier to nudge people toward. */
   highlighted?: boolean;
 }
@@ -38,6 +47,7 @@ export const PLANS: Plan[] = [
       "Watermark FrameStudio",
       "Template dasar",
     ],
+    limits: { designs: 5 },
   },
   {
     id: "pro",
@@ -52,6 +62,7 @@ export const PLANS: Plan[] = [
       "Alat AI (enhance, hapus latar)",
       "Penyimpanan 10 GB",
     ],
+    limits: { designs: null },
     highlighted: true,
   },
   {
@@ -68,6 +79,7 @@ export const PLANS: Plan[] = [
       "Penyimpanan 100 GB",
       "Dukungan prioritas",
     ],
+    limits: { designs: null },
   },
 ];
 
@@ -79,6 +91,11 @@ export const CURRENT_USAGE = {
   designsUsed: 3,
   designsLimit: 5,
 };
+
+/** The plan by id, falling back to the free tier for anything unrecognised. */
+export function planById(id: PlanId): Plan {
+  return PLANS.find((plan) => plan.id === id) ?? PLANS[0];
+}
 
 export function planRank(id: PlanId): number {
   return PLANS.findIndex((plan) => plan.id === id);
