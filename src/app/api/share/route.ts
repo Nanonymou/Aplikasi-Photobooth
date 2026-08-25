@@ -4,6 +4,7 @@ import { jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
 import { findRender } from "@/lib/db/renders";
+import { designBelongsTo } from "@/lib/db/designs";
 import { createShare, type Share } from "@/lib/db/shares";
 import { getRenderStorage } from "@/lib/storage/render-storage";
 import { getShareStorage } from "@/lib/storage/share-storage";
@@ -18,6 +19,22 @@ const QR_PIXELS = 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The design this share came from, if the caller said.
+ *
+ * Optional and only ever a hint about provenance — it decides nothing about
+ * access, so an absent or unusable value costs the caller nothing but the
+ * gallery's "shared" badge on that card. `undefined` when absent, `null` when
+ * present but unusable.
+ */
+function readDesignId(value: unknown): string | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || !UUID.test(value)) return null;
+  return value;
 }
 
 /** `undefined` when absent, `null` when present but not a sane number of days. */
@@ -99,6 +116,9 @@ export async function POST(request: Request): Promise<Response> {
   const days = readDays(form.get("days"));
   if (days === null) return jsonError(400, "Bidang `days` harus bilangan 1–30.");
 
+  const designId = readDesignId(form.get("designId"));
+  if (designId === null) return jsonError(400, "Bidang `designId` bukan id yang valid.");
+
   const data = new Uint8Array(await file.arrayBuffer());
 
   // The browser's reported type comes from the filename, so the bytes decide.
@@ -123,6 +143,7 @@ export async function POST(request: Request): Promise<Response> {
       filename,
       bytes: stored.bytes,
       days,
+      designId: await ownedDesign(owner, designId),
     });
 
     return shareResponse(share, request);
@@ -130,6 +151,23 @@ export async function POST(request: Request): Promise<Response> {
     console.error("POST /api/share failed", error);
     return jsonError(500, "Tautan berbagi gagal dibuat.");
   }
+}
+
+/**
+ * Keeps a claimed provenance honest.
+ *
+ * The design id arrives from the client, so it is checked against the caller's
+ * own designs before it is written — otherwise anyone could stamp their share
+ * with someone else's design id and light up a "shared" badge in a gallery that
+ * is not theirs. An id that does not check out is dropped rather than refused:
+ * the share itself is perfectly valid, it just does not get to claim a parent.
+ */
+async function ownedDesign(
+  ownerId: string,
+  designId: string | undefined,
+): Promise<string | null> {
+  if (!designId) return null;
+  return (await designBelongsTo(ownerId, designId)) ? designId : null;
 }
 
 /**
@@ -151,6 +189,9 @@ async function shareRender(request: Request): Promise<Response> {
 
   const days = readDays(body.value.days);
   if (days === null) return jsonError(400, "Bidang `days` harus bilangan 1–30.");
+
+  const designId = readDesignId(body.value.designId);
+  if (designId === null) return jsonError(400, "Bidang `designId` bukan id yang valid.");
 
   // No cookie means this browser has never rendered anything, so it owns no
   // render to share.
@@ -176,6 +217,7 @@ async function shareRender(request: Request): Promise<Response> {
           : record.filename,
       bytes: stored.bytes,
       days,
+      designId: await ownedDesign(owner, designId),
     });
 
     return shareResponse(share, request);

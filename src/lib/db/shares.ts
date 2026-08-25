@@ -46,6 +46,8 @@ export interface ShareInput {
   bytes: number;
   /** Days the link stays alive; the column's default is used when omitted. */
   days?: number;
+  /** The design this came from, when it came from one. */
+  designId?: string | null;
 }
 
 export interface Share {
@@ -97,8 +99,8 @@ export async function createShare(
 
     const rows = await query<ShareRow>(
       `insert into shares
-         (code, owner_id, storage_key, content_type, filename, bytes, expires_at)
-       values ($1,$2,$3,$4,$5,$6, coalesce($7::timestamptz, now() + interval '7 days'))
+         (code, owner_id, storage_key, content_type, filename, bytes, expires_at, design_id)
+       values ($1,$2,$3,$4,$5,$6, coalesce($7::timestamptz, now() + interval '7 days'), $8)
        on conflict (code) do nothing
        returning *`,
       [
@@ -111,6 +113,7 @@ export async function createShare(
         input.days
           ? new Date(Date.now() + input.days * 86_400_000).toISOString()
           : null,
+        input.designId ?? null,
       ],
     );
 

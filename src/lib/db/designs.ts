@@ -277,3 +277,23 @@ export async function loadDesign(
     version: design.version,
   };
 }
+
+/**
+ * Whether a design is one of this owner's.
+ *
+ * A membership question, deliberately not a read: callers use it to decide
+ * whether a claim about a design may be recorded, and loading the artwork to
+ * answer "is this yours" would drag the photos across for nothing.
+ */
+export async function designBelongsTo(
+  ownerId: string,
+  designId: string,
+): Promise<boolean> {
+  const rows = await query<{ ok: boolean }>(
+    `select true as ok from designs
+      where id = $1 and owner_id = $2 and deleted_at is null`,
+    [designId, ownerId],
+  );
+
+  return rows.length > 0;
+}
