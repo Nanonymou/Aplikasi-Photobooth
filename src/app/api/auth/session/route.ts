@@ -1,8 +1,6 @@
 import { clearAccountId } from "@/lib/api/account";
-import { getViewer } from "@/lib/api/authorize";
 import { jsonError } from "@/lib/api/http";
-import { getOwnerId } from "@/lib/api/owner";
-import { getGuestSession } from "@/lib/db/guest-sessions";
+import { describeMe } from "@/lib/api/me";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -10,25 +8,24 @@ export const runtime = "nodejs";
 /**
  * Who the caller is, and whether a guest session is waiting to be claimed.
  *
- * The second half is what makes this useful to the sign-in screens: a browser
- * holding unclaimed guest work should be told so, so it can offer to bring the
- * work along rather than silently stranding it on the old owner id.
+ * A narrower view of `GET /api/me`, and built from it rather than beside it: two
+ * descriptions of the same person drift, and the first thing to disagree is a
+ * menu against the page it opens. The sign-in screens want exactly this much —
+ * am I signed in, what may I do, and is there work here to bring along — so this
+ * stays as its own address, not as its own answer.
  */
 export async function GET(): Promise<Response> {
-  const viewer = await getViewer();
-  const owner = await getOwnerId();
-  const guest = owner ? await getGuestSession(owner) : null;
+  const me = await describeMe();
 
   return Response.json(
     {
-      account: viewer ? { id: viewer.profile.id, email: viewer.profile.email } : null,
+      account: me.profile ? { id: me.profile.id, email: me.profile.email } : null,
       // Sent so the client hides what this role cannot reach instead of
       // hard-coding its own copy of the policy. It is a hint for the UI; the
       // server checks again on every guarded request.
-      role: viewer?.profile.role ?? null,
-      permissions: viewer?.permissions ?? [],
-      // A claimed session is history; only an unclaimed one is an offer.
-      guestSession: guest && !guest.claimedAt ? guest : null,
+      role: me.role,
+      permissions: me.permissions,
+      guestSession: me.guestSession,
     },
     { headers: { "cache-control": "private, no-store" } },
   );

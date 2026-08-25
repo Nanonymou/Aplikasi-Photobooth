@@ -1,5 +1,6 @@
 import { getViewer } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
+import { describeMe } from "@/lib/api/me";
 import { updateOwnProfile } from "@/lib/db/user-profiles";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
@@ -16,19 +17,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * The signed-in user's own profile, role, and what that role may do.
  *
- * One request answers all three because they are always wanted together: an app
- * that knows who you are but not what you may do still has to guess at its own
- * navigation.
+ * Composed from the same `describeMe` that answers `GET /api/me`, so the profile
+ * screen and the app's bootstrap can never disagree about the same person. What
+ * is different here is the audience: this address is about *editing* a profile,
+ * so it insists on being signed in — a settings form has nothing to show a
+ * visitor who is not.
  */
 export async function GET(): Promise<Response> {
-  const viewer = await getViewer();
-  if (!viewer) return jsonError(401, "Masuk dulu untuk melihat profil.");
+  const me = await describeMe();
+  if (!me.profile) return jsonError(401, "Masuk dulu untuk melihat profil.");
 
   return Response.json(
     {
-      profile: viewer.profile,
-      role: viewer.profile.role,
-      permissions: viewer.permissions,
+      profile: me.profile,
+      role: me.role,
+      permissions: me.permissions,
     },
     { headers: { "cache-control": "private, no-store" } },
   );
