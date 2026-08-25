@@ -69,6 +69,22 @@ export async function setAccountId(accountId: string): Promise<void> {
   });
 }
 
+/**
+ * Ends the signed-in session.
+ *
+ * Overwritten and expired rather than simply deleted: a browser matches a
+ * `Set-Cookie` by name *and* path, so a bare delete can silently miss a cookie
+ * that was written with attributes it does not repeat — leaving the user still
+ * signed in on the next request, which is the one failure mode a sign-out must
+ * never have. Blanking the value too means even a cached header carries nothing.
+ */
 export async function clearAccountId(): Promise<void> {
-  (await cookies()).delete(ACCOUNT_COOKIE);
+  const store = await cookies();
+  store.set(ACCOUNT_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
 }

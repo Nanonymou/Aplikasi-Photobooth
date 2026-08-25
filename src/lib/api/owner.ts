@@ -49,3 +49,22 @@ export async function getOwnerId(): Promise<string | null> {
   const value = (await cookies()).get(OWNER_COOKIE)?.value;
   return value && UUID.test(value) ? value : null;
 }
+
+/**
+ * Forgets which guest this browser was.
+ *
+ * Only for a deliberate hand-back of a shared screen: the next person to touch
+ * a booth must not inherit the last guest's designs. Ordinary sign-out leaves
+ * this cookie alone, because it is also the identity for anything saved *after*
+ * signing out.
+ */
+export async function clearOwnerId(): Promise<void> {
+  const store = await cookies();
+  store.set(OWNER_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+}

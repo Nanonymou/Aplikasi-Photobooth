@@ -218,3 +218,23 @@ export async function claimGuestSession(
     return { session: toSession(claimed[0]), designs, photos };
   });
 }
+
+/**
+ * Ends a guest session now, rather than waiting for its expiry.
+ *
+ * Used when a shared booth screen is handed back: the work stays in the database
+ * (a cleanup sweep collects it later, and a mistaken tap should not destroy
+ * someone's only copy), but the session can no longer be claimed or resumed.
+ * Expiring it is enough — deleting the row would also lose the evidence that the
+ * code was ever issued, which is what makes a repeat code safe to rule out.
+ */
+export async function endGuestSession(ownerId: string): Promise<boolean> {
+  const rows = await query<{ owner_id: string }>(
+    `update guest_sessions
+        set expires_at = now()
+      where owner_id = $1 and claimed_at is null and expires_at > now()
+      returning owner_id`,
+    [ownerId],
+  );
+  return rows.length > 0;
+}
