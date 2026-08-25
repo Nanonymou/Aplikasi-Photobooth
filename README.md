@@ -66,6 +66,9 @@ tamu), `.storage/renders` (hasil ekspor, beberapa jam), dan `.storage/shares`
 adalah barisnya di database, dan `db:purge` yang menyapunya — cocok dijalankan
 lewat cron.
 
+Bentuk skemanya — pengguna, sesi, dan desain, beserta alasan tiap keputusannya —
+dijelaskan di [`docs/schema.md`](docs/schema.md).
+
 Migrasi berupa berkas SQL biasa di `db/migrations/`, dijalankan berurutan sesuai
 nama berkas, masing-masing dalam satu transaksi, dan dicatat di tabel
 `schema_migrations`.
