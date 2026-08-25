@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { LifeBuoy } from "lucide-react";
 
+import { HelpArticles } from "@/components/settings/help-articles";
 import { SectionHeading } from "@/components/settings/section-heading";
-import { SectionPlaceholder } from "@/components/settings/section-placeholder";
 
 export const metadata: Metadata = {
   title: "Bantuan — FrameStudio AI",
@@ -23,9 +22,7 @@ export default function HelpSettingsPage() {
         description="Panduan singkat, pertanyaan yang sering muncul, dan cara menghubungi kami."
       />
 
-      <SectionPlaceholder icon={LifeBuoy}>
-        Pusat bantuan beserta daftar artikelnya menyusul di tugas berikutnya.
-      </SectionPlaceholder>
+      <HelpArticles />
     </>
   );
 }
