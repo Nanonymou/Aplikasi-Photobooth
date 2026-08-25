@@ -91,6 +91,7 @@ yang berisik.
 | `photos` (0002) | Foto tamu: kunci storage, sumber (kamera/unggahan/contoh), kedaluwarsa. |
 | `shares` (0008, 0019) | Tautan bagikan: kode, berkas, kedaluwarsa, dan desain asalnya. |
 | `render_files` (0009) | Hasil ekspor yang dititipkan sebentar. |
+| `photo_filters`, `visual_effects` (0024) | Katalog tampilan: perlakuan warna, dan lapisan di atas foto. |
 | `export_events` (0015) | Catatan bahwa sebuah ekspor terjadi — untuk laporan, bukan untuk berkasnya. |
 
 Keputusan yang membentuknya:
@@ -109,6 +110,17 @@ Keputusan yang membentuknya:
 - **`shares.design_id` boleh null dan `on delete set null`.** Foto yang diunggah
   langsung memang bukan share sebuah proyek, dan menghapus desain tidak boleh
   mematikan tautan yang sudah dibagikan ke orang lain.
+- **Filter dan efek dua tabel, bukan satu.** Sebuah filter seluruhnya adalah
+  string CSS `filter`, sehingga pratinjau dan render akhir sepakat karena
+  konstruksinya. Sebuah efek adalah lapisan di atas foto — butuh background,
+  blend, opacity, dan untuk cuaca, deskripsi partikel yang dianimasikan kanvas.
+  Menyatukannya berarti baris yang separuh kolomnya selalu null plus CHECK yang
+  menjelaskan separuh mana.
+- **Kategori filter dan efek berupa enum, bukan baris `library_categories`.**
+  Pustaka lain punya daftar kategori yang memang tumbuh; lima keluarga filter dan
+  tiga kelompok efek adalah keputusan desain tentang cara panelnya disusun, dan
+  keluarga yang muncul karena seseorang menyisipkan baris akan meninggalkan panel
+  dengan tab yang tidak tahu harus diberi nama apa.
 - **`export_events` tidak punya foreign key ke apa pun.** Justru itu gunanya:
   berkasnya kedaluwarsa dalam jam, desainnya bisa dihapus pemiliknya, dan tidak
   satu pun boleh membuat total bulan lalu berubah.
