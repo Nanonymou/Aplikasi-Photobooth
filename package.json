@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:status": "node scripts/migrate.mjs --status",
     "db:seed": "node scripts/seed-library.mjs",
+    "db:seed:roles": "node scripts/seed-roles.mjs",
     "db:purge": "node scripts/purge.mjs"
   },
   "dependencies": {

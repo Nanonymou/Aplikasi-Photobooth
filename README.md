@@ -35,8 +35,30 @@ lalu jalankan migrasinya:
 npm run db:migrate    # terapkan migrasi yang belum jalan
 npm run db:status     # lihat mana yang sudah/belum
 npm run db:seed       # isi perpustakaan dekorasi dari katalog di src/lib/editor/
+npm run db:seed:roles # buat tiga akun staf: admin, editor, operator
 npm run db:purge      # buang render kedaluwarsa, foto terhapus, tautan lama
 ```
+
+Semua yang mendaftar berperan `tamu`, jadi admin pertama tidak bisa dibuat dari
+dalam aplikasi — konsolnya dijaga izin yang hanya dipunyai admin. `db:seed:roles`
+adalah pintu masuknya: ia menulis satu profil per peran staf dengan id yang
+diturunkan aplikasi dari alamat email, sehingga masuk dengan alamat itu mendarat
+di profil yang sama. Tidak ada kata sandi yang dibuat — masuk lewat tautan ajaib
+atau penyedia sosial — jadi menyemai alamat yang bukan milikmu tidak memberi
+akses apa pun. Alamat default memakai `example.com`; ganti untuk deployment
+sungguhan:
+
+```bash
+SEED_ADMIN_EMAIL=kamu@studio.id \
+SEED_EDITOR_EMAIL=editor@studio.id \
+SEED_OPERATOR_EMAIL=operator@studio.id \
+npm run db:seed:roles
+```
+
+Menjalankannya berkali-kali aman: nama tampilan yang sudah ada dipertahankan, dan
+peran seseorang hanya dinaikkan kalau masih `tamu` — perintah ini tidak akan
+menurunkan orang yang sengaja dipromosikan. Tambahkan `-- --force` kalau memang
+ingin menimpanya.
 
 Berkas disimpan di tiga bucket dengan umur berbeda: `.storage/photos` (foto
 tamu), `.storage/renders` (hasil ekspor, beberapa jam), dan `.storage/shares`
