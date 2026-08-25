@@ -58,6 +58,7 @@ Tiga hal berbeda memakai kata yang sama, jadi ketiganya tabel terpisah:
 | Tabel | Sesi apa | Umur |
 | --- | --- | --- |
 | `auth_sessions` (0013) | Sesi login sebuah perangkat. | Geser 30 hari, plafon mutlak 180 hari. |
+| `magic_links` (0022) | Bukti kepemilikan kotak surat: tautan masuk sekali pakai. | 15 menit, sekali pakai. |
 | `guest_sessions` (0011) | Identitas tamu di booth, punya kode pendek. | 30 hari sejak dibuat, disegarkan tiap autosave. |
 | `photo_sessions` (0002) | Satu sesi pemotretan: sederet jepretan. | Selamanya; fotonya yang kedaluwarsa. |
 
@@ -65,6 +66,11 @@ Yang penting soal `auth_sessions`: **cookie berisi token acak, database hanya
 menyimpan sha256-nya**. Tabel yang bocor tidak memberi siapa pun sesi yang bisa
 dipakai. Kedaluwarsanya geser — dipakai berarti diperpanjang — tapi dibatasi
 `absolute_expires_at`, supaya sesi yang aktif selamanya tetap punya akhir.
+
+`magic_links` menyimpan pola yang sama seperti `auth_sessions`: tokennya ada di
+email, yang tersimpan hanya sha256-nya, dan penukarannya satu pernyataan UPDATE
+yang sekaligus memutuskan dan menandai — supaya klien email yang memuat URL-nya
+lebih dulu tidak bisa menghabiskan tautan itu dari bawah pemiliknya.
 
 `guest_sessions.code` adalah alfabet tanpa huruf yang mirip angka
 (`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`): kode itu dibacakan keras-keras di booth

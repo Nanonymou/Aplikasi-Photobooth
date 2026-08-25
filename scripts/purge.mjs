@@ -125,10 +125,23 @@ async function main() {
       ? await client.query(`select 1 from shares where ${staleShares}`)
       : await client.query(`delete from shares where ${staleShares}`);
 
+    /*
+     * Sign-in links have no file behind them, so they are a plain delete. Kept
+     * a day past their usefulness rather than removed the instant they are
+     * spent: "that link was already used" is a better answer than "that link
+     * never existed" to somebody who tapped the same mail twice.
+     */
+    const staleLinks =
+      "expires_at <= now() - interval '1 day' or consumed_at <= now() - interval '1 day'";
+    const { rowCount: links } = DRY_RUN
+      ? await client.query(`select 1 from magic_links where ${staleLinks}`)
+      : await client.query(`delete from magic_links where ${staleLinks}`);
+
     console.log(
       `${DRY_RUN ? "[dry run] " : ""}renders: ${renders.rows} rows, ${renders.files.length} files; ` +
         `photos: ${photos.rows} rows, ${photos.files.length} files; ` +
-        `shares: ${deadShares.length} files, ${shares ?? 0} rows`,
+        `shares: ${deadShares.length} files, ${shares ?? 0} rows; ` +
+        `magic links: ${links ?? 0} rows`,
     );
   } finally {
     await client.end();

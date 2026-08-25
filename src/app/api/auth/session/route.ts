@@ -1,18 +1,11 @@
 import { clearAccountId } from "@/lib/api/account";
 import { getViewer } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { jsonError } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
-import { signIn } from "@/lib/api/sign-in";
 import { getGuestSession } from "@/lib/db/guest-sessions";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Who the caller is, and whether a guest session is waiting to be claimed.
@@ -42,34 +35,24 @@ export async function GET(): Promise<Response> {
 }
 
 /**
- * Signs in with an email address, and brings the guest's work with them.
+ * No longer a way in.
  *
- * The heavy lifting is `signIn` — session, profile, claim — shared with the
- * social callback so an account gets the same treatment whichever door it came
- * through. What is specific to this route is only the proof of identity, which
- * is still the stand-in: this verifies the shape of an email, not a password.
+ * This used to take an email address and hand back a session, which is a login
+ * form with the password field removed: anyone who could type someone else's
+ * address became them. Proof of the mailbox now lives where it belongs — ask for
+ * a link at `POST /api/auth/magic-link`, redeem it at
+ * `POST /api/auth/magic-link/verify` — and social sign-in comes through
+ * `POST /api/auth/oauth/callback`.
+ *
+ * Kept as an explicit refusal rather than deleted, because a caller still
+ * posting here deserves to be told where the door moved instead of getting a
+ * bare 405 that reads like an outage.
  */
-export async function POST(request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
-
-  const email = body.value.email;
-  if (typeof email !== "string" || !EMAIL.test(email.trim())) {
-    return jsonError(400, "Email tidak valid.");
-  }
-
-  try {
-    const { profile, claimed } = await signIn({
-      email: email.trim(),
-      provider: "email",
-    });
-
-    return Response.json({ account: { id: profile.id, email: profile.email }, profile, claimed });
-  } catch (error) {
-    console.error("POST /api/auth/session failed", error);
-    return jsonError(500, "Masuk gagal diselesaikan.");
-  }
+export async function POST(): Promise<Response> {
+  return jsonError(
+    400,
+    "Masuk dengan email kini lewat tautan sekali pakai: POST /api/auth/magic-link, lalu POST /api/auth/magic-link/verify.",
+  );
 }
 
 /**
