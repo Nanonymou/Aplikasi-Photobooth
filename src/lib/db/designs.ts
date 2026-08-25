@@ -2,6 +2,10 @@ import "server-only";
 
 import { query, transaction } from "@/lib/db/client";
 import { projectToPageWrites, rowsToProject } from "@/lib/db/mappers";
+import {
+  ensureGuestSession,
+  type GuestSession,
+} from "@/lib/db/guest-sessions";
 import type { DesignPageRow, DesignRow } from "@/lib/db/types";
 import type { EditorProject } from "@/types/editor";
 
@@ -81,10 +85,16 @@ async function writePages(
   }
 }
 
+/**
+ * Creates a design and enrols the guest session that owns it.
+ *
+ * Both land in one transaction: a design whose session never got written would
+ * be stranded the moment the owner cookie is lost, with no code to find it by.
+ */
 export async function createDesign(
   ownerId: string,
   project: EditorProject,
-): Promise<SavedDesign> {
+): Promise<{ saved: SavedDesign; session: GuestSession }> {
   return transaction(async (client) => {
     const { rows } = await client.query<DesignRow>(
       "insert into designs (owner_id, title) values ($1, $2) returning *",
@@ -101,10 +111,15 @@ export async function createDesign(
       [design.id],
     );
 
+    const session = await ensureGuestSession(ownerId, client);
+
     return {
-      id: design.id,
-      version: fresh[0].version,
-      updatedAt: fresh[0].updated_at.toISOString(),
+      saved: {
+        id: design.id,
+        version: fresh[0].version,
+        updatedAt: fresh[0].updated_at.toISOString(),
+      },
+      session,
     };
   });
 }
@@ -147,6 +162,14 @@ export async function saveDesign(
         where id = $1
         returning version, updated_at`,
       [designId, project.title],
+    );
+
+    // Autosave is the strongest signal a guest is still at the booth, so it
+    // pushes back `last_seen_at`. Sessions that only ever expire on the clock
+    // would sweep away someone mid-edit on a long sitting.
+    await client.query(
+      "update guest_sessions set last_seen_at = now() where owner_id = $1",
+      [ownerId],
     );
 
     return {

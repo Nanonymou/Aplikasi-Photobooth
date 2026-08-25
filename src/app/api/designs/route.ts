@@ -2,6 +2,7 @@ import { jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
 import { validateProject } from "@/lib/api/validate-project";
 import { createDesign, listDesigns } from "@/lib/db/designs";
+import { getGuestSession } from "@/lib/db/guest-sessions";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -14,15 +15,21 @@ export const runtime = "nodejs";
  * photo in all of them.
  *
  * A browser that has never saved anything has no owner cookie, and gets an
- * empty list rather than a fresh identity: reading should not mint anything.
+ * empty list rather than a fresh identity: reading should not mint anything —
+ * which is also why the guest session is only reported here, never created.
  */
 export async function GET(): Promise<Response> {
   const owner = await getOwnerId();
-  if (!owner) return Response.json({ designs: [] });
+  if (!owner) return Response.json({ designs: [], session: null });
 
   try {
+    const [designs, session] = await Promise.all([
+      listDesigns(owner),
+      getGuestSession(owner),
+    ]);
+
     return Response.json(
-      { designs: await listDesigns(owner) },
+      { designs, session },
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
@@ -32,10 +39,16 @@ export async function GET(): Promise<Response> {
 }
 
 /**
- * Creates a design.
+ * Creates a design, enrolling the guest session that owns it.
  *
  * The editor calls this once — the first time a project is saved — and then
  * autosaves to `PUT /api/designs/[id]` with the id and version returned here.
+ *
+ * Saving is also where a walk-up guest becomes a session worth naming: the
+ * response carries the short code and expiry, so the booth can tell them where
+ * their work lives and how long it stays. Enrolment shares the design's own
+ * transaction — a design that exists without the session that owns it would be
+ * unreachable once the cookie is gone.
  */
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
@@ -46,8 +59,8 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const owner = await requireOwnerId();
-    const saved = await createDesign(owner, validated.project);
-    return Response.json(saved, { status: 201 });
+    const { saved, session } = await createDesign(owner, validated.project);
+    return Response.json({ ...saved, session }, { status: 201 });
   } catch (error) {
     console.error("POST /api/designs failed", error);
     return jsonError(500, "Desain gagal disimpan.");
