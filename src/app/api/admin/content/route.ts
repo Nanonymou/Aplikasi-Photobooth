@@ -1,15 +1,18 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError } from "@/lib/api/http";
+import { jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
 import { getPhotoStorage } from "@/lib/storage/photo-storage";
 import {
   countContent,
   createAsset,
+  createTexture,
   DuplicateSlugError,
   isContentType,
   listContent,
+  TEXTURE_KINDS,
   UnknownCategoryError,
   type ContentStatus,
+  type TextureKind,
 } from "@/lib/db/admin-content";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
@@ -111,8 +114,20 @@ function readFlag(value: FormDataEntryValue | null): boolean {
 export const POST = withPermission(
   "admin.content.manage",
   async (_viewer, request: Request) => {
-    if (!(request.headers.get("content-type") ?? "").includes("multipart/form-data")) {
-      return jsonError(415, "Unggahan harus multipart/form-data.");
+    const contentType = request.headers.get("content-type") ?? "";
+
+    // A texture has nothing to upload — it is a routine and two colours — so it
+    // arrives as JSON. Same address, because "add something to the library" is
+    // one action; two body shapes, because the two things are not alike.
+    if (contentType.includes("application/json")) {
+      return addTexture(request);
+    }
+
+    if (!contentType.includes("multipart/form-data")) {
+      return jsonError(
+        415,
+        "Unggahan harus multipart/form-data, atau JSON untuk tekstur.",
+      );
     }
 
     let form: FormData;
@@ -180,3 +195,74 @@ export const POST = withPermission(
     }
   },
 );
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Adds a frame texture from a JSON body.
+ *
+ *   { label, kind, base, accent, premium?, publish? }
+ *
+ * `kind` names one of the five drawing routines the editor ships. It is checked
+ * against that list rather than passed through: a texture claiming a routine
+ * nobody wrote would draw nothing, and "nothing" is the hardest bug to notice in
+ * a swatch grid.
+ */
+async function addTexture(request: Request): Promise<Response> {
+  const body = await readJsonBody(request);
+  if (!body.ok) return body.response;
+  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+
+  if (body.value.type !== undefined && body.value.type !== "texture") {
+    return jsonError(400, "Body JSON di sini hanya untuk `type: \"texture\"`.");
+  }
+
+  const label = body.value.label;
+  if (typeof label !== "string" || label.trim().length === 0) {
+    return jsonError(400, "Nama wajib diisi.");
+  }
+  if (label.trim().length > MAX_LABEL) {
+    return jsonError(400, `Nama melebihi ${MAX_LABEL} karakter.`);
+  }
+
+  const kind = body.value.kind;
+  if (!TEXTURE_KINDS.includes(kind as TextureKind)) {
+    return jsonError(400, `Jenis tekstur harus salah satu dari: ${TEXTURE_KINDS.join(", ")}.`);
+  }
+
+  const base = body.value.base;
+  const accent = body.value.accent;
+  if (typeof base !== "string" || !HEX.test(base)) {
+    return jsonError(400, "Warna dasar harus hex 6 digit, mis. #d9a441.");
+  }
+  if (typeof accent !== "string" || !HEX.test(accent)) {
+    return jsonError(400, "Warna aksen harus hex 6 digit, mis. #fff3c4.");
+  }
+  if (base.toLowerCase() === accent.toLowerCase()) {
+    // Caught in the database too; refused here so the message can say why.
+    return jsonError(400, "Warna dasar dan aksen harus berbeda — kalau sama, yang tergambar hanya bidang polos.");
+  }
+
+  try {
+    const item = await createTexture({
+      label,
+      kind: kind as TextureKind,
+      base,
+      accent,
+      premium: body.value.premium === true,
+      publish: body.value.publish === true,
+    });
+
+    return Response.json({ item }, { status: 201 });
+  } catch (error) {
+    if (error instanceof DuplicateSlugError) {
+      return jsonError(409, error.message);
+    }
+    console.error("POST /api/admin/content (texture) failed", error);
+    return jsonError(500, "Tekstur gagal dibuat.");
+  }
+}

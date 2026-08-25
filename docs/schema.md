@@ -92,6 +92,7 @@ yang berisik.
 | `shares` (0008, 0019) | Tautan bagikan: kode, berkas, kedaluwarsa, dan desain asalnya. |
 | `render_files` (0009) | Hasil ekspor yang dititipkan sebentar. |
 | `photo_filters`, `visual_effects` (0024) | Katalog tampilan: perlakuan warna, dan lapisan di atas foto. |
+| `frame_textures` (0026) | Tekstur bingkai: rutinitas penggambar plus dua warnanya. |
 | `export_events` (0015) | Catatan bahwa sebuah ekspor terjadi — untuk laporan, bukan untuk berkasnya. |
 
 Keputusan yang membentuknya:
@@ -116,6 +117,11 @@ Keputusan yang membentuknya:
   blend, opacity, dan untuk cuaca, deskripsi partikel yang dianimasikan kanvas.
   Menyatukannya berarti baris yang separuh kolomnya selalu null plus CHECK yang
   menjelaskan separuh mana.
+- **Tekstur menyimpan semuanya kecuali gambarnya.** Kode menyediakan
+  rutinitasnya — bagaimana serat kertas, urat kayu, atau kilau logam ditaruh —
+  dan barisnya menyediakan rutinitas mana serta dua warnanya. Itu sebabnya
+  menambah tekstur baru tidak perlu deploy: "Tembaga" adalah rutinitas kilau
+  dengan sepasang warna lain.
 - **Kategori filter dan efek berupa enum, bukan baris `library_categories`.**
   Pustaka lain punya daftar kategori yang memang tumbuh; lima keluarga filter dan
   tiga kelompok efek adalah keputusan desain tentang cara panelnya disusun, dan

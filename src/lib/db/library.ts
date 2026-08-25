@@ -549,3 +549,76 @@ export async function listFilters(
     total: rows[0]?.total ?? 0,
   };
 }
+
+export interface TextureSummary {
+  /** The slug, which is what a border records when it wears this texture. */
+  id: string;
+  label: string;
+  /** Which drawing routine paints the tile. */
+  kind: string;
+  keywords: string[];
+  /** The two colours the tile is drawn from: base fill, then its markings. */
+  base: string;
+  accent: string;
+  isPremium: boolean;
+}
+
+export interface TextureListing {
+  textures: TextureSummary[];
+  total: number;
+}
+
+interface TextureRow {
+  slug: string;
+  label: string;
+  kind: string;
+  keywords: string[];
+  base: string;
+  accent: string;
+  is_premium: boolean;
+  total: number;
+}
+
+/**
+ * Frame textures for the panel, in curated order.
+ *
+ * A flat list, not grouped: seven of them fit on one row of swatches, and the
+ * `kind` they carry is which routine draws the tile rather than a tab somebody
+ * browses by. Filtering by it is still offered — `?category=kilau` — because the
+ * console reuses this shape.
+ */
+export async function listTextures(
+  options: LibraryQuery = {},
+): Promise<TextureListing> {
+  const { limit, offset } = bounds(options);
+
+  const rows = await query<TextureRow>(
+    `select i.slug, i.label, i.kind::text as kind, i.keywords, i.base, i.accent,
+            i.is_premium, count(*) over ()::int as total
+       from frame_textures i
+      where i.published_at is not null
+        and ($1::text is null or i.kind::text = $1)
+        and ($2::text is null
+             or i.label ilike '%' || $2 || '%'
+             or exists (
+               select 1 from unnest(i.keywords) as keyword
+                where keyword ilike '%' || $2 || '%'
+             ))
+      order by i.position, i.label
+      limit $3 offset $4`,
+    [...filterValues(options), limit, offset],
+  );
+
+  return {
+    textures: rows.map((row) => ({
+      id: row.slug,
+      label: row.label,
+      kind: row.kind,
+      keywords: row.keywords,
+      base: row.base,
+      accent: row.accent,
+      isPremium: row.is_premium,
+    })),
+    total: rows[0]?.total ?? 0,
+  };
+}

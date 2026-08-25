@@ -25,7 +25,8 @@ export type ContentType =
   | "background"
   | "textstyle"
   | "filter"
-  | "effect";
+  | "effect"
+  | "texture";
 
 export const CONTENT_TYPES: ContentType[] = [
   "template",
@@ -34,6 +35,7 @@ export const CONTENT_TYPES: ContentType[] = [
   "textstyle",
   "filter",
   "effect",
+  "texture",
 ];
 
 export type ContentStatus = "published" | "draft";
@@ -52,25 +54,28 @@ const TABLES: Record<ContentType, string> = {
   textstyle: "text_styles",
   filter: "photo_filters",
   effect: "visual_effects",
+  texture: "frame_textures",
 };
 
 /**
- * Where each library keeps the category a row belongs to.
+ * Where each library keeps the family a row belongs to.
  *
  * Four of them point at `library_categories`, which is a curated, growable list
- * with its own labels and ordering. Filters and effects instead carry an enum,
- * because their families are a decision about how the panel is laid out rather
- * than a list anyone adds to — see migration 0024. Both answer the same two
- * questions here (what is its slug, what does it read as), so the difference
- * lives in this one map instead of in every query.
+ * with its own labels and ordering — those map to `null` here. The rest carry it
+ * on the row itself as an enum, because their families are a decision about how
+ * the panel is laid out (filters, effects) or about which routine draws the tile
+ * (textures) rather than a list anyone adds to. All of them answer the same two
+ * questions — what is its slug, what does it read as — so the difference lives
+ * in this one map instead of in every query.
  */
-const CATEGORY_SOURCE: Record<ContentType, "table" | "enum"> = {
-  template: "table",
-  sticker: "table",
-  background: "table",
-  textstyle: "table",
-  filter: "enum",
-  effect: "enum",
+const CATEGORY_COLUMN: Record<ContentType, string | null> = {
+  template: null,
+  sticker: null,
+  background: null,
+  textstyle: null,
+  filter: "category",
+  effect: "category",
+  texture: "kind",
 };
 
 export function isContentType(value: unknown): value is ContentType {
@@ -85,15 +90,17 @@ export function isContentType(value: unknown): value is ContentType {
  * filters by type — a filtered tab reads one table, not four.
  */
 function categorySelect(type: ContentType): string {
-  return CATEGORY_SOURCE[type] === "table"
+  const column = CATEGORY_COLUMN[type];
+
+  return column === null
     ? `c.slug as category_slug, c.label as category`
     : // `initcap` turns `monokrom` into `Monokrom`, which is exactly how the
       // panel already labels these families — no second list to keep in step.
-      `i.category::text as category_slug, initcap(i.category::text) as category`;
+      `i.${column}::text as category_slug, initcap(i.${column}::text) as category`;
 }
 
 function categoryJoin(type: ContentType): string {
-  return CATEGORY_SOURCE[type] === "table"
+  return CATEGORY_COLUMN[type] === null
     ? "join library_categories c on c.id = i.category_id"
     : "";
 }
@@ -318,8 +325,11 @@ export class UnknownCategoryError extends Error {
 
 export class FixedCategoryError extends Error {
   constructor(type: ContentType) {
+    // Worth saying *why* rather than just no: for a filter or an effect the
+    // family decides which tab of the panel it appears under, and for a texture
+    // it decides which routine draws the tile. Neither is a label somebody moves.
     super(
-      `Kategori ${type} tidak bisa diubah: keluarganya ditentukan panel, bukan data.`,
+      `Kategori ${type} tidak bisa diubah di sini: nilainya menentukan cara item itu ditampilkan atau digambar, bukan sekadar pengelompokan.`,
     );
     this.name = "FixedCategoryError";
   }
@@ -453,7 +463,7 @@ export async function editContent(
   let categoryId: string | null = null;
 
   if (edit.categorySlug !== undefined) {
-    if (CATEGORY_SOURCE[type] === "enum") {
+    if (CATEGORY_COLUMN[type] !== null) {
       // Moving a filter between families would change what the panel offers
       // under a tab, which is a code change, not an edit.
       throw new FixedCategoryError(type);
@@ -478,7 +488,7 @@ export async function editContent(
   const values: unknown[] = [id, edit.label?.trim() ?? null];
   let categoryClause = "";
 
-  if (CATEGORY_SOURCE[type] === "table") {
+  if (CATEGORY_COLUMN[type] === null) {
     values.push(categoryId);
     categoryClause = `category_id = coalesce($${values.length}::uuid, category_id),`;
   }
@@ -501,4 +511,68 @@ export async function editContent(
   );
 
   return rows[0] ? getContent(type, id) : null;
+}
+
+/** The five routines that exist; a row naming another would draw nothing. */
+export const TEXTURE_KINDS = [
+  "kertas",
+  "kayu",
+  "linen",
+  "kilau",
+  "marmer",
+] as const;
+
+export type TextureKind = (typeof TEXTURE_KINDS)[number];
+
+export interface TextureInput {
+  label: string;
+  kind: TextureKind;
+  base: string;
+  accent: string;
+  premium: boolean;
+  publish: boolean;
+}
+
+/**
+ * Adds a frame texture.
+ *
+ * Nothing is uploaded: a texture is a routine plus two colours, so the whole
+ * thing arrives as JSON and the browser draws it. That is what makes this a real
+ * addition rather than a code change — "Tembaga" is the sheen routine in copper,
+ * and nobody has to deploy anything to offer it.
+ *
+ * The colours are checked in the database as six-digit hex, because a colour the
+ * canvas cannot parse paints transparent: a texture that silently does nothing.
+ */
+export async function createTexture(input: TextureInput): Promise<ContentItem> {
+  const slug = slugify(input.label);
+
+  try {
+    const rows = await query<{ id: string }>(
+      `insert into frame_textures (slug, label, kind, base, accent, is_premium, published_at)
+       values ($1, $2, $3, $4, $5, $6, ${input.publish ? "now()" : "null"})
+       returning id`,
+      [
+        slug,
+        input.label.trim(),
+        input.kind,
+        input.base.toLowerCase(),
+        input.accent.toLowerCase(),
+        input.premium,
+      ],
+    );
+
+    const created = await getContent("texture", rows[0].id);
+    if (!created) throw new Error("Tekstur baru tidak terbaca setelah dibuat.");
+    return created;
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new DuplicateSlugError(slug);
+    }
+    throw error;
+  }
 }

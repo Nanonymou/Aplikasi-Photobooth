@@ -42,7 +42,7 @@ async function loadCatalogue() {
 
   await writeFile(path.join(out, "package.json"), '{"type":"module"}');
 
-  for (const file of ["decorations.js", "templates.js", "filters.js"]) {
+  for (const file of ["decorations.js", "templates.js", "filters.js", "textures.js"]) {
     const target = path.join(out, file);
     const source = await readFile(target, "utf8");
     await writeFile(
@@ -54,9 +54,10 @@ async function loadCatalogue() {
   const decorations = await import(path.join(out, "decorations.js"));
   const templates = await import(path.join(out, "templates.js"));
   const filters = await import(path.join(out, "filters.js"));
+  const textures = await import(path.join(out, "textures.js"));
   await rm(out, { recursive: true, force: true });
 
-  return { ...decorations, ...templates, ...filters };
+  return { ...decorations, ...templates, ...filters, ...textures };
 }
 
 function compile(out) {
@@ -67,6 +68,7 @@ function compile(out) {
       "src/lib/editor/decorations.ts",
       "src/lib/editor/templates.ts",
       "src/lib/editor/filters.ts",
+      "src/lib/editor/textures.ts",
       "src/lib/editor/id.ts",
       "--outDir",
       out,
@@ -295,6 +297,28 @@ async function main() {
       );
     }
 
+    for (const [position, texture] of catalogue.FRAME_TEXTURES.entries()) {
+      await client.query(
+        `insert into frame_textures (slug, label, kind, base, accent, position, published_at)
+         values ($1, $2, $3, $4, $5, $6, now())
+         on conflict (slug) do update
+            set label = excluded.label,
+                kind = excluded.kind,
+                base = excluded.base,
+                accent = excluded.accent,
+                position = excluded.position,
+                published_at = frame_textures.published_at`,
+        [
+          texture.id,
+          texture.label,
+          texture.kind,
+          texture.base,
+          texture.accent,
+          position,
+        ],
+      );
+    }
+
     await client.query("commit");
 
     console.log(
@@ -303,7 +327,8 @@ async function main() {
         `${catalogue.BACKGROUNDS.length} backgrounds, ` +
         `${catalogue.TEXT_STYLES.length} text styles, ` +
         `${catalogue.PHOTO_FILTERS.length} filters, ` +
-        `${catalogue.VISUAL_EFFECTS.length} effects.`,
+        `${catalogue.VISUAL_EFFECTS.length} effects, ` +
+        `${catalogue.FRAME_TEXTURES.length} textures.`,
     );
   } catch (error) {
     await client.query("rollback");
