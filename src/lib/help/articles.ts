@@ -128,6 +128,16 @@ export const HELP_ARTICLES: HelpArticle[] = [
   },
 ];
 
+/** One article by its slug, or undefined — the detail page turns that into a 404. */
+export function articleBySlug(slug: string): HelpArticle | undefined {
+  return HELP_ARTICLES.find((article) => article.slug === slug);
+}
+
+/** The label a category id reads as. */
+export function categoryLabel(id: HelpCategory): string {
+  return HELP_CATEGORIES.find((entry) => entry.id === id)?.label ?? id;
+}
+
 /** Articles in one category, in catalogue order. */
 export function articlesIn(category: HelpCategory): HelpArticle[] {
   return HELP_ARTICLES.filter((article) => article.category === category);

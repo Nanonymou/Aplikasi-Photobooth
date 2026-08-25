@@ -52,6 +52,17 @@ function Article({
             {paragraph}
           </p>
         ))}
+
+        {/* An answer also needs an address: something to send to the person who
+            asked, that opens on the answer rather than on a list with the answer
+            somewhere inside it. */}
+        <Link
+          href={`/pengaturan/bantuan/${article.slug}`}
+          className="text-foreground mt-1 inline-flex w-fit items-center gap-1 text-xs underline underline-offset-2"
+        >
+          Buka halaman artikel ini
+          <ArrowUpRight className="size-3.5" aria-hidden="true" />
+        </Link>
       </div>
     </details>
   );
