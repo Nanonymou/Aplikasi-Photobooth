@@ -99,3 +99,37 @@ export async function getUserProfile(id: string): Promise<UserProfile | null> {
   );
   return rows[0] ? toProfile(rows[0]) : null;
 }
+
+/**
+ * Updates the parts of a profile its owner is allowed to change.
+ *
+ * `role` is conspicuously not among them, and not by omission: a profile update
+ * that could set a role would be a privilege escalation reachable by anyone with
+ * an account. Roles are granted through the admin surface, by someone who
+ * already holds the permission to grant them.
+ *
+ * Passing `null` clears a field, while omitting it leaves the stored value
+ * alone — the difference between "I removed my picture" and "I only renamed
+ * myself", which a single optional argument cannot otherwise express.
+ */
+export async function updateOwnProfile(
+  id: string,
+  patch: { displayName?: string | null; avatarUrl?: string | null },
+): Promise<UserProfile | null> {
+  const rows = await query<UserProfileRow>(
+    `update user_profiles set
+       display_name = case when $2::boolean then $3 else display_name end,
+       avatar_url   = case when $4::boolean then $5 else avatar_url end
+     where id = $1
+     returning *`,
+    [
+      id,
+      "displayName" in patch,
+      patch.displayName ?? null,
+      "avatarUrl" in patch,
+      patch.avatarUrl ?? null,
+    ],
+  );
+
+  return rows[0] ? toProfile(rows[0]) : null;
+}
