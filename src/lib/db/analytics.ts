@@ -247,3 +247,61 @@ export async function analyticsReport(
     topTemplates: toBreakdown(ofKind("template"), undefined, TOP_TEMPLATES),
   };
 }
+
+export type MetricTotals = Record<MetricId, number>;
+
+/**
+ * Totals for a window, without the daily breakdown.
+ *
+ * The comparison half of a report: to say "23% more sessions than last month"
+ * you need last month's number and nothing else about it. Counting it with the
+ * same SQL as the chart, then summing, would fetch ninety rows to add them up —
+ * so the sum happens in the database and one row comes back per metric.
+ */
+export async function periodTotals(
+  from: string,
+  days: number,
+): Promise<MetricTotals> {
+  const to = shiftDate(from, days - 1);
+  const params = [from, to, REPORT_TIMEZONE];
+
+  const rows = await query<{ metric: MetricId; value: number }>(
+    `with span as (
+       select ($1::date::timestamp at time zone $3) as from_ts,
+              (($2::date + 1)::timestamp at time zone $3) as to_ts
+     )
+     select 'sessions' as metric, count(*)::int as value
+       from photo_sessions s, span
+      where s.created_at >= span.from_ts and s.created_at < span.to_ts
+     union all
+     select 'designs', count(*)::int
+       from designs d, span
+      where d.created_at >= span.from_ts and d.created_at < span.to_ts
+     union all
+     select 'exports', count(*)::int
+       from export_events e, span
+      where e.created_at >= span.from_ts and e.created_at < span.to_ts
+     union all
+     select 'newUsers', count(*)::int
+       from user_profiles u, span
+      where u.created_at >= span.from_ts and u.created_at < span.to_ts`,
+    params,
+  );
+
+  const totals: MetricTotals = {
+    sessions: 0,
+    designs: 0,
+    exports: 0,
+    newUsers: 0,
+  };
+  for (const row of rows) totals[row.metric] = row.value;
+  return totals;
+}
+
+/** The window immediately before this one, of the same length. */
+export function previousWindow(
+  from: string,
+  days: number,
+): { from: string; days: number } {
+  return { from: shiftDate(from, -days), days };
+}

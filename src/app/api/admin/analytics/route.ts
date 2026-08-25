@@ -2,8 +2,11 @@ import { withPermission } from "@/lib/api/authorize";
 import { jsonError } from "@/lib/api/http";
 import {
   analyticsReport,
+  periodTotals,
+  previousWindow,
   reportToday,
   shiftDate,
+  type AnalyticsReport,
   type MetricId,
   type Point,
 } from "@/lib/db/analytics";
@@ -38,6 +41,40 @@ interface Kpi {
   /** Second half of the window against the first, as a signed percentage. */
   delta: number;
   trend: Trend;
+  /** The same metric over the window before this one, when one was asked for. */
+  previous?: number;
+  /** This window against that one, as a signed percentage. */
+  change?: number;
+}
+
+/** A percentage change, or null when there is no baseline to divide by. */
+function percentage(now: number, before: number): number | null {
+  if (before === 0) return null;
+  return Math.round(((now - before) / before) * 1000) / 10;
+}
+
+/**
+ * The report as a spreadsheet.
+ *
+ * One row per day with every metric on it, because that is the shape somebody
+ * pastes into a sheet and pivots — a column per metric, not a file per metric.
+ * The breakdowns are deliberately left out: they are a different table with
+ * different columns, and stapling them under the first would produce a file no
+ * spreadsheet can read as one thing.
+ */
+function toCsv(report: AnalyticsReport): string {
+  const header = ["tanggal", "sesi", "desain", "ekspor", "pengguna_baru"];
+  const rows = report.series.sessions.map((point, index) =>
+    [
+      point.date,
+      point.value,
+      report.series.designs[index].value,
+      report.series.exports[index].value,
+      report.series.newUsers[index].value,
+    ].join(","),
+  );
+
+  return [header.join(","), ...rows].join("\n") + "\n";
 }
 
 function sum(points: Point[]): number {
@@ -71,6 +108,8 @@ function change(points: Point[]): { delta: number; trend: Trend } {
  *
  *   ?period=7d|30d|90d          — a window ending today
  *   ?from=YYYY-MM-DD&to=…       — an explicit one, 2 to 365 days
+ *   &compare=previous           — also count the window before this one
+ *   &format=csv                 — the daily series as a spreadsheet
  *
  * Counted from the app's own rows, not from a tracking service: sessions,
  * designs, exports, accounts, and three breakdowns over the same window. Numbers
@@ -99,16 +138,51 @@ export const GET = withPermission(
     // busiest hours as nothing at all.
     const start = custom && from ? from : shiftDate(reportToday(), -(days - 1));
 
+    const wantsComparison = params.get("compare") === "previous";
+    const wantsCsv = params.get("format") === "csv";
+
     try {
-      const report = await analyticsReport(start, days);
+      const previous = previousWindow(start, days);
+      const [report, before] = await Promise.all([
+        analyticsReport(start, days),
+        wantsComparison
+          ? periodTotals(previous.from, previous.days)
+          : Promise.resolve(null),
+      ]);
+
+      if (wantsCsv) {
+        return new Response(toCsv(report), {
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": `attachment; filename="analitik-${report.window.from}-${report.window.to}.csv"`,
+            "cache-control": "private, no-store",
+          },
+        });
+      }
 
       const kpis: Kpi[] = KPIS.map(({ id, label }) => {
         const points = report.series[id];
-        return { id, label, total: sum(points), ...change(points) };
+        const total = sum(points);
+        const kpi: Kpi = { id, label, total, ...change(points) };
+
+        if (before) {
+          kpi.previous = before[id];
+          const moved = percentage(total, before[id]);
+          if (moved !== null) kpi.change = moved;
+        }
+
+        return kpi;
       });
 
       return Response.json(
-        { ...report, kpis, viewer: { role: viewer.profile.role } },
+        {
+          ...report,
+          kpis,
+          comparison: before
+            ? { window: { from: previous.from, days: previous.days }, totals: before }
+            : null,
+          viewer: { role: viewer.profile.role },
+        },
         { headers: { "cache-control": "private, no-store" } },
       );
     } catch (error) {
