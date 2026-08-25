@@ -147,8 +147,32 @@ export async function findGuestSessionByCode(
 }
 
 /** Everything a claim moved, so the caller can tell the guest what they got. */
+/**
+ * Everything a person's work is spread across.
+ *
+ * One list, because the failure mode is a table added later and forgotten here:
+ * the work would stay behind under an owner id nobody signs in as, and nothing
+ * would report an error — it would simply be gone from the account that thought
+ * it had claimed it.
+ *
+ * Table names are literals from this module and never reach it from a caller,
+ * which is what makes interpolating them into the UPDATE safe.
+ */
+const MERGED_TABLES = [
+  "designs",
+  "photos",
+  "photo_sessions",
+  "render_files",
+  "shares",
+  "export_events",
+] as const;
+
+export type MergedTable = (typeof MERGED_TABLES)[number];
+
 export interface ClaimResult {
   session: GuestSession;
+  /** Rows moved, per table — what the guest now owns under their account. */
+  moved: Record<MergedTable, number>;
   designs: number;
   photos: number;
 }
@@ -200,12 +224,10 @@ export async function claimGuestSession(
       return result.rowCount ?? 0;
     };
 
-    // Table names are literals from this module, never caller input.
-    const designs = await moved("designs");
-    const photos = await moved("photos");
-    await moved("photo_sessions");
-    await moved("render_files");
-    await moved("shares");
+    const counts = {} as Record<MergedTable, number>;
+    for (const table of MERGED_TABLES) {
+      counts[table] = await moved(table);
+    }
 
     const { rows: claimed } = await client.query<GuestSessionRow>(
       `update guest_sessions
@@ -215,7 +237,14 @@ export async function claimGuestSession(
       [owner, accountId],
     );
 
-    return { session: toSession(claimed[0]), designs, photos };
+    return {
+      session: toSession(claimed[0]),
+      moved: counts,
+      // The two the sign-in screen actually says out loud, kept at the top level
+      // so the sentence it builds does not have to reach into a map.
+      designs: counts.designs,
+      photos: counts.photos,
+    };
   });
 }
 
