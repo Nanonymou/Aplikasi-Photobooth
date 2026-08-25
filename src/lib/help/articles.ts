@@ -132,3 +132,54 @@ export const HELP_ARTICLES: HelpArticle[] = [
 export function articlesIn(category: HelpCategory): HelpArticle[] {
   return HELP_ARTICLES.filter((article) => article.category === category);
 }
+
+/**
+ * Everything an article can be found by.
+ *
+ * The body is included, not just the title and summary. Somebody searching
+ * "kode" is looking for the paragraph that explains the six-letter session code,
+ * and a search that only reads headings would tell them nothing is here — which
+ * is the one answer a help centre must never give wrongly.
+ */
+function haystack(article: HelpArticle): string {
+  return [article.title, article.summary, ...article.body]
+    .join(" ")
+    .toLowerCase();
+}
+
+export interface HelpFilter {
+  /** Free text; blank matches everything. */
+  query?: string;
+  /** A single category, or undefined for all of them. */
+  category?: HelpCategory;
+}
+
+/**
+ * The articles matching a filter, in catalogue order.
+ *
+ * Every word of the query has to appear somewhere in the article, in any order —
+ * "tautan kedaluwarsa" finds the sharing article whose text says "tautan" in one
+ * sentence and "kedaluwarsa" in the next. Matching the phrase as typed would
+ * find nothing, and people do not type sentences the way documents are written.
+ */
+export function searchArticles(filter: HelpFilter = {}): HelpArticle[] {
+  const words = (filter.query ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+  return HELP_ARTICLES.filter((article) => {
+    if (filter.category && article.category !== filter.category) return false;
+    if (words.length === 0) return true;
+
+    const text = haystack(article);
+    return words.every((word) => text.includes(word));
+  });
+}
+
+/** How many articles each category holds, for the chips. */
+export function categoryCounts(): Record<HelpCategory, number> {
+  const counts = Object.fromEntries(
+    HELP_CATEGORIES.map((category) => [category.id, 0]),
+  ) as Record<HelpCategory, number>;
+
+  for (const article of HELP_ARTICLES) counts[article.category] += 1;
+  return counts;
+}
