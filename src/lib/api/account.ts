@@ -4,41 +4,90 @@ import { createHash } from "node:crypto";
 
 import { cookies } from "next/headers";
 
+import { resolveAuthSession, revokeAuthSession } from "@/lib/db/auth-sessions";
+
 /**
  * Who the caller is signed in as, if anyone.
  *
- * Authentication itself is not built yet — the sign-in screens run against a
- * client-side stand-in (src/lib/auth/mock-auth.ts). This is the server half of
- * that same arrangement: a cookie naming the account, so the endpoints that need
- * an identity can be written, tested, and reasoned about now.
+ * The cookie carries a session token — an opaque secret that means nothing on
+ * its own — and the server resolves it to an account. It deliberately does not
+ * carry the account id: that id is derived from an email address, so a cookie
+ * holding it could be forged by anyone who knows the address.
  *
- * It is deliberately read-only and deliberately not called a session: nothing
- * here mints, verifies, or trusts anything beyond the shape of a uuid. When real
- * auth lands it replaces this function, and every caller keeps working, because
- * what they actually depend on is "an account id or nothing".
+ * Authentication of the *credential* is still a stand-in: sign-in verifies the
+ * shape of an email, not a password. What is real is everything after that — the
+ * session exists in the database, can be revoked, expires, and slides forward as
+ * it is used.
  */
-export const ACCOUNT_COOKIE = "framestudio_account";
+export const ACCOUNT_COOKIE = "framestudio_session";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Cookie attributes, in one place so every write and clear agrees. */
+const COOKIE_OPTIONS = {
+  // The token is a bearer credential: script must never be able to read it.
+  httpOnly: true,
+  // Lax still sends the cookie on a top-level navigation back from an OAuth
+  // provider, which `strict` would drop — the user would land signed out.
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+} as const;
 
-export async function getAccountId(): Promise<string | null> {
-  const value = (await cookies()).get(ACCOUNT_COOKIE)?.value;
-  return value && UUID.test(value) ? value : null;
+/** Matches the session's own slide, so the browser forgets when the server does. */
+const MAX_AGE = 60 * 60 * 24 * 30;
+
+export async function getSessionToken(): Promise<string | null> {
+  return (await cookies()).get(ACCOUNT_COOKIE)?.value ?? null;
 }
 
-/** A year, matching the guest owner cookie: signing in should outlast a nap. */
-const MAX_AGE = 60 * 60 * 24 * 365;
+/**
+ * The signed-in account id, or null.
+ *
+ * Resolving also refreshes the session when it has aged enough, so simply using
+ * the app keeps someone signed in.
+ */
+export async function getAccountId(): Promise<string | null> {
+  const token = await getSessionToken();
+  if (!token) return null;
+
+  const session = await resolveAuthSession(token);
+  return session?.accountId ?? null;
+}
+
+/** Hands the browser its session token. Route Handlers only: sets a header. */
+export async function setSessionToken(token: string): Promise<void> {
+  const store = await cookies();
+  store.set(ACCOUNT_COOKIE, token, { ...COOKIE_OPTIONS, maxAge: MAX_AGE });
+}
+
+/**
+ * Ends the signed-in session, on the server and in the browser.
+ *
+ * Revoking first is the part that matters: clearing a cookie only asks a browser
+ * to forget a token, and a copy taken beforehand would still work. The row is
+ * what makes it stop working.
+ *
+ * The cookie is overwritten and expired rather than deleted, because a browser
+ * matches `Set-Cookie` by name *and* path — a bare delete can silently miss a
+ * cookie written with attributes it does not repeat.
+ */
+export async function clearAccountId(): Promise<void> {
+  const token = await getSessionToken();
+  if (token) await revokeAuthSession(token);
+
+  const store = await cookies();
+  store.set(ACCOUNT_COOKIE, "", { ...COOKIE_OPTIONS, maxAge: 0 });
+}
 
 /**
  * The account id for an email address.
  *
  * Derived, not random, so the same person signing in twice lands on the same
- * account and finds the work they claimed last time. Real auth will hand out
- * ids from its own user table; deriving one here keeps that shape — stable,
- * opaque, one per person — without pretending there is a table behind it.
+ * account and finds the work they claimed last time. Real auth will hand out ids
+ * from its own user table; deriving one here keeps that shape — stable, opaque,
+ * one per person — without pretending there is a table behind it.
  *
- * Formatted as a v5-style uuid because that is what every `owner_id` column
- * expects; the version nibbles are set so it cannot be mistaken for a random v4.
+ * Note this is no longer anything a caller can present: it identifies an account
+ * inside the server, and reaching it requires a session token.
  */
 export function accountIdForEmail(email: string): string {
   const hash = createHash("sha256")
@@ -55,36 +104,4 @@ export function accountIdForEmail(email: string): string {
     variant + hash.slice(17, 20),
     hash.slice(20, 32),
   ].join("-");
-}
-
-/** Starts the (stand-in) signed-in session. Route Handlers only: sets a header. */
-export async function setAccountId(accountId: string): Promise<void> {
-  const store = await cookies();
-  store.set(ACCOUNT_COOKIE, accountId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: MAX_AGE,
-  });
-}
-
-/**
- * Ends the signed-in session.
- *
- * Overwritten and expired rather than simply deleted: a browser matches a
- * `Set-Cookie` by name *and* path, so a bare delete can silently miss a cookie
- * that was written with attributes it does not repeat — leaving the user still
- * signed in on the next request, which is the one failure mode a sign-out must
- * never have. Blanking the value too means even a cached header carries nothing.
- */
-export async function clearAccountId(): Promise<void> {
-  const store = await cookies();
-  store.set(ACCOUNT_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
 }

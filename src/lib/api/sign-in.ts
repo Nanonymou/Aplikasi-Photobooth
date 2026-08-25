@@ -1,6 +1,7 @@
 import "server-only";
 
-import { accountIdForEmail, setAccountId } from "@/lib/api/account";
+import { accountIdForEmail, setSessionToken } from "@/lib/api/account";
+import { createAuthSession } from "@/lib/db/auth-sessions";
 import { getOwnerId } from "@/lib/api/owner";
 import {
   claimGuestSession,
@@ -37,8 +38,14 @@ export async function signIn(identity: {
 }): Promise<SignInResult> {
   const accountId = accountIdForEmail(identity.email);
 
-  await setAccountId(accountId);
+  // The profile first: a session pointing at an account with no profile row
+  // would resolve to an identity nothing else can describe.
   const profile = await recordSignIn({ ...identity, id: accountId });
+
+  // Each sign-in issues its own session, so signing out on a phone does not
+  // sign the same person out of the booth they are standing at.
+  const session = await createAuthSession(accountId);
+  await setSessionToken(session.token);
 
   // Whatever this browser was working on as a guest comes along.
   let claimed: SignInResult["claimed"] = null;
