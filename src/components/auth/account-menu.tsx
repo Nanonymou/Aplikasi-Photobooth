@@ -4,12 +4,12 @@ import Link from "next/link";
 import {
   CreditCard,
   Images,
+  LifeBuoy,
   LogOut,
   MonitorPlay,
   Projector,
   ShieldCheck,
   Settings,
-  UserRound,
 } from "lucide-react";
 
 import { RoleGate } from "@/components/auth/role-gate";
@@ -146,13 +146,20 @@ export function AccountMenu() {
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem disabled>
-          <UserRound />
-          Profil saya
+        {/* One entry, not two: "profil" and "pengaturan akun" were the same
+            destination wearing different names, and the section they lead to
+            keeps its own tabs. */}
+        <DropdownMenuItem asChild>
+          <Link href="/pengaturan/profil">
+            <Settings />
+            Pengaturan
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <Settings />
-          Pengaturan akun
+        <DropdownMenuItem asChild>
+          <Link href="/pengaturan/bantuan">
+            <LifeBuoy />
+            Bantuan
+          </Link>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

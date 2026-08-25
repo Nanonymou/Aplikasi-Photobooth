@@ -33,6 +33,7 @@ const PROTECTED = [
   "/admin",
   "/galeri",
   "/langganan",
+  "/pengaturan",
   "/editor",
   "/kiosk",
   "/slideshow",
