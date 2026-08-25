@@ -133,3 +133,71 @@ export async function updateOwnProfile(
 
   return rows[0] ? toProfile(rows[0]) : null;
 }
+
+export interface UserListQuery {
+  /** Matches name or email, case-insensitively. */
+  search?: string;
+  role?: UserRole;
+  sort?: "name" | "joined";
+  direction?: "asc" | "desc";
+  limit: number;
+  offset: number;
+}
+
+export interface UserListPage {
+  users: (UserProfile & { createdAt: string })[];
+  /** Total matching the filters, so the console can page and show a count. */
+  total: number;
+}
+
+interface ListRow extends UserProfileRow {
+  created_at: Date;
+  total: string;
+}
+
+/**
+ * Columns the caller may sort by.
+ *
+ * A whitelist, not a passthrough: the sort key reaches SQL as an identifier, and
+ * an identifier cannot be a bound parameter. Mapping the caller's word to a
+ * literal we wrote is what keeps `?sort=` from being an injection point.
+ */
+const SORT_COLUMNS = {
+  name: "coalesce(display_name, email)",
+  joined: "created_at",
+} as const;
+
+/**
+ * The admin console's user list.
+ *
+ * Filters, sort, and the total come back in one round trip: a second query for
+ * the count could disagree with the page it describes, and on a list people act
+ * on — suspending, changing roles — that discrepancy is the kind users report as
+ * "it said 40 but showed 39".
+ */
+export async function listUserProfiles(
+  params: UserListQuery,
+): Promise<UserListPage> {
+  const column = SORT_COLUMNS[params.sort ?? "joined"];
+  const direction = params.direction === "asc" ? "asc" : "desc";
+  const search = params.search?.trim() ?? "";
+
+  const rows = await query<ListRow>(
+    `select *, count(*) over () as total
+       from user_profiles
+      where ($1::user_role is null or role = $1)
+        and ($2 = '' or display_name ilike '%' || $2 || '%' or email ilike '%' || $2 || '%')
+      order by ${column} ${direction}, id
+      limit $3 offset $4`,
+    [params.role ?? null, search, params.limit, params.offset],
+  );
+
+  return {
+    users: rows.map((row) => ({
+      ...toProfile(row),
+      createdAt: row.created_at.toISOString(),
+    })),
+    // `count(*) over ()` is absent when nothing matched, which is itself zero.
+    total: rows[0] ? Number(rows[0].total) : 0,
+  };
+}
