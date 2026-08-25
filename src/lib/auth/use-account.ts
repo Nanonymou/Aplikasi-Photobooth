@@ -60,19 +60,38 @@ function subscribe(callback: () => void): () => void {
   return () => listeners.delete(callback);
 }
 
+function publish(next: Profile): void {
+  cached = next;
+  listeners.forEach((listener) => listener());
+}
+
 /**
  * Switches the mock account's role and notifies every reader, so role-gated
  * navigation re-renders at once. Frontend-only: the real session is set by the
  * server at sign-in, not flipped in the client.
  */
 export function setMockRole(role: Role): void {
-  cached = { ...BASE_PROFILE, role };
+  publish({ ...clientSnapshot(), role });
   try {
     window.localStorage.setItem(ROLE_KEY, role);
   } catch {
     // A blocked write only means the switch does not survive a reload; harmless.
   }
-  listeners.forEach((listener) => listener());
+}
+
+/**
+ * Applies an edited profile to the store.
+ *
+ * The profile form saves through this, so the top bar renames itself the moment
+ * the save lands rather than at the next reload. Deliberately not persisted:
+ * where an edited profile *lives* is the endpoint's job, and a copy parked in
+ * this browser would be the wrong answer for the next device.
+ */
+export function setMockProfile(update: {
+  name?: string;
+  avatarUrl?: string | null;
+}): void {
+  publish({ ...clientSnapshot(), ...update });
 }
 
 /**

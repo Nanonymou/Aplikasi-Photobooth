@@ -21,44 +21,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { initials } from "@/lib/auth/initials";
+import { Avatar } from "@/components/auth/avatar";
 import { ROLE_LABELS, ROLES } from "@/lib/auth/roles";
-import { setMockRole, useAccount, type Profile } from "@/lib/auth/use-account";
+import { setMockRole, useAccount } from "@/lib/auth/use-account";
 import { useLogout } from "@/lib/auth/use-logout";
 import { cn } from "@/lib/utils";
-
-function Avatar({
-  profile,
-  className,
-}: {
-  profile: Profile;
-  className?: string;
-}) {
-  if (profile.avatarUrl) {
-    // A remote provider avatar of unknown host; next/image adds nothing over a
-    // plain, sized img here.
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={profile.avatarUrl}
-        alt=""
-        className={cn("rounded-full object-cover", className)}
-      />
-    );
-  }
-
-  return (
-    <span
-      className={cn(
-        "bg-primary/10 text-primary flex items-center justify-center rounded-full font-medium",
-        className,
-      )}
-      aria-hidden="true"
-    >
-      {initials(profile.name)}
-    </span>
-  );
-}
 
 /**
  * The signed-in user's account menu.
