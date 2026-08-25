@@ -1,5 +1,6 @@
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
+import { callerOwners } from "@/lib/api/scope";
 import { validateProject } from "@/lib/api/validate-project";
 import { createDesign, listDesigns } from "@/lib/db/designs";
 import { getGuestSession } from "@/lib/db/guest-sessions";
@@ -17,15 +18,23 @@ export const runtime = "nodejs";
  * A browser that has never saved anything has no owner cookie, and gets an
  * empty list rather than a fresh identity: reading should not mint anything —
  * which is also why the guest session is only reported here, never created.
+ *
+ * Scoped to every identity the caller owns, not just this browser's cookie: a
+ * signed-in account's designs are spread across the guest sessions it claimed,
+ * and a list that showed only the current cookie would go empty the first time
+ * someone signed in somewhere new. The session reported alongside is still this
+ * browser's, because that is the one whose code and expiry the screen is about
+ * to show.
  */
 export async function GET(): Promise<Response> {
   const owner = await getOwnerId();
-  if (!owner) return Response.json({ designs: [], session: null });
+  const owners = await callerOwners();
+  if (owners.length === 0) return Response.json({ designs: [], session: null });
 
   try {
     const [designs, session] = await Promise.all([
-      listDesigns(owner),
-      getGuestSession(owner),
+      listDesigns(owners),
+      owner ? getGuestSession(owner) : Promise.resolve(null),
     ]);
 
     return Response.json(

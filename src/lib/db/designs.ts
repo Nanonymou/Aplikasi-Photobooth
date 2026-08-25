@@ -133,19 +133,23 @@ export async function createDesign(
  * version they meant.
  */
 export async function saveDesign(
-  ownerId: string,
+  owners: string[],
   designId: string,
   project: EditorProject,
   expectedVersion: number,
+  /** The browser doing the editing, whose session the save keeps alive. */
+  activeOwnerId: string | null,
 ): Promise<SavedDesign> {
+  if (owners.length === 0) throw new DesignNotFoundError();
+
   return transaction(async (client) => {
     // Lock the row for the whole save so a concurrent writer waits rather than
     // interleaving its pages with ours.
     const { rows } = await client.query<DesignRow>(
       `select * from designs
-        where id = $1 and owner_id = $2 and deleted_at is null
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null
         for update`,
-      [designId, ownerId],
+      [designId, owners],
     );
 
     const design = rows[0];
@@ -167,10 +171,18 @@ export async function saveDesign(
     // Autosave is the strongest signal a guest is still at the booth, so it
     // pushes back `last_seen_at`. Sessions that only ever expire on the clock
     // would sweep away someone mid-edit on a long sitting.
-    await client.query(
-      "update guest_sessions set last_seen_at = now() where owner_id = $1",
-      [ownerId],
-    );
+    //
+    // The session bumped is the *editing browser's*, not the design's owner.
+    // Those differ once an account claims its work: the design moves to the
+    // account id, while the session that can still expire is the one on the
+    // device someone is sitting at. Keeping the design's owner alive instead
+    // would sweep the booth out from under a guest who is mid-edit.
+    if (activeOwnerId) {
+      await client.query(
+        "update guest_sessions set last_seen_at = now() where owner_id = $1",
+        [activeOwnerId],
+      );
+    }
 
     return {
       id: designId,
@@ -215,9 +227,11 @@ interface DesignSummaryRow {
  * of ten designs would otherwise drag every photo in them across the wire.
  */
 export async function listDesigns(
-  ownerId: string,
+  owners: string[],
   limit = 50,
 ): Promise<DesignSummary[]> {
+  if (owners.length === 0) return [];
+
   const rows = await query<DesignSummaryRow>(
     `select d.id,
             d.title,
@@ -239,10 +253,10 @@ export async function listDesigns(
           order by p.position
           limit 1
        ) cover on true
-      where d.owner_id = $1 and d.deleted_at is null
+      where d.owner_id = any($1::uuid[]) and d.deleted_at is null
       order by d.updated_at desc
       limit $2`,
-    [ownerId, limit],
+    [owners, limit],
   );
 
   return rows.map((row) => ({
@@ -257,12 +271,15 @@ export async function listDesigns(
 }
 
 export async function loadDesign(
-  ownerId: string,
+  owners: string[],
   designId: string,
 ): Promise<LoadedDesign | null> {
+  if (owners.length === 0) return null;
+
   const designs = await query<DesignRow>(
-    "select * from designs where id = $1 and owner_id = $2 and deleted_at is null",
-    [designId, ownerId],
+    `select * from designs
+      where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null`,
+    [designId, owners],
   );
   const design = designs[0];
   if (!design) return null;

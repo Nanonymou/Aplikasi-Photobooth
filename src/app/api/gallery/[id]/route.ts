@@ -1,7 +1,6 @@
-import { getAccountId } from "@/lib/api/account";
 import { jsonError, readJsonBody } from "@/lib/api/http";
-import { getOwnerId } from "@/lib/api/owner";
-import { deleteDesign, ownerScope, renameDesign } from "@/lib/db/gallery";
+import { callerOwners } from "@/lib/api/scope";
+import { deleteDesign, renameDesign } from "@/lib/db/gallery";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -50,7 +49,7 @@ export async function PATCH(
   }
 
   try {
-    const owners = await ownerScope(await getAccountId(), await getOwnerId());
+    const owners = await callerOwners();
     const design = await renameDesign(owners, id, title);
     if (!design) return jsonError(404, "Desain tidak ditemukan.");
 
@@ -80,7 +79,7 @@ export async function DELETE(
   if (!UUID.test(id)) return jsonError(404, "Desain tidak ditemukan.");
 
   try {
-    const owners = await ownerScope(await getAccountId(), await getOwnerId());
+    const owners = await callerOwners();
     const removed = await deleteDesign(owners, id);
     if (!removed) return jsonError(404, "Desain tidak ditemukan.");
 

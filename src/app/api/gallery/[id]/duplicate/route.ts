@@ -1,7 +1,6 @@
-import { getAccountId } from "@/lib/api/account";
 import { jsonError } from "@/lib/api/http";
-import { getOwnerId } from "@/lib/api/owner";
-import { duplicateDesign, ownerScope } from "@/lib/db/gallery";
+import { callerOwners } from "@/lib/api/scope";
+import { duplicateDesign } from "@/lib/db/gallery";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -29,7 +28,7 @@ export async function POST(
   if (!UUID.test(id)) return jsonError(404, "Desain tidak ditemukan.");
 
   try {
-    const owners = await ownerScope(await getAccountId(), await getOwnerId());
+    const owners = await callerOwners();
     const design = await duplicateDesign(owners, id);
     if (!design) return jsonError(404, "Desain tidak ditemukan.");
 

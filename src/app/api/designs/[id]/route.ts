@@ -1,5 +1,6 @@
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
+import { callerOwners } from "@/lib/api/scope";
 import { validateProject } from "@/lib/api/validate-project";
 import {
   DesignConflictError,
@@ -33,11 +34,11 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await context.params;
 
-  const owner = await getOwnerId();
-  if (!owner) return jsonError(404, "Desain tidak ditemukan.");
+  const owners = await callerOwners();
+  if (owners.length === 0) return jsonError(404, "Desain tidak ditemukan.");
 
   try {
-    const loaded = await loadDesign(owner, id);
+    const loaded = await loadDesign(owners, id);
     if (!loaded) return jsonError(404, "Desain tidak ditemukan.");
 
     const etag = `W/"${loaded.version}"`;
@@ -79,10 +80,10 @@ export async function PUT(
 ): Promise<Response> {
   const { id } = await context.params;
 
-  // No cookie means this browser has never created a design, so it cannot own
+  // No cookie and no session means the caller owns nothing, so it cannot own
   // this one. Minting an id here would only manufacture a 404 with extra steps.
-  const owner = await getOwnerId();
-  if (!owner) return jsonError(404, "Desain tidak ditemukan.");
+  const owners = await callerOwners();
+  if (owners.length === 0) return jsonError(404, "Desain tidak ditemukan.");
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
@@ -97,7 +98,13 @@ export async function PUT(
   if (!validated.ok) return jsonError(400, validated.error);
 
   try {
-    const saved = await saveDesign(owner, id, validated.project, version);
+    const saved = await saveDesign(
+      owners,
+      id,
+      validated.project,
+      version,
+      await getOwnerId(),
+    );
     return Response.json(saved);
   } catch (error) {
     if (error instanceof DesignConflictError) {

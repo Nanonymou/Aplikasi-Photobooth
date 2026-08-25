@@ -1,9 +1,7 @@
-import { getAccountId } from "@/lib/api/account";
 import { jsonError } from "@/lib/api/http";
-import { getOwnerId } from "@/lib/api/owner";
+import { callerOwners } from "@/lib/api/scope";
 import {
   listGallery,
-  ownerScope,
   type GalleryScope,
   type GallerySort,
 } from "@/lib/db/gallery";
@@ -49,11 +47,7 @@ export async function GET(request: Request): Promise<Response> {
   const sort = params.get("sort");
 
   try {
-    const [accountId, ownerId] = await Promise.all([
-      getAccountId(),
-      getOwnerId(),
-    ]);
-    const owners = await ownerScope(accountId, ownerId);
+    const owners = await callerOwners();
 
     const page = await listGallery({
       owners,
