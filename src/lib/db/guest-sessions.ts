@@ -2,7 +2,7 @@ import "server-only";
 
 import type pg from "pg";
 
-import { query } from "@/lib/db/client";
+import { query, transaction } from "@/lib/db/client";
 
 /**
  * The anonymous session behind a guest's designs.
@@ -144,4 +144,77 @@ export async function findGuestSessionByCode(
     [code.trim().toUpperCase()],
   );
   return rows[0] ? toSession(rows[0]) : null;
+}
+
+/** Everything a claim moved, so the caller can tell the guest what they got. */
+export interface ClaimResult {
+  session: GuestSession;
+  designs: number;
+  photos: number;
+}
+
+export class GuestSessionNotFoundError extends Error {
+  constructor() {
+    super("Sesi tamu tidak ditemukan atau sudah berakhir.");
+    this.name = "GuestSessionNotFoundError";
+  }
+}
+
+/**
+ * Hands a guest session's work to an account.
+ *
+ * The transfer is a re-stamp, not a copy: every row that carried the anonymous
+ * `owner_id` now carries the account's. Designs keep their ids, so a link or an
+ * open editor tab still resolves, and nothing has to be reconciled afterwards.
+ *
+ * All of it rides one transaction, and the session row is locked first. Two
+ * devices claiming the same code at once — a real scenario, since the code is
+ * meant to be carried between screens — would otherwise both pass the "is it
+ * claimed?" check and split the guest's work across two accounts. `for update`
+ * makes the second one wait and then find the session already claimed.
+ *
+ * Photo sessions, renders, and shares move too. Leaving them behind would strand
+ * the guest's photos on an owner id nobody can present a cookie for.
+ */
+export async function claimGuestSession(
+  code: string,
+  accountId: string,
+): Promise<ClaimResult> {
+  return transaction(async (client) => {
+    const { rows } = await client.query<GuestSessionRow>(
+      `select * from guest_sessions
+        where code = $1 and claimed_at is null and expires_at > now()
+        for update`,
+      [code.trim().toUpperCase()],
+    );
+
+    const session = rows[0];
+    if (!session) throw new GuestSessionNotFoundError();
+
+    const owner = session.owner_id;
+    const moved = async (table: string) => {
+      const result = await client.query(
+        `update ${table} set owner_id = $2 where owner_id = $1`,
+        [owner, accountId],
+      );
+      return result.rowCount ?? 0;
+    };
+
+    // Table names are literals from this module, never caller input.
+    const designs = await moved("designs");
+    const photos = await moved("photos");
+    await moved("photo_sessions");
+    await moved("render_files");
+    await moved("shares");
+
+    const { rows: claimed } = await client.query<GuestSessionRow>(
+      `update guest_sessions
+          set claimed_at = now(), claimed_by = $2
+        where owner_id = $1
+        returning *`,
+      [owner, accountId],
+    );
+
+    return { session: toSession(claimed[0]), designs, photos };
+  });
 }
