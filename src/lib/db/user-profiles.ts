@@ -1,6 +1,6 @@
 import "server-only";
 
-import { query } from "@/lib/db/client";
+import { query, transaction } from "@/lib/db/client";
 
 /**
  * Account profiles, kept in step with whatever the identity provider says.
@@ -200,4 +200,67 @@ export async function listUserProfiles(
     // `count(*) over ()` is absent when nothing matched, which is itself zero.
     total: rows[0] ? Number(rows[0].total) : 0,
   };
+}
+
+export class LastAdminError extends Error {
+  constructor() {
+    super("Admin terakhir tidak bisa dicabut perannya.");
+    this.name = "LastAdminError";
+  }
+}
+
+/**
+ * Changes someone's role.
+ *
+ * The guard that matters is the last admin: a console whose only administrator
+ * demotes themselves — or is demoted by a colleague doing the same thing at the
+ * same moment — cannot be recovered from inside the app. Somebody has to open a
+ * database console, which on a booth deployment may mean nobody can.
+ *
+ * So the count and the write share a transaction, and the admin rows are locked
+ * before counting. Two simultaneous demotions would otherwise both read "2
+ * admins", both conclude they were safe, and between them leave zero.
+ *
+ * The admin set is locked *first*, and in id order, even when the target is not
+ * an admin — that ordering is the whole point. Locking the target row first and
+ * the admins second lets two demotions of two different admins grab each other's
+ * rows in opposite orders, and Postgres resolves that by killing one with a
+ * deadlock error: the right outcome (one change) reported as a server fault.
+ * With one fixed order the second caller simply waits, then sees the truth.
+ *
+ * Serialising every role change behind one lock is affordable because role
+ * changes are rare, deliberate, human-paced actions.
+ *
+ * Returns null when the target does not exist, so the caller can answer 404
+ * rather than reporting a success that changed nothing.
+ */
+export async function changeUserRole(
+  userId: string,
+  role: UserRole,
+): Promise<UserProfile | null> {
+  return transaction(async (client) => {
+    const { rows: admins } = await client.query<{ id: string }>(
+      "select id from user_profiles where role = 'admin' order by id for update",
+    );
+
+    const { rows: current } = await client.query<UserProfileRow>(
+      "select * from user_profiles where id = $1 for update",
+      [userId],
+    );
+
+    const target = current[0];
+    if (!target) return null;
+    if (target.role === role) return toProfile(target);
+
+    if (target.role === "admin" && admins.length <= 1) {
+      throw new LastAdminError();
+    }
+
+    const { rows: updated } = await client.query<UserProfileRow>(
+      "update user_profiles set role = $2 where id = $1 returning *",
+      [userId, role],
+    );
+
+    return toProfile(updated[0]);
+  });
 }
