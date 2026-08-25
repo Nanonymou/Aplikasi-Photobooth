@@ -1,0 +1,65 @@
+# Supabase Auth configuration for FrameStudio's magic-link sign-in.
+#
+# Checked in rather than clicked into the dashboard: "enable email", the redirect
+# allow-list, and the mail template are the kind of settings that silently drift
+# between environments and are then very hard to explain. Here they are reviewed
+# in a pull request like any other change, and applied the same way to every
+# project.
+#
+#   supabase link --project-ref <ref>
+#   supabase config push
+#
+# Only the auth surface this feature needs is configured. The app's data still
+# lives in plain PostgreSQL (see .env.example), which Supabase also is, so
+# adopting this does not move the schema.
+
+project_id = "framestudio"
+
+[auth]
+# Where a link lands when it carries no explicit redirect of its own.
+site_url = "env(NEXT_PUBLIC_SITE_URL)"
+
+# A magic link is only as safe as the places it may bounce to: an open redirect
+# here would let anyone mint a link that logs a victim in on a page they control.
+# So the list names exact callback paths, never a bare wildcard host.
+additional_redirect_urls = [
+  "http://localhost:3000/masuk-tautan/verifikasi",
+  "https://framestudio.id/masuk-tautan/verifikasi",
+]
+
+# The magic link is the whole credential, so it is deliberately short-lived.
+# An hour covers "I'll check my email in a minute" without leaving a working
+# key sitting in an inbox all week.
+jwt_expiry = 3600
+
+# Long enough that a guest who comes back next week is still signed in.
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+
+[auth.email]
+# The magic-link provider itself.
+enable_signup = true
+# Passwordless is the point: a link both signs an existing user in and creates
+# an account on first use, so the booth never asks a guest to pick a password.
+enable_confirmations = true
+# One request per minute per address. A booth's guests share a network, so this
+# is the rate limit most likely to be hit by honest use — hence a minute, not
+# the stricter default.
+max_frequency = "1m"
+# Six digits is for typing a code by hand; FrameStudio sends a tappable link,
+# where a longer, unguessable token costs the user nothing.
+otp_length = 8
+otp_expiry = 3600
+
+# The one mail this app sends. Kept as a file so its copy is reviewed with the
+# app's own Indonesian wording rather than living in a textarea.
+[auth.email.template.magic_link]
+subject = "Tautan masuk FrameStudio"
+content_path = "./supabase/templates/magic-link.html"
+
+# Not used by FrameStudio: sign-in is a link or a social provider, never a
+# password, so leaving these on would only widen the surface.
+[auth.email.smtp]
+# Configured per environment; the defaults send from Supabase's shared sender,
+# which is fine for development and rate-limited in production.
+enabled = false

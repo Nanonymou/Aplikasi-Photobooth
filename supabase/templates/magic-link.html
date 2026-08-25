@@ -1,0 +1,55 @@
+<!--
+  The magic-link email.
+
+  Written to survive email clients, not to impress them: a table for layout, no
+  external stylesheet, inline styles only, and a plain-text fallback below the
+  button — Gmail, Outlook, and most in-app browsers each drop a different subset
+  of everything else.
+
+  The wording matches the app's own screens (src/components/auth/magic-link-form)
+  so the mail reads as the same product that sent it, in the same language.
+
+  {{ .ConfirmationURL }} is the only variable: Supabase substitutes the one-time
+  link, already pointed at the redirect the request asked for.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:14px;padding:32px;">
+        <tr>
+          <td style="font-size:18px;font-weight:600;color:#0f172a;padding-bottom:8px;">
+            FrameStudio
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:15px;line-height:1.6;color:#334155;padding-bottom:24px;">
+            Tekan tombol di bawah untuk masuk. Tautan ini hanya berlaku satu jam
+            dan sekali pakai.
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding-bottom:24px;">
+            <a
+              href="{{ .ConfirmationURL }}"
+              style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 28px;border-radius:10px;"
+            >
+              Masuk ke FrameStudio
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:12px;line-height:1.6;color:#64748b;padding-bottom:16px;">
+            Tombolnya tidak bisa ditekan? Salin alamat ini ke browser:<br />
+            <span style="color:#7c3aed;word-break:break-all;">{{ .ConfirmationURL }}</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:12px;line-height:1.6;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;">
+            Kalau kamu tidak meminta tautan ini, abaikan saja email ini — tidak
+            ada yang berubah pada akunmu.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
