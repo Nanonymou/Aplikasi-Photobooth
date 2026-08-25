@@ -11,10 +11,11 @@ import { getUserProfile, type UserProfile } from "@/lib/db/user-profiles";
 /**
  * Role verification for anything the server guards.
  *
- * The client already refuses to *show* what a role cannot reach (RoleGuard,
- * RoleGate). That is a courtesy to the user, not a boundary: it runs on the
+ * The client already refuses to *show* what a role cannot reach (RoleGate hides
+ * menu entries). That is a courtesy to the user, not a boundary: it runs on the
  * visitor's own machine, and anyone can call an endpoint directly. This is the
- * boundary — the same policy, decided where it cannot be edited.
+ * boundary for endpoints, as `lib/auth/page-guard.ts` is for pages — the same
+ * policy, decided where it cannot be edited.
  *
  * A viewer is resolved once and carries its permissions with it, so a handler
  * that checks two things does not ask the database twice.

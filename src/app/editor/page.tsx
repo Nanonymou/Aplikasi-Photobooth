@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-import { RoleGuard } from "@/components/auth/role-guard";
 import { EditorShell } from "@/components/editor/editor-shell";
 import { Button } from "@/components/ui/button";
+import { requireAccount } from "@/lib/auth/page-guard";
 
 export const metadata: Metadata = {
   title: "Editor — FrameStudio AI",
@@ -20,19 +20,19 @@ export const metadata: Metadata = {
  * gallery → editor → gallery — closes. The account menu (sign out, admin console
  * for admins) rides in the shell's top bar.
  */
-export default function EditorPage() {
+export default async function EditorPage() {
+  await requireAccount();
+
   return (
-    <RoleGuard allow={["admin", "editor", "operator", "tamu"]}>
-      <EditorShell
-        topbarActions={
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/galeri">
-              <ArrowLeft />
-              <span className="hidden sm:inline">Galeri</span>
-            </Link>
-          </Button>
-        }
-      />
-    </RoleGuard>
+    <EditorShell
+      topbarActions={
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/galeri">
+            <ArrowLeft />
+            <span className="hidden sm:inline">Galeri</span>
+          </Link>
+        </Button>
+      }
+    />
   );
 }

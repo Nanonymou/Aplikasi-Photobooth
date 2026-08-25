@@ -8,7 +8,8 @@ import { useRole } from "@/lib/auth/use-account";
 /**
  * Inline role gate for a fragment of UI.
  *
- * The quiet counterpart to `RoleGuard`: where the guard owns a whole route and
+ * The quiet counterpart to the server-side page guards: where they own a whole
+ * route and
  * announces a denial, this just decides whether a piece of the page exists at
  * all — a nav link, a menu entry, a button — rendering nothing (or a `fallback`)
  * when the role does not qualify. Used to compose navigation that differs by

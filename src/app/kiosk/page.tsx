@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { RoleGuard } from "@/components/auth/role-guard";
 import { KioskMode } from "@/components/kiosk/kiosk-mode";
+import { requirePageFeature } from "@/lib/auth/page-guard";
 
 export const metadata: Metadata = {
   title: "Kiosk Mode — FrameStudio AI",
@@ -10,14 +10,14 @@ export const metadata: Metadata = {
 /**
  * Kiosk mode, for the organizer running a booth.
  *
- * Running an unattended booth is the operator's job, so the page is gated to the
- * roles that hold one — an operator or an admin sets it up, a guest never reaches
- * it directly. Everything else is the kiosk itself.
+ * Running an unattended booth is the operator's job, and kiosk mode is sold with
+ * the Studio plan, so the gate asks both at once — the same feature check the
+ * endpoints behind this screen use. A role that will never fit lands on the
+ * denial page; an account one upgrade away lands on the pricing page, which is
+ * the only one of the two that is worth showing them.
  */
-export default function KioskPage() {
-  return (
-    <RoleGuard allow={["operator", "admin"]}>
-      <KioskMode />
-    </RoleGuard>
-  );
+export default async function KioskPage() {
+  await requirePageFeature("booth.kiosk");
+
+  return <KioskMode />;
 }
