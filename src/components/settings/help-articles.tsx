@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, ChevronDown, Compass, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,25 @@ export function HelpArticles() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* First, because the commonest thing somebody needs from a help centre on
+          their first visit is not an answer to a question — it is the shape of
+          the thing they just opened. */}
+      <Link
+        href="/pengaturan/bantuan/panduan"
+        className="bg-card border-border hover:border-primary/40 focus-visible:ring-ring/50 flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors outline-none focus-visible:ring-[3px]"
+      >
+        <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <Compass className="size-4.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Panduan cepat</p>
+          <p className="text-muted-foreground text-sm text-pretty">
+            Empat hal yang kamu lakukan di sepuluh menit pertama, berurutan.
+          </p>
+        </div>
+        <ArrowUpRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+      </Link>
+
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search
