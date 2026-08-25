@@ -2,8 +2,10 @@ import { withPermission } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
   deleteContent,
+  editContent,
   isContentType,
-  setContentStatus,
+  UnknownCategoryError,
+  type ContentEdit,
   type ContentType,
 } from "@/lib/db/admin-content";
 
@@ -15,6 +17,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+
+/** Matches the columns' own limit, so a rename fails here rather than in SQL. */
+const MAX_LABEL = 120;
+
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 type Target = { type: ContentType; id: string } | { response: Response };
 
@@ -39,17 +46,18 @@ async function resolve(
 }
 
 /**
- * Publishes an item or pulls it back to draft.
+ * Edits an item's name, category, or whether it is live.
  *
- * Status is the only field here. Editing what an item *is* — a template's slots,
- * a sticker's glyph — is per-kind work with per-kind validation, and folding it
- * into one endpoint would mean one handler that half-understands four shapes.
- * Publishing is the action this screen actually offers, and it means the same
- * thing for all four.
+ * Any subset: a body that mentions only `status` publishes without touching the
+ * label, and one that mentions only `label` renames without republishing. That
+ * is why each field is read separately rather than spread — "not mentioned" and
+ * "set to nothing" are different instructions.
  *
- * Idempotent on purpose: publishing something already live succeeds and leaves
- * its publication date alone, so a double-click and a stale card both settle on
- * the state the caller asked for.
+ * Not the artwork. Replacing the bytes behind an asset would silently change
+ * every design already using it, so a new picture is a new asset.
+ *
+ * Publishing stays idempotent: doing it twice does not restamp the publication
+ * date, so a double-click and a stale card both settle where the caller asked.
  */
 export const PATCH = withPermission(
   "admin.content.manage",
@@ -65,21 +73,50 @@ export const PATCH = withPermission(
     if (!body.ok) return body.response;
     if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
 
-    const extra = Object.keys(body.value).filter((key) => key !== "status");
+    const allowed = ["label", "categorySlug", "status"];
+    const extra = Object.keys(body.value).filter((key) => !allowed.includes(key));
     if (extra.length > 0) {
       return jsonError(
         400,
-        `Hanya status yang bisa diubah di sini: ${extra.join(", ")} ditolak.`,
+        `Bidang tidak dikenal: ${extra.join(", ")}. Yang bisa diubah: ${allowed.join(", ")}.`,
       );
     }
 
-    const status = body.value.status;
-    if (status !== "published" && status !== "draft") {
-      return jsonError(400, "Status harus 'published' atau 'draft'.");
+    const edit: ContentEdit = {};
+
+    if ("label" in body.value) {
+      const label = body.value.label;
+      if (typeof label !== "string" || label.trim().length === 0) {
+        return jsonError(400, "Nama wajib diisi.");
+      }
+      if (label.trim().length > MAX_LABEL) {
+        return jsonError(400, `Nama melebihi ${MAX_LABEL} karakter.`);
+      }
+      edit.label = label;
+    }
+
+    if ("categorySlug" in body.value) {
+      const slug = body.value.categorySlug;
+      if (typeof slug !== "string" || !SLUG.test(slug)) {
+        return jsonError(400, "Kategori harus slug huruf kecil.");
+      }
+      edit.categorySlug = slug;
+    }
+
+    if ("status" in body.value) {
+      const status = body.value.status;
+      if (status !== "published" && status !== "draft") {
+        return jsonError(400, "Status harus 'published' atau 'draft'.");
+      }
+      edit.status = status;
+    }
+
+    if (Object.keys(edit).length === 0) {
+      return jsonError(400, "Tidak ada yang diubah.");
     }
 
     try {
-      const item = await setContentStatus(target.type, target.id, status);
+      const item = await editContent(target.type, target.id, edit);
       if (!item) return jsonError(404, "Konten tidak ditemukan.");
 
       return Response.json(
@@ -87,8 +124,11 @@ export const PATCH = withPermission(
         { headers: { "cache-control": "private, no-store" } },
       );
     } catch (error) {
+      if (error instanceof UnknownCategoryError) {
+        return jsonError(400, error.message);
+      }
       console.error(`PATCH /api/admin/content/${target.type} failed`, error);
-      return jsonError(500, "Status konten gagal diubah.");
+      return jsonError(500, "Konten gagal diubah.");
     }
   },
 );

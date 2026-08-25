@@ -218,33 +218,6 @@ export async function getContent(
 }
 
 /**
- * Publishes an item or pulls it back to draft.
- *
- * `published_at` is a timestamp, not a flag, so publishing an already-published
- * item must not restamp it: "live since" is information the console shows, and
- * an accidental double-click would otherwise rewrite history. Unpublishing does
- * clear it — a draft has no publication date, and republishing later is a new
- * event, not a resumption of the old one.
- */
-export async function setContentStatus(
-  type: ContentType,
-  id: string,
-  status: ContentStatus,
-): Promise<ContentItem | null> {
-  const rows = await query<{ id: string }>(
-    `update ${TABLES[type]}
-        set published_at = case when $2 then coalesce(published_at, now()) else null end
-      where id = $1
-     returning id`,
-    [id, status === "published"],
-  );
-
-  // The read is a second round-trip because the card the console redraws needs
-  // the category label, which lives in another table; RETURNING cannot join.
-  return rows[0] ? getContent(type, id) : null;
-}
-
-/**
  * Removes an item from the library.
  *
  * Nothing references these rows — a page records the template it came from by
@@ -276,4 +249,184 @@ export async function deleteContent(
     await client.query(`delete from ${TABLES[type]} where id = $1`, [id]);
     return toItem(rows[0]);
   });
+}
+
+export interface AssetUpload {
+  /** Only the two libraries that are made of uploaded artwork. */
+  type: Extract<ContentType, "sticker" | "background">;
+  label: string;
+  categorySlug: string;
+  /** `<sha256>.<ext>` in photo storage — the bytes are already there. */
+  storageKey: string;
+  width: number;
+  height: number;
+  premium: boolean;
+  /** Published straight away, or parked as a draft for review. */
+  publish: boolean;
+}
+
+export class UnknownCategoryError extends Error {
+  constructor(slug: string) {
+    super(`Kategori "${slug}" tidak ada untuk jenis ini.`);
+    this.name = "UnknownCategoryError";
+  }
+}
+
+export class DuplicateSlugError extends Error {
+  constructor(slug: string) {
+    super(`Slug "${slug}" sudah dipakai.`);
+    this.name = "DuplicateSlugError";
+  }
+}
+
+/**
+ * A url-safe name derived from the label.
+ *
+ * The slug is what a page records when it uses something, so it outlives the
+ * row's uuid and has to be readable — `bunga-musim-semi`, not a hash. Derived
+ * rather than asked for, because nobody uploading a sticker wants to be asked
+ * for two names.
+ */
+export function slugify(label: string): string {
+  return label
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/**
+ * Adds an uploaded asset to the library.
+ *
+ * Only stickers and backgrounds. A template is a composition — slots, texts, a
+ * canvas size — and a text style is a set of font fields; neither is a file
+ * somebody uploads, and pretending otherwise would mean one endpoint that
+ * half-understands four different shapes.
+ *
+ * The bytes are stored before this is called and identified by their own hash,
+ * so uploading the same artwork twice is one file with two rows pointing at it.
+ * The slug is what must be unique, and a clash is reported rather than silently
+ * suffixed: two stickers called the same thing is a decision for the person
+ * naming them.
+ */
+export async function createAsset(input: AssetUpload): Promise<ContentItem> {
+  const kind = input.type === "sticker" ? "sticker" : "background";
+  const slug = slugify(input.label);
+
+  const [category] = await query<{ id: string }>(
+    "select id from library_categories where kind = $1 and slug = $2",
+    [kind, input.categorySlug],
+  );
+  if (!category) throw new UnknownCategoryError(input.categorySlug);
+
+  const published = input.publish ? "now()" : "null";
+
+  try {
+    const rows =
+      input.type === "sticker"
+        ? await query<{ id: string }>(
+            `insert into stickers
+               (slug, label, category_id, kind, storage_key, width, height,
+                is_premium, published_at)
+             values ($1, $2, $3, 'image', $4, $5, $6, $7, ${published})
+             returning id`,
+            [
+              slug,
+              input.label.trim(),
+              category.id,
+              input.storageKey,
+              input.width,
+              input.height,
+              input.premium,
+            ],
+          )
+        : await query<{ id: string }>(
+            `insert into backgrounds
+               (slug, label, category_id, background_type, background, is_premium, published_at)
+             values ($1, $2, $3, 'image', $4::jsonb, $5, ${published})
+             returning id`,
+            [
+              slug,
+              input.label.trim(),
+              category.id,
+              JSON.stringify({
+                type: "image",
+                src: `/api/photos/${input.storageKey}`,
+              }),
+              input.premium,
+            ],
+          );
+
+    const created = await getContent(input.type, rows[0].id);
+    if (!created) throw new Error("Aset baru tidak terbaca setelah dibuat.");
+    return created;
+  } catch (error) {
+    // 23505 is a unique violation, and `slug` is the only unique column here.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new DuplicateSlugError(slug);
+    }
+    throw error;
+  }
+}
+
+export interface ContentEdit {
+  label?: string;
+  categorySlug?: string;
+  status?: ContentStatus;
+}
+
+/**
+ * Edits what an item is called, where it files, and whether it is live.
+ *
+ * Not its artwork. Replacing the bytes behind an asset would silently change
+ * every design already using it — the library's whole contract is that a slug
+ * means one thing forever — so a new picture is a new asset, and the old one is
+ * unpublished if nobody should reach it any more.
+ *
+ * The slug is deliberately left alone by a rename. It is the name pages recorded
+ * when they used this, and rewriting it would orphan them; the label is what
+ * anybody actually reads.
+ */
+export async function editContent(
+  type: ContentType,
+  id: string,
+  edit: ContentEdit,
+): Promise<ContentItem | null> {
+  let categoryId: string | null = null;
+
+  if (edit.categorySlug !== undefined) {
+    const kind = type === "textstyle" ? "text_style" : type;
+    const [category] = await query<{ id: string }>(
+      "select id from library_categories where kind = $1 and slug = $2",
+      [kind, edit.categorySlug],
+    );
+    if (!category) throw new UnknownCategoryError(edit.categorySlug);
+    categoryId = category.id;
+  }
+
+  const rows = await query<{ id: string }>(
+    `update ${TABLES[type]}
+        set label = coalesce($2, label),
+            category_id = coalesce($3::uuid, category_id),
+            published_at = case
+              when $4::boolean is null then published_at
+              when $4 then coalesce(published_at, now())
+              else null
+            end
+      where id = $1
+     returning id`,
+    [
+      id,
+      edit.label?.trim() ?? null,
+      categoryId,
+      edit.status === undefined ? null : edit.status === "published",
+    ],
+  );
+
+  return rows[0] ? getContent(type, id) : null;
 }
