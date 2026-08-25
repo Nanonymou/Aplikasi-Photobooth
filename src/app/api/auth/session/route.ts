@@ -1,16 +1,8 @@
-import {
-  accountIdForEmail,
-  clearAccountId,
-  getAccountId,
-  setAccountId,
-} from "@/lib/api/account";
+import { clearAccountId, getAccountId } from "@/lib/api/account";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
-import {
-  claimGuestSession,
-  getGuestSession,
-  GuestSessionNotFoundError,
-} from "@/lib/db/guest-sessions";
+import { signIn } from "@/lib/api/sign-in";
+import { getGuestSession } from "@/lib/db/guest-sessions";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -44,20 +36,12 @@ export async function GET(): Promise<Response> {
 }
 
 /**
- * Signs in, and brings the guest's work with them.
+ * Signs in with an email address, and brings the guest's work with them.
  *
- * This is the integration the whole guest-session feature exists for. Claiming
- * is not a second step the client has to remember: a guest who signs in at the
- * booth almost never means "leave my strip behind", so the claim happens here,
- * in the same request that establishes the session.
- *
- * A failed claim does not fail the sign-in. The session is real either way, and
- * refusing to log someone in because their expired guest work could not be moved
- * would be the worse outcome; the response says what happened instead.
- *
- * Authentication itself is still the stand-in (src/lib/api/account.ts): this
- * verifies the shape of an email, not a password. What it does establish for
- * real is the identity every downstream endpoint reads.
+ * The heavy lifting is `signIn` — session, profile, claim — shared with the
+ * social callback so an account gets the same treatment whichever door it came
+ * through. What is specific to this route is only the proof of identity, which
+ * is still the stand-in: this verifies the shape of an email, not a password.
  */
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
@@ -69,32 +53,17 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError(400, "Email tidak valid.");
   }
 
-  const accountId = accountIdForEmail(email);
-  await setAccountId(accountId);
+  try {
+    const { profile, claimed } = await signIn({
+      email: email.trim(),
+      provider: "email",
+    });
 
-  // Whatever this browser was working on as a guest comes along.
-  let claimed: { designs: number; photos: number } | null = null;
-  const owner = await getOwnerId();
-
-  if (owner) {
-    const guest = await getGuestSession(owner);
-    if (guest && !guest.claimedAt) {
-      try {
-        const result = await claimGuestSession(guest.code, accountId);
-        claimed = { designs: result.designs, photos: result.photos };
-      } catch (error) {
-        // Expired or claimed in the meantime: nothing to move, still signed in.
-        if (!(error instanceof GuestSessionNotFoundError)) {
-          console.error("POST /api/auth/session claim failed", error);
-        }
-      }
-    }
+    return Response.json({ account: { id: profile.id, email: profile.email }, profile, claimed });
+  } catch (error) {
+    console.error("POST /api/auth/session failed", error);
+    return jsonError(500, "Masuk gagal diselesaikan.");
   }
-
-  return Response.json({
-    account: { id: accountId, email: email.trim().toLowerCase() },
-    claimed,
-  });
 }
 
 /**
