@@ -23,8 +23,12 @@ site_url = "env(NEXT_PUBLIC_SITE_URL)"
 # here would let anyone mint a link that logs a victim in on a page they control.
 # So the list names exact callback paths, never a bare wildcard host.
 additional_redirect_urls = [
+  # Magic link
   "http://localhost:3000/masuk-tautan/verifikasi",
   "https://framestudio.id/masuk-tautan/verifikasi",
+  # Social sign-in (src/lib/auth/mock-auth.ts OAUTH_CALLBACK_PATH)
+  "http://localhost:3000/masuk-sosial/callback",
+  "https://framestudio.id/masuk-sosial/callback",
 ]
 
 # The magic link is the whole credential, so it is deliberately short-lived.
@@ -63,3 +67,30 @@ content_path = "./supabase/templates/magic-link.html"
 # Configured per environment; the defaults send from Supabase's shared sender,
 # which is fine for development and rate-limited in production.
 enabled = false
+
+# --- Social sign-in -----------------------------------------------------------
+#
+# Both providers hand the browser back to Supabase's own callback
+# (https://<project-ref>.supabase.co/auth/v1/callback), which then bounces to
+# the app path the request asked for. That Supabase URL is what goes in each
+# provider's console; the app's own callback is in the redirect allow-list above.
+#
+# Secrets are read from the environment, never written here — this file is
+# reviewed in pull requests and lives in git.
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
+# Google is the one provider that reliably returns a verified email, so an
+# account arriving this way needs no second confirmation step.
+skip_nonce_check = false
+
+[auth.external.apple]
+enabled = true
+# Apple calls this a "Services ID", not a client id, and it is NOT the app id.
+client_id = "env(SUPABASE_AUTH_APPLE_CLIENT_ID)"
+# Apple issues no static secret: the value is a short-lived JWT signed with the
+# .p8 key, so it has to be minted (and re-minted, at most every six months)
+# rather than pasted once. See docs/auth-providers.md.
+secret = "env(SUPABASE_AUTH_APPLE_SECRET)"
