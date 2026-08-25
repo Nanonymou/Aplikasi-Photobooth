@@ -1,4 +1,5 @@
-import { clearAccountId, getAccountId } from "@/lib/api/account";
+import { clearAccountId } from "@/lib/api/account";
+import { getViewer } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
 import { signIn } from "@/lib/api/sign-in";
@@ -21,13 +22,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * work along rather than silently stranding it on the old owner id.
  */
 export async function GET(): Promise<Response> {
-  const account = await getAccountId();
+  const viewer = await getViewer();
   const owner = await getOwnerId();
   const guest = owner ? await getGuestSession(owner) : null;
 
   return Response.json(
     {
-      account: account ? { id: account } : null,
+      account: viewer ? { id: viewer.profile.id, email: viewer.profile.email } : null,
+      // Sent so the client hides what this role cannot reach instead of
+      // hard-coding its own copy of the policy. It is a hint for the UI; the
+      // server checks again on every guarded request.
+      role: viewer?.profile.role ?? null,
+      permissions: viewer?.permissions ?? [],
       // A claimed session is history; only an unclaimed one is an offer.
       guestSession: guest && !guest.claimedAt ? guest : null,
     },
