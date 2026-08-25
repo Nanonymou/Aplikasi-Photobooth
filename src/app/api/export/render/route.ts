@@ -2,6 +2,7 @@ import { EXPORT_FORMATS, type ExportFormat } from "@/lib/editor/export";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { requireOwnerId } from "@/lib/api/owner";
 import { validateProject } from "@/lib/api/validate-project";
+import { recordExport } from "@/lib/db/export-events";
 import { recordRender } from "@/lib/db/renders";
 import { convertRender } from "@/lib/render/convert";
 import { getRenderStorage } from "@/lib/storage/render-storage";
@@ -94,7 +95,7 @@ export async function POST(request: Request): Promise<Response> {
   const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, rawScale));
 
   try {
-    await requireOwnerId();
+    const owner = await requireOwnerId();
 
     const page = validated.project.pages[pageIndex] as CanvasPage;
     const dpi = Math.round(72 * scale);
@@ -112,7 +113,7 @@ export async function POST(request: Request): Promise<Response> {
     if (persist) {
       const storage = getRenderStorage();
       const stored = await storage.put(new Uint8Array(file.data), file.extension);
-      const record = await recordRender(await requireOwnerId(), {
+      const record = await recordRender(owner, {
         storageKey: stored.key,
         contentType: file.contentType,
         filename,
@@ -121,8 +122,27 @@ export async function POST(request: Request): Promise<Response> {
         height: rendered.height,
       });
 
+      await recordExport({
+        ownerId: owner,
+        format,
+        bytes: stored.bytes,
+        scale,
+        persisted: true,
+      });
+
       return Response.json({ ...record, format, scale, dpi }, { status: 201 });
     }
+
+    // Counted here rather than in the client: an export is finished when the
+    // server has produced the bytes, and a browser that closes the tab before
+    // the download settles still did the work this number is measuring.
+    await recordExport({
+      ownerId: owner,
+      format,
+      bytes: file.data.byteLength,
+      scale,
+      persisted: false,
+    });
 
     return new Response(file.data as BodyInit, {
       headers: {
