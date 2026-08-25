@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Loader2, Save } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
 
 import { Avatar } from "@/components/auth/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { setMockProfile, useAccount } from "@/lib/auth/use-account";
-import { NAME_MAX, nameProblem, saveProfile } from "@/lib/settings/profile";
+import {
+  NAME_MAX,
+  nameProblem,
+  readAvatarFile,
+  saveProfile,
+} from "@/lib/settings/profile";
 
 /** How long "Tersimpan" stays up before the bar goes quiet again. */
 const SAVED_MS = 2500;
@@ -33,7 +38,10 @@ function Row({
           <p className="text-muted-foreground text-xs">{description}</p>
         )}
       </div>
-      <div className="w-full sm:w-64 sm:shrink-0">{children}</div>
+      {/* One width for every row, wide enough that the photo controls sit on a
+          single line — rows whose controls start at different x read as three
+          little forms rather than one. */}
+      <div className="w-full sm:w-80 sm:shrink-0">{children}</div>
     </div>
   );
 }
@@ -57,9 +65,17 @@ export function ProfileForm() {
   const profile = useAccount();
 
   const [name, setName] = useState<string | null>(null);
+  // Same `null`-means-untouched rule as the name: the picture follows the
+  // account until somebody actually picks one. A cleared photo is `null` too,
+  // which is why the two are told apart by a separate flag rather than by value.
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoTouched, setPhotoTouched] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [failed, setFailed] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // The server render has no profile yet, and neither does the first paint.
   if (!profile) {
@@ -75,7 +91,39 @@ export function ProfileForm() {
   // — a save from another tab is not overwritten by a stale initial value.
   const value = name ?? profile.name;
   const problem = nameProblem(value);
-  const dirty = value.trim() !== profile.name;
+  const avatarUrl = photoTouched ? photo : (profile.avatarUrl ?? null);
+  const dirty =
+    value.trim() !== profile.name || avatarUrl !== (profile.avatarUrl ?? null);
+
+  /** What the avatar and the preview both read from, so they cannot disagree. */
+  const preview = { ...profile, avatarUrl };
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+
+    setJustSaved(false);
+    setFailed(false);
+    setPhotoError(null);
+    setReading(true);
+
+    const result = await readAvatarFile(file);
+    setReading(false);
+
+    if (!result.ok) {
+      setPhotoError(result.error);
+      return;
+    }
+
+    setPhoto(result.dataUrl);
+    setPhotoTouched(true);
+  }
+
+  function clearPhoto() {
+    setJustSaved(false);
+    setPhotoError(null);
+    setPhoto(null);
+    setPhotoTouched(true);
+  }
 
   async function save() {
     if (!dirty || problem || busy) return;
@@ -83,10 +131,12 @@ export function ProfileForm() {
     setBusy(true);
     setFailed(false);
     try {
-      const draft = { name: value.trim(), avatarUrl: profile!.avatarUrl ?? null };
+      const draft = { name: value.trim(), avatarUrl };
       await saveProfile(draft);
-      setMockProfile({ name: draft.name });
+      setMockProfile(draft);
       setName(null);
+      setPhoto(null);
+      setPhotoTouched(false);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), SAVED_MS);
     } catch {
@@ -121,14 +171,73 @@ export function ProfileForm() {
             label="Foto"
             description="Dipakai di menu akun dan daftar karya."
           >
-            <div className="flex items-center gap-3">
-              <Avatar profile={profile} className="size-12 text-sm" />
-              <p className="text-muted-foreground text-xs">
-                {profile.avatarUrl
-                  ? "Diambil dari akun yang kamu pakai untuk masuk."
-                  : "Belum ada foto — inisial namamu dipakai sebagai gantinya."}
-              </p>
+            <div
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void pick(event.dataTransfer.files[0]);
+              }}
+              className="flex items-center gap-3"
+            >
+              <Avatar profile={preview} className="size-14 text-sm" />
+
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={reading}
+                  >
+                    {reading ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <ImagePlus />
+                    )}
+                    {avatarUrl ? "Ganti foto" : "Pilih foto"}
+                  </Button>
+
+                  {avatarUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearPhoto}
+                      disabled={reading}
+                    >
+                      <Trash2 />
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+
+                <p
+                  className={
+                    photoError
+                      ? "text-destructive text-xs"
+                      : "text-muted-foreground text-xs"
+                  }
+                >
+                  {photoError ??
+                    (avatarUrl
+                      ? "Dipotong persegi dari tengah, seperti yang terlihat."
+                      : "Seret gambar ke sini atau pilih berkas — inisial namamu dipakai sampai ada foto.")}
+                </p>
+              </div>
             </div>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                void pick(event.target.files?.[0]);
+                // Cleared so picking the same file twice still fires a change.
+                event.target.value = "";
+              }}
+            />
           </Row>
 
           <Row
@@ -183,6 +292,9 @@ export function ProfileForm() {
               size="sm"
               onClick={() => {
                 setName(null);
+                setPhoto(null);
+                setPhotoTouched(false);
+                setPhotoError(null);
                 setFailed(false);
               }}
               disabled={busy}
