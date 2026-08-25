@@ -40,6 +40,30 @@ export function magicLinkUrl(token: string): string {
 }
 
 /**
+ * Sends a support note from the console to one account.
+ *
+ * Same delivery, different content, and the same honest report: an admin who
+ * typed a paragraph to a stuck user needs to know whether it left the building.
+ */
+export async function deliverSupportNote(
+  email: string,
+  message: string,
+): Promise<Delivery> {
+  const provider = process.env.MAIL_PROVIDER;
+
+  if (!provider) {
+    console.warn(
+      `[mail] no MAIL_PROVIDER configured — support note for ${email} not sent.\n` +
+        `[mail] note: ${message}`,
+    );
+    return { delivered: false, reason: "no mail provider configured" };
+  }
+
+  console.error(`[mail] unknown MAIL_PROVIDER "${provider}"; note not sent.`);
+  return { delivered: false, reason: `unknown provider: ${provider}` };
+}
+
+/**
  * Sends the link, if there is anything to send it with.
  *
  * Deliberately not an SMTP client: which provider this ends up on is a
