@@ -1,19 +1,22 @@
 import { withPermission } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
-  getKioskConfig,
+  getBranding,
   PIN_PATTERN,
   saveBranding,
   type BrandingUpdate,
 } from "@/lib/db/event-branding";
+import { ACCENT_OPTIONS, type AccentId } from "@/lib/admin/branding";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
 
+const ACCENTS = ACCENT_OPTIONS.map((option) => option.id);
+
 const MAX_EVENT_NAME = 120;
 const MAX_TAGLINE = 200;
 
-const FIELDS = ["eventName", "tagline", "pin"];
+const FIELDS = ["eventName", "tagline", "accent", "pin"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -21,15 +24,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 type Parsed = { update: BrandingUpdate } | { error: string };
 
-/**
- * Reads the organizer's kiosk setup out of the body.
- *
- * `pin` has three meanings and all three are needed: a string sets it, `null`
- * removes it, and leaving the key out entirely keeps the one already stored.
- * That last case is the common one — an organizer fixing a typo in the event
- * name should not have to retype the PIN, and should certainly not wipe it by
- * omission.
- */
 function parse(body: Record<string, unknown>): Parsed {
   const extra = Object.keys(body).filter((key) => !FIELDS.includes(key));
   if (extra.length > 0) {
@@ -52,11 +46,17 @@ function parse(body: Record<string, unknown>): Parsed {
     return { error: `Kalimat sambutan melebihi ${MAX_TAGLINE} karakter.` };
   }
 
+  if (!ACCENTS.includes(body.accent as AccentId)) {
+    return { error: `Warna aksen harus salah satu dari: ${ACCENTS.join(", ")}.` };
+  }
+
   const update: BrandingUpdate = {
     eventName: eventName.trim(),
     tagline: tagline.trim(),
+    accent: body.accent as AccentId,
   };
 
+  // Same three meanings as the kiosk's own setup: set, clear, or leave alone.
   if ("pin" in body) {
     const pin = body.pin;
     if (pin !== null && (typeof pin !== "string" || !PIN_PATTERN.test(pin))) {
@@ -69,36 +69,38 @@ function parse(body: Record<string, unknown>): Parsed {
 }
 
 /**
- * What the kiosk screen shows.
+ * The event's branding.
  *
- * The PIN is not in the answer, and there is no query string that will produce
- * it. Kiosk mode runs on a device pointed at a crowd with the organizer's
- * session already signed in; anything this endpoint returns is one devtools
- * panel away from a guest, so the exit secret is checked on the server
- * (`POST /api/kiosk/unlock`) rather than shipped for the client to compare.
- * `pinSet` is all the screen needs — enough to know whether to offer the pad.
+ * The same row the kiosk reads — the console and the booth are two editors of
+ * one set of values, not two settings that happen to look alike. Which is the
+ * whole point: an organizer renaming the event at the booth and an admin
+ * renaming it in the console must not end up each convinced they had.
+ *
+ * The exit PIN is reported only as `pinSet`. This screen is a form an admin
+ * types into, not a place to read a secret back out of, and the value itself
+ * has no reason to travel to a browser at all.
  */
-export const GET = withPermission("booth.kiosk", async () => {
+export const GET = withPermission("admin.branding.manage", async () => {
   try {
     return Response.json(
-      { config: await getKioskConfig() },
+      { branding: await getBranding() },
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
-    console.error("GET /api/kiosk/config failed", error);
-    return jsonError(500, "Pengaturan kiosk gagal dimuat.");
+    console.error("GET /api/admin/branding failed", error);
+    return jsonError(500, "Branding gagal dimuat.");
   }
 });
 
 /**
- * Sets up the booth: the event's name, its welcome line, and the exit PIN.
+ * Saves the branding.
  *
- * The same row the console's branding page edits, minus the accent — the kiosk
- * setup screen shows no colour picker, and a field an editor cannot see is one
- * it has no business overwriting.
+ * Accent is required here, unlike on the kiosk's setup endpoint, because this
+ * form shows a colour picker: a body without it is a client that lost a field,
+ * not one that had nothing to say about it.
  */
 export const PUT = withPermission(
-  "booth.kiosk",
+  "admin.branding.manage",
   async (viewer, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
@@ -108,14 +110,14 @@ export const PUT = withPermission(
     if ("error" in parsed) return jsonError(400, parsed.error);
 
     try {
-      await saveBranding(parsed.update, viewer.profile.id);
+      const branding = await saveBranding(parsed.update, viewer.profile.id);
       return Response.json(
-        { config: await getKioskConfig() },
+        { branding },
         { headers: { "cache-control": "private, no-store" } },
       );
     } catch (error) {
-      console.error("PUT /api/kiosk/config failed", error);
-      return jsonError(500, "Pengaturan kiosk gagal disimpan.");
+      console.error("PUT /api/admin/branding failed", error);
+      return jsonError(500, "Branding gagal disimpan.");
     }
   },
 );

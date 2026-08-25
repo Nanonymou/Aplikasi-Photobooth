@@ -1,6 +1,6 @@
 import { withPermission } from "@/lib/api/authorize";
 import { jsonError, readJsonBody } from "@/lib/api/http";
-import { checkKioskPin, PIN_PATTERN } from "@/lib/db/kiosk-settings";
+import { checkExitPin, PIN_PATTERN } from "@/lib/db/event-branding";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
@@ -90,7 +90,7 @@ export const POST = withPermission(
     }
 
     try {
-      if (await checkKioskPin(pin)) {
+      if (await checkExitPin(pin)) {
         failures.delete(viewer.profile.id);
         return Response.json(
           { unlocked: true },
