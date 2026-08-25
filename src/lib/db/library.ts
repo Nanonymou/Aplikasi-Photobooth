@@ -461,3 +461,91 @@ export async function listTextStyles(
     total: rows[0]?.total ?? 0,
   };
 }
+
+export interface FilterSummary {
+  /** The slug, which is what a slot records when a photo wears this filter. */
+  id: string;
+  label: string;
+  /** The family it files under — the panel's tabs. */
+  category: string;
+  keywords: string[];
+  /** A CSS `filter` value; empty means the untouched photo. */
+  css: string;
+  isPremium: boolean;
+}
+
+export interface FilterListing {
+  filters: FilterSummary[];
+  total: number;
+}
+
+interface FilterRow {
+  slug: string;
+  label: string;
+  category: string;
+  keywords: string[];
+  css: string;
+  is_premium: boolean;
+  total: number;
+}
+
+/**
+ * The filter families, with how many published filters each holds.
+ *
+ * Not `listCategories`: filters carry their family as an enum on the row rather
+ * than a foreign key, so the list comes from the rows themselves. A family with
+ * nothing published in it does not appear, which is the same rule the other
+ * libraries follow — a tab that opens on nothing is worse than no tab.
+ */
+export async function listFilterCategories(): Promise<LibraryCategory[]> {
+  return query<LibraryCategory>(
+    `select category::text as slug, initcap(category::text) as label,
+            count(*)::int as count
+       from photo_filters
+      where published_at is not null
+      group by category
+      order by category`,
+  );
+}
+
+/**
+ * Filters for the panel, in curated order.
+ *
+ * Drafts never appear — the editor sees the shop window, the console sees the
+ * stockroom — and the search covers labels and keywords, so "bw" can find
+ * "Monokrom" once somebody adds the synonym.
+ */
+export async function listFilters(
+  options: LibraryQuery = {},
+): Promise<FilterListing> {
+  const { limit, offset } = bounds(options);
+
+  const rows = await query<FilterRow>(
+    `select i.slug, i.label, i.category::text as category, i.keywords, i.css,
+            i.is_premium, count(*) over ()::int as total
+       from photo_filters i
+      where i.published_at is not null
+        and ($1::text is null or i.category::text = $1)
+        and ($2::text is null
+             or i.label ilike '%' || $2 || '%'
+             or exists (
+               select 1 from unnest(i.keywords) as keyword
+                where keyword ilike '%' || $2 || '%'
+             ))
+      order by i.position, i.label
+      limit $3 offset $4`,
+    [...filterValues(options), limit, offset],
+  );
+
+  return {
+    filters: rows.map((row) => ({
+      id: row.slug,
+      label: row.label,
+      category: row.category,
+      keywords: row.keywords,
+      css: row.css,
+      isPremium: row.is_premium,
+    })),
+    total: rows[0]?.total ?? 0,
+  };
+}

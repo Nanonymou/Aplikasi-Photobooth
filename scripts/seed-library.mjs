@@ -42,7 +42,7 @@ async function loadCatalogue() {
 
   await writeFile(path.join(out, "package.json"), '{"type":"module"}');
 
-  for (const file of ["decorations.js", "templates.js"]) {
+  for (const file of ["decorations.js", "templates.js", "filters.js"]) {
     const target = path.join(out, file);
     const source = await readFile(target, "utf8");
     await writeFile(
@@ -53,9 +53,10 @@ async function loadCatalogue() {
 
   const decorations = await import(path.join(out, "decorations.js"));
   const templates = await import(path.join(out, "templates.js"));
+  const filters = await import(path.join(out, "filters.js"));
   await rm(out, { recursive: true, force: true });
 
-  return { ...decorations, ...templates };
+  return { ...decorations, ...templates, ...filters };
 }
 
 function compile(out) {
@@ -65,6 +66,7 @@ function compile(out) {
       "tsc",
       "src/lib/editor/decorations.ts",
       "src/lib/editor/templates.ts",
+      "src/lib/editor/filters.ts",
       "src/lib/editor/id.ts",
       "--outDir",
       out,
@@ -242,13 +244,66 @@ async function main() {
       );
     }
 
+    /*
+     * Filters and effects carry their family as an enum rather than pointing at
+     * `library_categories`, so there is no category pass for them — the row is
+     * the whole record. Position comes from the order the catalogue lists them
+     * in, which is the order the panel is meant to show.
+     */
+    for (const [position, filter] of catalogue.PHOTO_FILTERS.entries()) {
+      await client.query(
+        `insert into photo_filters (slug, label, category, css, position, published_at)
+         values ($1, $2, $3, $4, $5, now())
+         on conflict (slug) do update
+            set label = excluded.label,
+                category = excluded.category,
+                css = excluded.css,
+                position = excluded.position,
+                -- A filter pulled from the shop window by an admin stays pulled;
+                -- re-running the seed must not quietly republish it.
+                published_at = photo_filters.published_at`,
+        [filter.id, filter.label, filter.category, filter.css, position],
+      );
+    }
+
+    for (const [position, effect] of catalogue.VISUAL_EFFECTS.entries()) {
+      await client.query(
+        `insert into visual_effects
+           (slug, label, category, hint, overlay, blend, opacity, particle, position, published_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, now())
+         on conflict (slug) do update
+            set label = excluded.label,
+                category = excluded.category,
+                hint = excluded.hint,
+                overlay = excluded.overlay,
+                blend = excluded.blend,
+                opacity = excluded.opacity,
+                particle = excluded.particle,
+                position = excluded.position,
+                published_at = visual_effects.published_at`,
+        [
+          effect.id,
+          effect.label,
+          effect.category,
+          effect.hint,
+          effect.overlay,
+          effect.blend,
+          effect.opacity,
+          effect.particle ? JSON.stringify(effect.particle) : null,
+          position,
+        ],
+      );
+    }
+
     await client.query("commit");
 
     console.log(
       `Seeded ${catalogue.TEMPLATES.length} templates, ` +
         `${catalogue.STICKERS.length} stickers, ` +
         `${catalogue.BACKGROUNDS.length} backgrounds, ` +
-        `${catalogue.TEXT_STYLES.length} text styles.`,
+        `${catalogue.TEXT_STYLES.length} text styles, ` +
+        `${catalogue.PHOTO_FILTERS.length} filters, ` +
+        `${catalogue.VISUAL_EFFECTS.length} effects.`,
     );
   } catch (error) {
     await client.query("rollback");

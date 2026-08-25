@@ -19,13 +19,21 @@ import { query, transaction } from "@/lib/db/client";
  */
 
 /** The console's vocabulary. `text_style` is `textstyle` here, as the UI spells it. */
-export type ContentType = "template" | "sticker" | "background" | "textstyle";
+export type ContentType =
+  | "template"
+  | "sticker"
+  | "background"
+  | "textstyle"
+  | "filter"
+  | "effect";
 
 export const CONTENT_TYPES: ContentType[] = [
   "template",
   "sticker",
   "background",
   "textstyle",
+  "filter",
+  "effect",
 ];
 
 export type ContentStatus = "published" | "draft";
@@ -42,6 +50,27 @@ const TABLES: Record<ContentType, string> = {
   sticker: "stickers",
   background: "backgrounds",
   textstyle: "text_styles",
+  filter: "photo_filters",
+  effect: "visual_effects",
+};
+
+/**
+ * Where each library keeps the category a row belongs to.
+ *
+ * Four of them point at `library_categories`, which is a curated, growable list
+ * with its own labels and ordering. Filters and effects instead carry an enum,
+ * because their families are a decision about how the panel is laid out rather
+ * than a list anyone adds to — see migration 0024. Both answer the same two
+ * questions here (what is its slug, what does it read as), so the difference
+ * lives in this one map instead of in every query.
+ */
+const CATEGORY_SOURCE: Record<ContentType, "table" | "enum"> = {
+  template: "table",
+  sticker: "table",
+  background: "table",
+  textstyle: "table",
+  filter: "enum",
+  effect: "enum",
 };
 
 export function isContentType(value: unknown): value is ContentType {
@@ -55,10 +84,26 @@ export function isContentType(value: unknown): value is ContentType {
  * Postgres drop the other three tables from the plan entirely when the query
  * filters by type — a filtered tab reads one table, not four.
  */
+function categorySelect(type: ContentType): string {
+  return CATEGORY_SOURCE[type] === "table"
+    ? `c.slug as category_slug, c.label as category`
+    : // `initcap` turns `monokrom` into `Monokrom`, which is exactly how the
+      // panel already labels these families — no second list to keep in step.
+      `i.category::text as category_slug, initcap(i.category::text) as category`;
+}
+
+function categoryJoin(type: ContentType): string {
+  return CATEGORY_SOURCE[type] === "table"
+    ? "join library_categories c on c.id = i.category_id"
+    : "";
+}
+
 const UNION = CONTENT_TYPES.map(
-  (type) => `select id, '${type}'::text as type, slug, label, category_id,
-                    is_premium, published_at, updated_at
-               from ${TABLES[type]}`,
+  (type) => `select i.id, '${type}'::text as type, i.slug, i.label,
+                    ${categorySelect(type)},
+                    i.is_premium, i.published_at, i.updated_at
+               from ${TABLES[type]} i
+               ${categoryJoin(type)}`,
 ).join("\n      union all\n      ");
 
 export interface ContentItem {
@@ -134,13 +179,12 @@ export async function listContent(params: ContentQuery): Promise<ContentPage> {
       ${UNION}
     )
     select i.id, i.type, i.slug, i.label, i.is_premium, i.published_at, i.updated_at,
-           c.label as category, c.slug as category_slug,
+           i.category, i.category_slug,
            count(*) over () as total
       from items i
-      join library_categories c on c.id = i.category_id
      where ($1::text is null or i.type = $1)
        and ($2::text is null or (i.published_at is not null) = ($2 = 'published'))
-       and ($3 = '' or i.label ilike '%' || $3 || '%' or c.label ilike '%' || $3 || '%')
+       and ($3 = '' or i.label ilike '%' || $3 || '%' or i.category ilike '%' || $3 || '%')
      order by i.updated_at desc, i.id
      limit $4 offset $5`,
     [
@@ -207,9 +251,9 @@ export async function getContent(
   const rows = await query<ContentRow>(
     `select i.id, '${type}'::text as type, i.slug, i.label, i.is_premium,
             i.published_at, i.updated_at,
-            c.label as category, c.slug as category_slug
+            ${categorySelect(type)}
        from ${TABLES[type]} i
-       join library_categories c on c.id = i.category_id
+       ${categoryJoin(type)}
       where i.id = $1`,
     [id],
   );
@@ -236,9 +280,9 @@ export async function deleteContent(
     const { rows } = await client.query<ContentRow>(
       `select i.id, '${type}'::text as type, i.slug, i.label, i.is_premium,
               i.published_at, i.updated_at,
-              c.label as category, c.slug as category_slug
+              ${categorySelect(type)}
          from ${TABLES[type]} i
-         join library_categories c on c.id = i.category_id
+         ${categoryJoin(type)}
         where i.id = $1
           for update of i`,
       [id],
@@ -269,6 +313,15 @@ export class UnknownCategoryError extends Error {
   constructor(slug: string) {
     super(`Kategori "${slug}" tidak ada untuk jenis ini.`);
     this.name = "UnknownCategoryError";
+  }
+}
+
+export class FixedCategoryError extends Error {
+  constructor(type: ContentType) {
+    super(
+      `Kategori ${type} tidak bisa diubah: keluarganya ditentukan panel, bukan data.`,
+    );
+    this.name = "FixedCategoryError";
   }
 }
 
@@ -400,6 +453,12 @@ export async function editContent(
   let categoryId: string | null = null;
 
   if (edit.categorySlug !== undefined) {
+    if (CATEGORY_SOURCE[type] === "enum") {
+      // Moving a filter between families would change what the panel offers
+      // under a tab, which is a code change, not an edit.
+      throw new FixedCategoryError(type);
+    }
+
     const kind = type === "textstyle" ? "text_style" : type;
     const [category] = await query<{ id: string }>(
       "select id from library_categories where kind = $1 and slug = $2",
@@ -409,23 +468,36 @@ export async function editContent(
     categoryId = category.id;
   }
 
+  /*
+   * The SET list is built rather than written out, because filters and effects
+   * have no `category_id` column at all — naming one is a syntax error, not a
+   * no-op. Parameters are numbered as they are pushed for the same reason: a
+   * placeholder that survives while its clause does not leaves Postgres unable
+   * to infer its type.
+   */
+  const values: unknown[] = [id, edit.label?.trim() ?? null];
+  let categoryClause = "";
+
+  if (CATEGORY_SOURCE[type] === "table") {
+    values.push(categoryId);
+    categoryClause = `category_id = coalesce($${values.length}::uuid, category_id),`;
+  }
+
+  values.push(edit.status === undefined ? null : edit.status === "published");
+  const status = `$${values.length}`;
+
   const rows = await query<{ id: string }>(
     `update ${TABLES[type]}
         set label = coalesce($2, label),
-            category_id = coalesce($3::uuid, category_id),
+            ${categoryClause}
             published_at = case
-              when $4::boolean is null then published_at
-              when $4 then coalesce(published_at, now())
+              when ${status}::boolean is null then published_at
+              when ${status} then coalesce(published_at, now())
               else null
             end
       where id = $1
      returning id`,
-    [
-      id,
-      edit.label?.trim() ?? null,
-      categoryId,
-      edit.status === undefined ? null : edit.status === "published",
-    ],
+    values,
   );
 
   return rows[0] ? getContent(type, id) : null;

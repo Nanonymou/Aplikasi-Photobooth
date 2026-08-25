@@ -3,6 +3,7 @@ import { jsonError, readJsonBody } from "@/lib/api/http";
 import {
   deleteContent,
   editContent,
+  FixedCategoryError,
   isContentType,
   UnknownCategoryError,
   type ContentEdit,
@@ -124,7 +125,10 @@ export const PATCH = withPermission(
         { headers: { "cache-control": "private, no-store" } },
       );
     } catch (error) {
-      if (error instanceof UnknownCategoryError) {
+      if (
+        error instanceof UnknownCategoryError ||
+        error instanceof FixedCategoryError
+      ) {
         return jsonError(400, error.message);
       }
       console.error(`PATCH /api/admin/content/${target.type} failed`, error);
