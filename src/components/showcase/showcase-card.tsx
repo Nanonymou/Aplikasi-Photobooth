@@ -46,12 +46,12 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
 
   return (
     <article className="bg-card border-border hover:border-primary/50 mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-xl border transition-colors">
-      {/* Straight into the editor, not to a detail page that does not exist yet.
-          The id rides along so the new session can credit what it came from —
-          a remix without the name of what was remixed is just a copy. */}
+      {/* To the design's own page, not straight into a remix. The wall is for
+          scanning and the page is for deciding; nobody remixes a template they
+          have only seen at thumbnail size, and the Remix button waits there. */}
       <Link
-        href={`/tamu?remix=${item.id}`}
-        aria-label={`Remix ${item.title} oleh ${item.author}`}
+        href={`/jelajah/${item.id}`}
+        aria-label={`Lihat ${item.title} oleh ${item.author}`}
         className="focus-visible:ring-ring/50 group/preview relative flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         style={{
           aspectRatio: `${item.width} / ${item.height}`,
@@ -70,7 +70,7 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
             focus-within would light it up while the like button has focus. */}
         <span className="bg-background/85 text-foreground pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium opacity-0 backdrop-blur transition-opacity group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100">
           <Wand2 className="size-3.5" />
-          Remix desain ini
+          Lihat & remix
         </span>
       </Link>
 
