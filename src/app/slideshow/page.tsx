@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { LiveSlideshow } from "@/components/slideshow/live-slideshow";
 import { requirePageFeature } from "@/lib/auth/page-guard";
+import { getBranding } from "@/lib/db/event-branding";
 
 export const metadata: Metadata = {
   title: "Live Slideshow — FrameStudio AI",
@@ -14,9 +15,15 @@ export const metadata: Metadata = {
  * it up, a guest never opens it directly — and, like kiosk mode, it is part of
  * the Studio plan. One feature check covers both halves, on the server, before
  * the screen exists.
+ *
+ * The event's name is read here for the same reason the kiosk reads it: the
+ * badge over a wall display names the event to a room full of people who know
+ * perfectly well what it is called.
  */
 export default async function SlideshowPage() {
   await requirePageFeature("booth.slideshow");
 
-  return <LiveSlideshow />;
+  const branding = await getBranding();
+
+  return <LiveSlideshow eventName={branding.eventName} />;
 }

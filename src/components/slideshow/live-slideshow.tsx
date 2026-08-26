@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { KIOSK_CONFIG } from "@/lib/kiosk/kiosk-config";
 import { SLIDESHOW_ITEMS } from "@/lib/slideshow/live-feed";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +32,7 @@ const EXIT_TO = "/admin";
  * fullscreen, exit — surface on movement and fade back out so the wall stays clean.
  * Arrow keys step, space toggles play. Gated to organizers by the page around it.
  */
-export function LiveSlideshow() {
+export function LiveSlideshow({ eventName }: { eventName: string }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const items = SLIDESHOW_ITEMS;
@@ -143,7 +142,7 @@ export function LiveSlideshow() {
             LIVE
           </span>
           <span className="text-sm font-medium text-white/90">
-            {KIOSK_CONFIG.eventName}
+            {eventName}
           </span>
         </div>
 
