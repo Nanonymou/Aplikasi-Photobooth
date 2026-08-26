@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
+import { pageOrientation } from "@/types/editor";
 import type { ToolId } from "@/types/editor";
 
 function ToolSwitcher() {
@@ -197,12 +198,25 @@ function PageSummary() {
 
   if (selectedCount > 0) return null;
 
+  // A square is neither of the two, and this is a readout rather than a control,
+  // so it can simply say what the shape is.
+  const shape =
+    page.width === page.height
+      ? "Persegi"
+      : pageOrientation(page) === "landscape"
+        ? "Horizontal"
+        : "Vertikal";
+
   return (
     <>
       <Separator orientation="vertical" className="h-6" />
-      <span className="text-muted-foreground text-xs">
-        {page.name} · {page.width} × {page.height} px ·{" "}
-        {page.width >= page.height ? "Horizontal" : "Vertikal"}
+      {/* Re-keyed per page so the readout fades in with the canvas instead of
+          swapping under a cursor that is still on its way to the strip. */}
+      <span
+        key={page.id}
+        className="page-label-swap text-muted-foreground text-xs"
+      >
+        {page.name} · {page.width} × {page.height} px · {shape}
       </span>
     </>
   );

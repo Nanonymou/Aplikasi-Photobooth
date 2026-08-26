@@ -75,9 +75,18 @@ export function PageStrip() {
   }
 
   // Pages can also change from the keyboard and from the canvas, so the strip
-  // follows the selection rather than assuming a click put it there.
+  // follows the selection rather than assuming a click put it there. It glides
+  // so the row reads as having moved along rather than having been re-drawn —
+  // which matters most when Alt+→ is walking a long strip and the chips would
+  // otherwise teleport.
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    activeRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
   }, [activePageId]);
 
   return (
@@ -89,8 +98,9 @@ export function PageStrip() {
     >
       {/* Actions first, pinned left, so they stay put as the strip grows and
           scrolls — a button that walks away is a button people stop reaching
-          for. */}
-      <div className="sticky left-0 z-10 flex shrink-0 items-center gap-1">
+          for. Opaque, because a pinned group with a see-through background has
+          the scrolled chips sliding visibly behind the buttons. */}
+      <div className="bg-editor-chrome sticky left-0 z-10 flex shrink-0 items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

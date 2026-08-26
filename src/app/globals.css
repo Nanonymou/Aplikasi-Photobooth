@@ -173,10 +173,55 @@
   animation: settings-confirm 320ms ease-out;
 }
 
+/*
+ * Motion for moving between pages in the editor.
+ *
+ * The direction is the message: the strip reads left to right and Alt+←/→ walks
+ * it, so a page arriving from the right means "later" and from the left means
+ * "earlier". Kept to a nudge and a fade — the canvas is the work, not a slide
+ * deck, and anything longer gets in the way of clicking through a strip.
+ */
+
+@keyframes page-enter-next {
+  from {
+    opacity: 0;
+    transform: translateX(2.5%);
+  }
+}
+
+@keyframes page-enter-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-2.5%);
+  }
+}
+
+@keyframes page-label-swap {
+  from {
+    opacity: 0;
+  }
+}
+
+@utility page-enter-next {
+  animation: page-enter-next 200ms ease-out;
+}
+
+@utility page-enter-prev {
+  animation: page-enter-prev 200ms ease-out;
+}
+
+@utility page-label-swap {
+  /* The readout above the stage, so the name and size do not simply pop. */
+  animation: page-label-swap 200ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-enter,
   .settings-reveal,
-  .settings-confirm {
+  .settings-confirm,
+  .page-enter-next,
+  .page-enter-prev,
+  .page-label-swap {
     animation: none;
   }
 }

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { CanvasViewport } from "@/components/editor/canvas/canvas-viewport";
+import { PageTransition } from "@/components/editor/canvas/page-transition";
 import { PageStrip } from "@/components/editor/page-strip";
 import { EditorToolbar } from "@/components/editor/editor-toolbar";
 import { EditorTopbar } from "@/components/editor/editor-topbar";
@@ -60,7 +61,9 @@ export function EditorShell({
           <main className="order-1 flex min-h-0 min-w-0 flex-1 flex-col md:order-none">
             <EditorToolbar />
             <div className="bg-editor-stage min-h-0 flex-1">
-              <CanvasViewport />
+              <PageTransition>
+                <CanvasViewport />
+              </PageTransition>
             </div>
             <PageStrip />
             <StatusBar />
