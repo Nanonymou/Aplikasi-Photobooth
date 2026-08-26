@@ -1,16 +1,23 @@
 "use client";
 
-import { Check, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  RectangleHorizontal,
+  RectangleVertical,
+  TriangleAlert,
+} from "lucide-react";
 
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   clampScale,
   EXPORT_FORMATS,
+  exportOrientation,
   formatBytes,
   getExportFormat,
   isHeavyExport,
   isLossy,
+  isTurned,
   matchingPresetId,
   MAX_SCALE,
   MIN_SCALE,
@@ -20,7 +27,7 @@ import {
   type ExportSettings,
 } from "@/lib/editor/export";
 import { cn } from "@/lib/utils";
-import type { CanvasPage } from "@/types/editor";
+import type { CanvasPage, PageOrientation } from "@/types/editor";
 
 const cardClass =
   "rounded-lg border px-2.5 py-2 text-left transition-colors outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]";
@@ -47,6 +54,11 @@ export function ExportOptions({
   const definition = getExportFormat(settings.format);
   const plan = planExport(page, settings);
   const activePreset = matchingPresetId(settings.scale);
+  // A square page comes out identical either way round, so it gets no choice to
+  // make rather than a pair of buttons that both do nothing.
+  const square = page.width === page.height;
+  const orientation = exportOrientation(page, settings);
+  const turned = isTurned(page, settings);
 
   function patch(next: Partial<ExportSettings>) {
     onChange({ ...settings, ...next });
@@ -81,6 +93,36 @@ export function ExportOptions({
           {definition.hint}
         </p>
       </div>
+
+      {!square && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-medium">Orientasi</p>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={orientation}
+            onValueChange={(value) => {
+              if (!value) return;
+              patch({ orientation: value as PageOrientation });
+            }}
+            className="w-full"
+          >
+            <ToggleGroupItem value="portrait" className="flex-1">
+              <RectangleVertical />
+              Vertikal
+            </ToggleGroupItem>
+            <ToggleGroupItem value="landscape" className="flex-1">
+              <RectangleHorizontal />
+              Horizontal
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            {turned
+              ? "Hasilnya diputar seperempat putaran saat disimpan. Tata letak halaman tidak ikut berubah."
+              : "Sesuai halaman. Pilih arah satunya kalau pencetaknya memuat kertas memanjang."}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-medium">Resolusi</p>

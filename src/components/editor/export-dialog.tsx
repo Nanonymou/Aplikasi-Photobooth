@@ -56,10 +56,11 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
   const plan = planExport(page, settings);
 
   // Rasterising the stage is async (the crop goes through an Image), so the
-  // preview cannot be computed during render. Only the two settings that change
-  // what the picture looks like are watched — scale and quality do not.
+  // preview cannot be computed during render. Only the settings that change what
+  // the picture looks like are watched — scale and quality do not.
   const previewFormat = settings.format;
   const previewTransparent = settings.transparent;
+  const previewOrientation = settings.orientation;
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -68,6 +69,7 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           ...defaultExportSettings(),
           format: previewFormat,
           transparent: previewTransparent,
+          orientation: previewOrientation,
         });
         if (!cancelled) setPreview(url);
       } catch (cause) {
@@ -77,7 +79,7 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [page, previewFormat, previewTransparent]);
+  }, [page, previewFormat, previewTransparent, previewOrientation]);
 
   const busy = progress !== null;
 
@@ -129,10 +131,13 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           }}
         />
 
-        <div className="flex flex-col gap-1.5">
+        {/* Sized by the picture rather than stretched to the options column: a
+            landscape export is short, and a tall box would frame it with a
+            column of empty checkerboard. */}
+        <div className="flex flex-col gap-1.5 self-start">
           <p className="text-xs font-medium">Pratinjau</p>
           <div
-            className="border-editor-border flex min-h-32 flex-1 items-center justify-center overflow-hidden rounded-lg border p-2"
+            className="border-editor-border flex min-h-32 items-center justify-center overflow-hidden rounded-lg border p-2"
             style={{
               backgroundImage: `url("${transparencyCheckerDataUri()}")`,
             }}

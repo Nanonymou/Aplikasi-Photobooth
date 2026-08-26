@@ -235,6 +235,8 @@ export interface EditorProject {
   updatedAt: string;
 }
 
-export function pageOrientation(page: CanvasPage): PageOrientation {
+export function pageOrientation(
+  page: Pick<CanvasPage, "width" | "height">,
+): PageOrientation {
   return page.width >= page.height ? "landscape" : "portrait";
 }

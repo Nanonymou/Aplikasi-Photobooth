@@ -1,6 +1,7 @@
 import { jpegToPdf } from "@/lib/editor/pdf";
 import { EXPORT_CHROME, getStageSnapshot } from "@/lib/editor/stage-registry";
-import type { CanvasPage } from "@/types/editor";
+import { pageOrientation } from "@/types/editor";
+import type { CanvasPage, PageOrientation } from "@/types/editor";
 
 export type ExportFormat = "png" | "jpeg" | "webp" | "pdf";
 
@@ -103,6 +104,14 @@ export interface ExportSettings {
   quality: number;
   /** Keep the alpha channel. Only honoured by formats that have one. */
   transparent: boolean;
+  /**
+   * Which way round the file comes out. `null` means "as designed".
+   *
+   * A strip is drawn upright but a lot of photo printers feed the sheet the
+   * other way, so the export turns the finished picture 90° rather than asking
+   * the user to re-lay the page — the design is not touched, only the file.
+   */
+  orientation: PageOrientation | null;
 }
 
 export function defaultExportSettings(): ExportSettings {
@@ -111,7 +120,30 @@ export function defaultExportSettings(): ExportSettings {
     scale: getQualityPreset(DEFAULT_PRESET_ID).scale,
     quality: 0.92,
     transparent: true,
+    orientation: null,
   };
+}
+
+/** The orientation an export will actually come out in. */
+export function exportOrientation(
+  page: Pick<CanvasPage, "width" | "height">,
+  settings: ExportSettings,
+): PageOrientation {
+  return settings.orientation ?? pageOrientation(page);
+}
+
+/**
+ * Whether the picture has to be turned to reach the chosen orientation.
+ *
+ * A square is the same page either way round, so it is never turned — turning
+ * it would only cost a re-raster and hand back the identical file.
+ */
+export function isTurned(
+  page: Pick<CanvasPage, "width" | "height">,
+  settings: ExportSettings,
+): boolean {
+  if (page.width === page.height) return false;
+  return exportOrientation(page, settings) !== pageOrientation(page);
 }
 
 /** The preset a scale corresponds to, or `null` when it was set by hand. */
@@ -153,8 +185,9 @@ export function planExport(
   settings: ExportSettings,
 ): ExportPlan {
   const { format, scale, quality } = settings;
-  const width = Math.round(page.width * scale);
-  const height = Math.round(page.height * scale);
+  const turned = isTurned(page, settings);
+  const width = Math.round((turned ? page.height : page.width) * scale);
+  const height = Math.round((turned ? page.width : page.height) * scale);
   const dpi = dpiFor(scale);
 
   // Lossy encoders roughly track the quality knob; PNG does not care about it.
@@ -258,6 +291,7 @@ async function rasterise(
   page: Pick<CanvasPage, "width" | "height">,
   scale: number,
   keepTransparency: boolean,
+  turned = false,
 ): Promise<HTMLCanvasElement> {
   const snapshot = getStageSnapshot();
   if (!snapshot) throw new Error("Kanvas belum siap. Buka editor lalu ulangi.");
@@ -289,9 +323,12 @@ async function rasterise(
 
   const source = await loadImage(captured);
 
+  const width = Math.round(page.width * scale);
+  const height = Math.round(page.height * scale);
+
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(page.width * scale);
-  canvas.height = Math.round(page.height * scale);
+  canvas.width = turned ? height : width;
+  canvas.height = turned ? width : height;
 
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Browser ini tidak mendukung ekspor kanvas.");
@@ -300,7 +337,14 @@ async function rasterise(
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
   }
-  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+
+  if (turned) {
+    // A quarter turn clockwise, so the top of the design ends up on the right —
+    // the way a strip comes out of a printer that is fed the long way.
+    context.translate(canvas.width, 0);
+    context.rotate(Math.PI / 2);
+  }
+  context.drawImage(source, 0, 0, width, height);
 
   return canvas;
 }
@@ -312,7 +356,12 @@ export async function renderPreview(
   maxSize = 360,
 ): Promise<string> {
   const scale = Math.min(1, maxSize / Math.max(page.width, page.height));
-  const canvas = await rasterise(page, scale, keepsTransparency(settings));
+  const canvas = await rasterise(
+    page,
+    scale,
+    keepsTransparency(settings),
+    isTurned(page, settings),
+  );
   return canvas.toDataURL("image/png");
 }
 
@@ -340,7 +389,12 @@ export async function renderExport(
   };
 
   await report(0.1, "Menyiapkan kanvas…");
-  const canvas = await rasterise(page, scale, keepsTransparency(settings));
+  const canvas = await rasterise(
+    page,
+    scale,
+    keepsTransparency(settings),
+    isTurned(page, settings),
+  );
 
   await report(0.6, `Menyusun ${definition.label}…`);
 
