@@ -65,6 +65,26 @@ export function useEditorShortcuts() {
         return;
       }
 
+      /*
+       * Page navigation on Alt+arrow.
+       *
+       * Alt rather than a bare arrow, which nudges the selected object, and not
+       * PageUp/PageDown, which a laptop keyboard reaches through a second
+       * modifier anyway. Held here rather than in the strip so it works with the
+       * focus anywhere on the canvas.
+       */
+      if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const pages = store.project.pages;
+        const index = pages.findIndex((page) => page.id === store.activePageId);
+        const next = pages[index + (event.key === "ArrowRight" ? 1 : -1)];
+
+        if (next) {
+          event.preventDefault();
+          store.setActivePage(next.id);
+        }
+        return;
+      }
+
       if (mod) return;
 
       switch (event.key) {

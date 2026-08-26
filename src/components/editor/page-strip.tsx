@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PageThumbnail } from "@/components/editor/page-thumbnail";
 import { useEditorStore } from "@/store/editor-store";
 import { toast } from "@/store/toast-store";
 import { pageOrientation } from "@/types/editor";
@@ -53,6 +54,13 @@ export function PageStrip() {
   // that is never usable in a one-page project is a control that only ever
   // teaches people it does nothing.
   const canRemove = pages.length > 1;
+
+  const index = pages.findIndex((page) => page.id === activePageId);
+
+  function step(delta: number) {
+    const next = pages[index + delta];
+    if (next) setActivePage(next.id);
+  }
 
   function remove() {
     const page = pages.find((candidate) => candidate.id === activePageId);
@@ -129,6 +137,41 @@ export function PageStrip() {
         )}
 
         <Separator orientation="vertical" className="mx-1 h-6" />
+
+        {/* Sequential navigation next to the list, because a strip is a place
+            where "the one before this" is a real thought — and on a narrow
+            screen it beats scrolling the row to find the neighbour. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => step(-1)}
+              disabled={index <= 0}
+              aria-label="Halaman sebelumnya"
+            >
+              <ChevronLeft />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Halaman sebelumnya (Alt+←)</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => step(1)}
+              disabled={index === -1 || index >= pages.length - 1}
+              aria-label="Halaman berikutnya"
+            >
+              <ChevronRight />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Halaman berikutnya (Alt+→)</TooltipContent>
+        </Tooltip>
+
+        <Separator orientation="vertical" className="mx-1 h-6" />
       </div>
 
       {pages.map((page, index) => {
@@ -150,14 +193,10 @@ export function PageStrip() {
                 : "border-editor-border hover:bg-accent",
             )}
           >
-            {/* Stands in for the thumbnail a later task draws here — but already
-                the right shape, so the row's rhythm does not change when the
-                real preview arrives. */}
-            <span
-              aria-hidden="true"
+            <PageThumbnail
+              page={page}
               className={cn(
-                "border-editor-border shrink-0 rounded-sm border",
-                active ? "bg-primary/20" : "bg-editor-stage",
+                "border-editor-border bg-editor-stage shrink-0 rounded-sm border",
                 landscape ? "h-5 w-7" : "h-7 w-5",
               )}
             />
