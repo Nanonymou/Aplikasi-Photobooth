@@ -14,11 +14,19 @@ import type { ShowcaseItem } from "@/lib/showcase/feed";
  * browse-until-something-catches-your-eye wall wants; it is not a ranking, and
  * nothing here depends on which card comes "after" which.
  */
-export function ShowcaseGrid({ items }: { items: ShowcaseItem[] }) {
+export function ShowcaseGrid({
+  items,
+  empty = "Belum ada karya yang dipublikasikan. Jadilah yang pertama.",
+}: {
+  items: ShowcaseItem[];
+  /** What to say when the list is empty — a filtered wall and a bare one are
+   *  empty for different reasons, and one sentence cannot be true of both. */
+  empty?: string;
+}) {
   if (items.length === 0) {
     return (
       <div className="border-border text-muted-foreground rounded-xl border border-dashed px-4 py-16 text-center text-sm">
-        Belum ada karya yang dipublikasikan. Jadilah yang pertama.
+        {empty}
       </div>
     );
   }

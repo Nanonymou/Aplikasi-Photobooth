@@ -3,9 +3,16 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { AppHeader } from "@/components/layout/app-header";
+import { ShowcaseFilters } from "@/components/showcase/showcase-filters";
 import { ShowcaseGrid } from "@/components/showcase/showcase-grid";
 import { Button } from "@/components/ui/button";
-import { SHOWCASE_ITEMS } from "@/lib/showcase/feed";
+import {
+  browseShowcase,
+  categoryCounts,
+  parseCategory,
+  parseSort,
+  SHOWCASE_ITEMS,
+} from "@/lib/showcase/feed";
 
 export const metadata: Metadata = {
   title: "Jelajah Karya — FrameStudio AI",
@@ -20,8 +27,22 @@ export const metadata: Metadata = {
  * a shared link or a search, and asking them to make an account before they have
  * seen anything is asking them to leave. The account menu in the header is the
  * only nudge — everything on this page is readable signed out.
+ *
+ * The filter and the ordering are read from the query string here rather than
+ * held in the browser, so a filtered wall is a link that can be sent, the back
+ * button undoes a choice, and the page still works before any JavaScript
+ * arrives. An unrecognised value falls back rather than erroring: this is a URL
+ * strangers type and edit.
  */
-export default function ShowcasePage() {
+export default async function ShowcasePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const query = await searchParams;
+  const category = parseCategory(query.kategori);
+  const sort = parseSort(query.urut);
+  const items = browseShowcase(SHOWCASE_ITEMS, { category, sort });
   return (
     <div className="bg-background flex min-h-dvh flex-col">
       <AppHeader title="Jelajah karya" />
@@ -45,7 +66,25 @@ export default function ShowcasePage() {
           </Button>
         </div>
 
-        <ShowcaseGrid items={SHOWCASE_ITEMS} />
+        <ShowcaseFilters
+          category={category}
+          sort={sort}
+          counts={categoryCounts(SHOWCASE_ITEMS)}
+          total={SHOWCASE_ITEMS.length}
+        />
+
+        <p className="text-muted-foreground text-xs tabular-nums" aria-live="polite">
+          {items.length} karya
+        </p>
+
+        <ShowcaseGrid
+          items={items}
+          empty={
+            category
+              ? "Belum ada karya di kategori ini. Coba kategori lain."
+              : undefined
+          }
+        />
       </main>
     </div>
   );
