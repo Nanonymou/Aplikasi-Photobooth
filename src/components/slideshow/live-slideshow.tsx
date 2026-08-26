@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ChevronLeft,
   ChevronRight,
+  Gauge,
   Maximize,
   Pause,
   Play,
@@ -14,14 +15,24 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { SLIDESHOW_ITEMS } from "@/lib/slideshow/live-feed";
+import {
+  PACE_OPTIONS,
+  setPace,
+  stepPace,
+  usePace,
+} from "@/lib/slideshow/pace";
 import { cn } from "@/lib/utils";
 
-/** How long each photo holds before the next slides in, while playing. */
-const ADVANCE_MS = 5000;
 /** Idle time before the organizer controls fade away. */
 const CONTROLS_IDLE_MS = 3500;
-/** Where the organizer lands on exit. */
-const EXIT_TO = "/admin";
+/**
+ * Where the organizer lands on exit.
+ *
+ * The editor, not the admin console: the slideshow is an operator's screen and
+ * an operator has no `admin.console` permission, so closing the wall would land
+ * on "akses ditolak".
+ */
+const EXIT_TO = "/editor";
 
 /**
  * Live slideshow: the event's shared photos on the big screen.
@@ -29,8 +40,9 @@ const EXIT_TO = "/admin";
  * The organizer projects this and lets it run: shared frames cross-fade one after
  * another, newest first, over a blurred fill so any aspect ratio looks intentional
  * on a wide screen. It plays on its own; the presenter controls — play/pause, step,
- * fullscreen, exit — surface on movement and fade back out so the wall stays clean.
- * Arrow keys step, space toggles play. Gated to organizers by the page around it.
+ * pace, fullscreen, exit — surface on movement and fade back out so the wall stays
+ * clean. Arrow keys step, up/down change the pace, space toggles play. Gated to
+ * organizers by the page around it.
  */
 export function LiveSlideshow({ eventName }: { eventName: string }) {
   const router = useRouter();
@@ -41,6 +53,7 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
   const [playing, setPlaying] = useState(true);
   const [wake, setWake] = useState(0);
   const [idleHidden, setIdleHidden] = useState(false);
+  const pace = usePace();
 
   const current = items[index];
 
@@ -57,9 +70,9 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
   // timer pattern, not a synchronous setState in the effect body.
   useEffect(() => {
     if (!playing || items.length < 2) return;
-    const id = setInterval(next, ADVANCE_MS);
+    const id = setInterval(next, pace * 1000);
     return () => clearInterval(id);
-  }, [playing, next, items.length]);
+  }, [playing, next, items.length, pace]);
 
   // Fade the controls out after a spell of no activity; any wake resets it.
   const nudge = useCallback(() => {
@@ -76,6 +89,10 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
     function onKey(event: KeyboardEvent) {
       if (event.code === "ArrowRight") next();
       else if (event.code === "ArrowLeft") prev();
+      // Up is faster, which means a *shorter* hold — the arrow follows the wall,
+      // not the number.
+      else if (event.code === "ArrowUp") setPace(stepPace(pace, -1));
+      else if (event.code === "ArrowDown") setPace(stepPace(pace, 1));
       else if (event.code === "Space") {
         event.preventDefault();
         setPlaying((p) => !p);
@@ -84,7 +101,7 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, prev, nudge]);
+  }, [next, prev, nudge, pace]);
 
   function goFullscreen() {
     document.documentElement.requestFullscreen?.().catch(() => {});
@@ -128,6 +145,22 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
           className="absolute inset-0 m-auto max-h-full max-w-full object-contain drop-shadow-2xl"
         />
       </AnimatePresence>
+
+      {/* The hold made visible. Without it the pace buttons are four numbers the
+          operator has to time with a wristwatch to tell apart; with it, one
+          glance at the bar says how long the wall sits on a face. Keyed by the
+          slide so it restarts, and paused with the show. */}
+      <div className="absolute inset-x-0 top-0 z-10 h-0.5 bg-white/10">
+        <div
+          key={`${current.id}-${index}-${pace}`}
+          className="bg-white/70 h-full origin-left slideshow-progress"
+          style={{
+            animationDuration: `${pace}s`,
+            animationPlayState: playing ? "running" : "paused",
+          }}
+          aria-hidden="true"
+        />
+      </div>
 
       {/* Top: live badge + event, always legible over the photo. */}
       <div
@@ -183,6 +216,37 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Spelled out rather than hidden behind a menu: on a projected wall
+              the operator is standing up, often in the dark, and "make it
+              slower" should be one tap and no reading. */}
+          <div
+            role="group"
+            aria-label="Kecepatan"
+            className="mr-1 flex items-center gap-0.5 rounded-full bg-white/10 p-0.5"
+          >
+            <Gauge className="mx-1.5 size-3.5 text-white/50" aria-hidden="true" />
+            {PACE_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setPace(option);
+                  nudge();
+                }}
+                aria-pressed={option === pace}
+                aria-label={`${option} detik per foto`}
+                className={cn(
+                  "focus-visible:ring-ring/50 rounded-full px-2.5 py-1 text-xs tabular-nums outline-none transition-colors focus-visible:ring-2",
+                  option === pace
+                    ? "bg-white text-black"
+                    : "text-white/70 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                {option}s
+              </button>
+            ))}
+          </div>
+
           <Button
             variant="ghost"
             size="icon"

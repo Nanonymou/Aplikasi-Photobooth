@@ -215,6 +215,27 @@
   animation: page-label-swap 200ms ease-out;
 }
 
+/*
+ * The slideshow's hold, drawn as a bar.
+ *
+ * Its duration is set inline from the chosen pace, so one keyframe covers every
+ * speed. It is not switched off under reduced motion: this is a progress
+ * indicator, not decoration — a bar that stopped moving would say the wall had
+ * stopped, which is exactly the thing it exists to report.
+ */
+@keyframes slideshow-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@utility slideshow-progress {
+  animation: slideshow-progress linear forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-enter,
   .settings-reveal,
