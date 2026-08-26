@@ -6,6 +6,12 @@ import type { EditorProject } from "@/types/editor";
  * Ids are hardcoded on purpose: the same tree has to render on the server and on
  * the client. Once designs are persisted this is replaced by a fetch, but the
  * shape of the data stays identical.
+ *
+ * Three pages, not one, and deliberately unalike: a tall photostrip, a square
+ * card, and a landscape one. A project that seeds a single page lets a
+ * multi-page editor look finished while every part of it that has to cope with
+ * *differences between* pages — the strip, the fit-to-screen maths, per-page
+ * orientation — is never once exercised by the thing developers look at all day.
  */
 export const MOCK_PROJECT: EditorProject = {
   id: "prj_demo",
@@ -131,18 +137,20 @@ export const MOCK_PROJECT: EditorProject = {
     {
       id: "page_2",
       name: "Kartu ucapan",
-      width: 1800,
+      // Square: a different aspect ratio to the strip, so anything that assumes
+      // one shape breaks where somebody can see it.
+      width: 1200,
       height: 1200,
       background: { type: "solid", color: "#0f172a" },
       objects: [
         {
           id: "slot_4",
           kind: "slot",
-          name: "Slot foto utama",
-          x: 120,
-          y: 160,
-          width: 800,
-          height: 880,
+          name: "Foto utama",
+          x: 100,
+          y: 100,
+          width: 1000,
+          height: 760,
           rotation: 0,
           opacity: 1,
           locked: false,
@@ -152,54 +160,46 @@ export const MOCK_PROJECT: EditorProject = {
           borderWidth: 0,
           borderColor: "#ffffff",
           fill: "#1e293b",
-          photo: {
-            src: "/samples/photo-3.svg",
-            offsetX: 0,
-            offsetY: 0,
-            scale: 1,
-          },
-        },
-        {
-          id: "slot_5",
-          kind: "slot",
-          name: "Slot foto bulat",
-          x: 1040,
-          y: 160,
-          width: 360,
-          height: 360,
-          rotation: 0,
-          opacity: 1,
-          locked: false,
-          visible: true,
-          shape: "circle",
-          cornerRadius: 0,
-          borderWidth: 12,
-          borderColor: "#a78bfa",
-          fill: "#1e293b",
           photo: null,
         },
         {
           id: "text_2",
           kind: "text",
           name: "Ucapan",
-          x: 1040,
-          y: 600,
-          width: 640,
-          height: 200,
+          x: 100,
+          y: 920,
+          width: 1000,
+          height: 180,
           rotation: 0,
           opacity: 1,
           locked: false,
           visible: true,
-          text: "Selamat menempuh\nhidup baru, teman!",
+          text: "Terima kasih sudah datang!",
           fontFamily: "var(--font-geist-sans)",
-          fontSize: 56,
-          fontWeight: 600,
+          fontSize: 72,
+          fontWeight: 700,
           letterSpacing: 0,
-          lineHeight: 1.3,
-          align: "left",
+          lineHeight: 1.2,
+          align: "center",
           fill: "#f8fafc",
         },
       ],
+    },
+    {
+      id: "page_3",
+      name: "Sampul",
+      // Landscape, and empty on purpose: an editor should be looked at with at
+      // least one page that has nothing on it, because that is the state every
+      // new page starts in.
+      width: 1800,
+      height: 1200,
+      background: {
+        type: "gradient",
+        from: "#1e293b",
+        to: "#4c1d95",
+        angle: 160,
+      },
+      objects: [],
     },
   ],
 };
