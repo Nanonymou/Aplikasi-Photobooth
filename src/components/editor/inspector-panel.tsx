@@ -4,6 +4,8 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  RectangleHorizontal,
+  RectangleVertical,
   Settings2,
 } from "lucide-react";
 
@@ -14,7 +16,12 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useSelectedObjects } from "@/hooks/use-selected-objects";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
-import type { CanvasObject, TextObject } from "@/types/editor";
+import { pageOrientation } from "@/types/editor";
+import type {
+  CanvasObject,
+  PageOrientation,
+  TextObject,
+} from "@/types/editor";
 
 function Field({
   label,
@@ -218,6 +225,14 @@ function ObjectInspector({ object }: { object: CanvasObject }) {
 
 function PageInspector() {
   const page = useActivePage();
+  const setPageOrientation = useEditorStore(
+    (state) => state.setPageOrientation,
+  );
+
+  // A square is neither, and saying "Horizontal" about one would be a claim the
+  // button cannot honour — turning a square gives the same square back.
+  const square = page.width === page.height;
+  const orientation = square ? "" : pageOrientation(page);
 
   return (
     <div className="flex flex-col gap-4">
@@ -233,13 +248,39 @@ function PageInspector() {
         <dd className="text-right tabular-nums">
           {page.width} × {page.height}
         </dd>
-        <dt className="text-muted-foreground">Orientasi</dt>
-        <dd className="text-right">
-          {page.width >= page.height ? "Horizontal" : "Vertikal"}
-        </dd>
         <dt className="text-muted-foreground">Objek</dt>
         <dd className="text-right tabular-nums">{page.objects.length}</dd>
       </dl>
+
+      {/* Per page, not per project: a strip and the card that goes with it are
+          different shapes, and the control sits with the rest of this page's
+          properties so it is obvious which one it turns. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-xs">Orientasi</span>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={orientation}
+          onValueChange={(value) =>
+            value && setPageOrientation(value as PageOrientation)
+          }
+          className="w-full"
+        >
+          <ToggleGroupItem value="portrait" className="flex-1">
+            <RectangleVertical />
+            Vertikal
+          </ToggleGroupItem>
+          <ToggleGroupItem value="landscape" className="flex-1">
+            <RectangleHorizontal />
+            Horizontal
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          {square
+            ? "Halaman ini persegi, jadi memutarnya tidak mengubah apa pun. Ubah ukurannya dulu lewat template."
+            : "Memutar halaman menukar ukurannya dan mengecilkan isinya agar tetap muat — tanpa mengubah perbandingan sisi foto mana pun."}
+        </p>
+      </div>
 
       <div className="border-editor-border text-muted-foreground flex items-start gap-2 rounded-lg border border-dashed p-3 text-xs leading-relaxed">
         <Settings2 className="mt-0.5 size-3.5 shrink-0" />
