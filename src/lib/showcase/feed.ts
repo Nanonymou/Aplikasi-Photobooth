@@ -1,0 +1,190 @@
+/**
+ * The public showcase feed.
+ *
+ * Stand-in for the designs people have chosen to publish — the wall a visitor
+ * lands on before they have an account, and the one place in the app where the
+ * work is somebody else's. The real feed (published designs, newest or most
+ * used first, paged) replaces this constant without moving the screen.
+ *
+ * Every entry carries its page size rather than a thumbnail, because the shape
+ * *is* the information here: a photostrip, a square card and a wide cover are
+ * three different things to make, and a grid that crops them all to 4:3 hides
+ * the only thing a browser of templates is actually shopping for.
+ */
+
+export interface ShowcaseItem {
+  id: string;
+  title: string;
+  author: string;
+  /** Page size in design pixels — the card keeps this ratio. */
+  width: number;
+  height: number;
+  tags: string[];
+  /** How many people have started a design from this one. */
+  uses: number;
+  likes: number;
+  /** Pre-formatted, so there is no clock to hydrate. */
+  at: string;
+  /** Card tint. Stored rather than derived: this is data, not a computation. */
+  hue: number;
+}
+
+export const SHOWCASE_ITEMS: ShowcaseItem[] = [
+  {
+    id: "sc_strip_wisuda",
+    title: "Photostrip wisuda klasik",
+    author: "Rara Puspita",
+    width: 1200,
+    height: 1800,
+    tags: ["wisuda", "photostrip"],
+    uses: 1284,
+    likes: 342,
+    at: "2 hari lalu",
+    hue: 268,
+  },
+  {
+    id: "sc_kartu_nikah",
+    title: "Kartu ucapan pernikahan",
+    author: "Studio Kenanga",
+    width: 1200,
+    height: 1200,
+    tags: ["pernikahan", "kartu"],
+    uses: 968,
+    likes: 511,
+    at: "4 hari lalu",
+    hue: 340,
+  },
+  {
+    id: "sc_sampul_reuni",
+    title: "Sampul reuni angkatan",
+    author: "Bagas Priyo",
+    width: 1800,
+    height: 1200,
+    tags: ["reuni", "sampul"],
+    uses: 412,
+    likes: 126,
+    at: "5 hari lalu",
+    hue: 200,
+  },
+  {
+    id: "sc_strip_ultah",
+    title: "Strip ulang tahun neon",
+    author: "Nadia Ayu",
+    width: 1000,
+    height: 2000,
+    tags: ["ulang tahun", "photostrip"],
+    uses: 2130,
+    likes: 874,
+    at: "6 hari lalu",
+    hue: 300,
+  },
+  {
+    id: "sc_polaroid_kantor",
+    title: "Polaroid gathering kantor",
+    author: "Tim Halo",
+    width: 1200,
+    height: 1400,
+    tags: ["kantor", "polaroid"],
+    uses: 733,
+    likes: 208,
+    at: "1 minggu lalu",
+    hue: 32,
+  },
+  {
+    id: "sc_grid_arisan",
+    title: "Grid 2×2 arisan",
+    author: "Geng Melati",
+    width: 1400,
+    height: 1400,
+    tags: ["keluarga", "grid"],
+    uses: 356,
+    likes: 97,
+    at: "1 minggu lalu",
+    hue: 150,
+  },
+  {
+    id: "sc_strip_konser",
+    title: "Photostrip konser",
+    author: "Rio Mahendra",
+    width: 900,
+    height: 2100,
+    tags: ["konser", "photostrip"],
+    uses: 1502,
+    likes: 640,
+    at: "2 minggu lalu",
+    hue: 258,
+  },
+  {
+    id: "sc_kartu_lebaran",
+    title: "Kartu Lebaran keluarga",
+    author: "Keluarga Hartono",
+    width: 1200,
+    height: 1600,
+    tags: ["lebaran", "keluarga"],
+    uses: 1876,
+    likes: 921,
+    at: "2 minggu lalu",
+    hue: 96,
+  },
+  {
+    id: "sc_sampul_wisuda",
+    title: "Banner wisuda memanjang",
+    author: "Kampus Kreatif",
+    width: 2000,
+    height: 900,
+    tags: ["wisuda", "banner"],
+    uses: 288,
+    likes: 74,
+    at: "3 minggu lalu",
+    hue: 220,
+  },
+  {
+    id: "sc_hati_valentine",
+    title: "Frame hati valentine",
+    author: "Dewi Anggraini",
+    width: 1200,
+    height: 1500,
+    tags: ["valentine", "hati"],
+    uses: 1104,
+    likes: 588,
+    at: "3 minggu lalu",
+    hue: 350,
+  },
+  {
+    id: "sc_strip_anak",
+    title: "Strip ulang tahun anak",
+    author: "Mama Kirana",
+    width: 1000,
+    height: 1900,
+    tags: ["anak", "photostrip"],
+    uses: 645,
+    likes: 231,
+    at: "1 bulan lalu",
+    hue: 48,
+  },
+  {
+    id: "sc_kartu_natal",
+    title: "Kartu Natal hangat",
+    author: "Studio Cemara",
+    width: 1200,
+    height: 1200,
+    tags: ["natal", "kartu"],
+    uses: 812,
+    likes: 405,
+    at: "1 bulan lalu",
+    hue: 8,
+  },
+];
+
+/** Compact counts, so "1.284" does not eat a card's width. */
+export function formatCount(value: number): string {
+  if (value < 1000) return String(value);
+  const thousands = value / 1000;
+  return `${thousands >= 10 ? Math.round(thousands) : thousands.toFixed(1).replace(".", ",")} rb`;
+}
+
+/** Portrait, square or landscape — what the card's label says out loud. */
+export function shapeLabel(item: ShowcaseItem): string {
+  if (item.width === item.height) return "Persegi";
+  return item.width > item.height ? "Horizontal" : "Vertikal";
+}

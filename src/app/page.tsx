@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Aperture, ArrowRight } from "lucide-react";
+import { Aperture, ArrowRight, Images } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +30,15 @@ export default function Home() {
         <p className="text-muted-foreground text-xs">
           Tanpa akun — karyamu tersimpan di perangkat ini.
         </p>
+
+        {/* The showcase needs a door from the front page, and it is the one
+            thing here a visitor can look at before deciding anything. */}
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/jelajah">
+            <Images />
+            Lihat karya komunitas
+          </Link>
+        </Button>
       </div>
 
       <p className="text-muted-foreground text-sm">
