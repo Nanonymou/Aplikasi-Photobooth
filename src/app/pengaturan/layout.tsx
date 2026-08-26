@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
+import { SectionTransition } from "@/components/settings/section-transition";
 import { SettingsNav } from "@/components/settings/settings-nav";
+import { Toaster } from "@/components/ui/toaster";
 import { requireAccount } from "@/lib/auth/page-guard";
 
 /**
@@ -28,9 +30,13 @@ export default async function SettingsLayout({
       <AppHeader title="Pengaturan" />
       <SettingsNav />
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6">
-        {children}
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6">
+        <SectionTransition>{children}</SectionTransition>
       </main>
+
+      {/* Saves here confirm themselves the same way saves elsewhere in the app
+          do; without this the toast has nowhere to land. */}
+      <Toaster />
     </div>
   );
 }

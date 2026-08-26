@@ -46,7 +46,7 @@ function Article({
         </div>
       </summary>
 
-      <div className="text-muted-foreground flex flex-col gap-2 px-4 pt-1 pb-4 pl-11 text-sm leading-relaxed">
+      <div className="settings-reveal text-muted-foreground flex flex-col gap-2 px-4 pt-1 pb-4 pl-11 text-sm leading-relaxed">
         {article.body.map((paragraph) => (
           <p key={paragraph} className="text-pretty">
             {paragraph}

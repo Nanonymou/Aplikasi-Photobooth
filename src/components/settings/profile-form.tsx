@@ -7,6 +7,7 @@ import { Avatar } from "@/components/auth/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { setMockProfile, useAccount } from "@/lib/auth/use-account";
+import { toast } from "@/store/toast-store";
 import {
   NAME_MAX,
   nameProblem,
@@ -139,6 +140,16 @@ export function ProfileForm() {
       setPhotoTouched(false);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), SAVED_MS);
+
+      // Two confirmations, doing two jobs: the bar says the form is clean and
+      // stays that way, the toast says *something just happened* and leaves.
+      // Only the second one is noticeable if you were looking at the photo
+      // rather than at the button you pressed.
+      toast({
+        variant: "success",
+        title: "Profil tersimpan",
+        description: draft.name,
+      });
     } catch {
       setFailed(true);
     } finally {
@@ -306,7 +317,7 @@ export function ProfileForm() {
             {busy ? (
               <Loader2 className="animate-spin" />
             ) : justSaved ? (
-              <Check />
+              <Check className="settings-confirm" />
             ) : (
               <Save />
             )}

@@ -58,7 +58,7 @@ export function UpgradeButton({
       {busy ? (
         <Loader2 className="animate-spin" />
       ) : recorded ? (
-        <Check />
+        <Check className="settings-confirm" />
       ) : (
         <Sparkles />
       )}
