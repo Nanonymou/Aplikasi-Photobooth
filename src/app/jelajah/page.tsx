@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { ShowcaseFilters } from "@/components/showcase/showcase-filters";
-import { ShowcaseGrid } from "@/components/showcase/showcase-grid";
+import { ShowcaseResults } from "@/components/showcase/showcase-results";
 import { Button } from "@/components/ui/button";
 import {
   browseShowcase,
@@ -43,6 +43,7 @@ export default async function ShowcasePage({
   const category = parseCategory(query.kategori);
   const sort = parseSort(query.urut);
   const items = browseShowcase(SHOWCASE_ITEMS, { category, sort });
+  const savedOnly = query.simpan === "1";
   return (
     <div className="bg-background flex min-h-dvh flex-col">
       <AppHeader title="Jelajah karya" />
@@ -69,21 +70,15 @@ export default async function ShowcasePage({
         <ShowcaseFilters
           category={category}
           sort={sort}
+          savedOnly={savedOnly}
           counts={categoryCounts(SHOWCASE_ITEMS)}
           total={SHOWCASE_ITEMS.length}
         />
 
-        <p className="text-muted-foreground text-xs tabular-nums" aria-live="polite">
-          {items.length} karya
-        </p>
-
-        <ShowcaseGrid
+        <ShowcaseResults
           items={items}
-          empty={
-            category
-              ? "Belum ada karya di kategori ini. Coba kategori lain."
-              : undefined
-          }
+          savedOnly={savedOnly}
+          category={category}
         />
       </main>
     </div>

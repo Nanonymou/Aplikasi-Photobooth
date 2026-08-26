@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Heart, Images, Sparkles, Wand2 } from "lucide-react";
+import { Bookmark, Heart, Images, Sparkles, Wand2 } from "lucide-react";
 
 import { initials } from "@/lib/auth/initials";
+import {
+  toggleLike,
+  toggleSave,
+  useLiked,
+  useSaved,
+} from "@/lib/showcase/reactions";
 import {
   formatCount,
   shapeLabel,
@@ -32,10 +37,11 @@ import { cn } from "@/lib/utils";
  * things inside it is a card a keyboard cannot use.
  */
 export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
-  // Per-visitor and not persisted, matching the mock feed behind it. A real
-  // like posts and reconciles; what is real here is that the count moves the
-  // moment it is pressed rather than after a round trip.
-  const [liked, setLiked] = useState(false);
+  // The count moves the moment it is pressed rather than after a round trip —
+  // which is what a real like does too, it just reconciles afterwards. The
+  // stored feed count plus this visitor's own vote is the whole arithmetic.
+  const liked = useLiked(item.id);
+  const saved = useSaved(item.id);
   const likes = item.likes + (liked ? 1 : 0);
 
   return (
@@ -100,21 +106,39 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
         </div>
 
         <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs tabular-nums">
-          <button
-            type="button"
-            onClick={() => setLiked((on) => !on)}
-            aria-pressed={liked}
-            aria-label={liked ? `Batal suka ${item.title}` : `Suka ${item.title}`}
-            className={cn(
-              "focus-visible:ring-ring/50 -ml-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 outline-none transition-colors focus-visible:ring-2",
-              liked
-                ? "text-rose-500"
-                : "hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Heart className={cn("size-3.5", liked && "fill-current")} />
-            {formatCount(likes)}
-          </button>
+          <div className="flex items-center gap-0.5">
+            {/* Two gestures, not one: a like is a signal to whoever made this, a
+                save is a note to yourself. A single star would mean both and
+                therefore neither. */}
+            <button
+              type="button"
+              onClick={() => toggleLike(item.id)}
+              aria-pressed={liked}
+              aria-label={liked ? `Batal suka ${item.title}` : `Suka ${item.title}`}
+              className={cn(
+                "focus-visible:ring-ring/50 -ml-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 outline-none transition-colors focus-visible:ring-2",
+                liked ? "text-rose-500" : "hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Heart className={cn("size-3.5", liked && "fill-current")} />
+              {formatCount(likes)}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleSave(item.id)}
+              aria-pressed={saved}
+              aria-label={
+                saved ? `Hapus ${item.title} dari simpanan` : `Simpan ${item.title}`
+              }
+              className={cn(
+                "focus-visible:ring-ring/50 flex items-center rounded-full p-1 outline-none transition-colors focus-visible:ring-2",
+                saved ? "text-primary" : "hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Bookmark className={cn("size-3.5", saved && "fill-current")} />
+            </button>
+          </div>
 
           <span className="flex items-center gap-1">
             <Sparkles className="size-3.5" />

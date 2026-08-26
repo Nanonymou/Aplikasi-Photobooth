@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Bookmark, Check } from "lucide-react";
 
 import {
   CATEGORIES,
@@ -18,18 +18,15 @@ import { cn } from "@/lib/utils";
  * arrives on stays the address of the plain wall.
  */
 function hrefFor(
-  category: CategoryId | null,
-  sort: SortId,
-  patch: { category?: CategoryId | null; sort?: SortId },
+  state: { category: CategoryId | null; sort: SortId; savedOnly: boolean },
+  patch: { category?: CategoryId | null; sort?: SortId; savedOnly?: boolean },
 ): string {
-  const next = {
-    category: patch.category === undefined ? category : patch.category,
-    sort: patch.sort ?? sort,
-  };
+  const next = { ...state, ...patch };
 
   const query = new URLSearchParams();
   if (next.category) query.set("kategori", next.category);
   if (next.sort !== "populer") query.set("urut", next.sort);
+  if (next.savedOnly) query.set("simpan", "1");
 
   const search = query.toString();
   return search ? `/jelajah?${search}` : "/jelajah";
@@ -52,21 +49,25 @@ const chipOff = "border-border text-muted-foreground hover:bg-accent hover:text-
 export function ShowcaseFilters({
   category,
   sort,
+  savedOnly,
   counts,
   total,
 }: {
   category: CategoryId | null;
   sort: SortId;
+  savedOnly: boolean;
   counts: Record<CategoryId, number>;
   total: number;
 }) {
+  const state = { category, sort, savedOnly };
+
   return (
     <div className="flex flex-col gap-3">
       <nav aria-label="Kategori" className="-mx-4 overflow-x-auto px-4">
         <ul className="flex w-max gap-1.5">
           <li>
             <Link
-              href={hrefFor(category, sort, { category: null })}
+              href={hrefFor(state, { category: null })}
               aria-current={category === null ? "true" : undefined}
               className={cn(chip, category === null ? chipOn : chipOff)}
             >
@@ -79,7 +80,7 @@ export function ShowcaseFilters({
             return (
               <li key={option.id}>
                 <Link
-                  href={hrefFor(category, sort, { category: option.id })}
+                  href={hrefFor(state, { category: option.id })}
                   aria-current={active ? "true" : undefined}
                   className={cn(chip, active ? chipOn : chipOff)}
                 >
@@ -91,6 +92,25 @@ export function ShowcaseFilters({
               </li>
             );
           })}
+
+          {/* A different axis to the categories, so it is set apart rather than
+              standing in the row as if it were another occasion. The count is
+              missing on purpose: only this browser knows it, and a number
+              rendered on the server would be a guess. */}
+          <li className="ml-1.5 flex items-center border-l pl-3">
+            <Link
+              href={hrefFor(state, { savedOnly: !savedOnly })}
+              aria-current={savedOnly ? "true" : undefined}
+              className={cn(
+                chip,
+                "flex items-center gap-1.5",
+                savedOnly ? chipOn : chipOff,
+              )}
+            >
+              <Bookmark className={cn("size-3.5", savedOnly && "fill-current")} />
+              Tersimpan
+            </Link>
+          </li>
         </ul>
       </nav>
 
@@ -104,7 +124,7 @@ export function ShowcaseFilters({
           return (
             <Link
               key={option.id}
-              href={hrefFor(category, sort, { sort: option.id })}
+              href={hrefFor(state, { sort: option.id })}
               aria-current={active ? "true" : undefined}
               className={cn(
                 "focus-visible:ring-ring/50 flex items-center gap-1 rounded-md px-2 py-1 outline-none transition-colors focus-visible:ring-2",
