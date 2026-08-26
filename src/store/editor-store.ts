@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 
+import { createId } from "@/lib/editor/id";
 import { MOCK_PROJECT } from "@/lib/editor/mock-project";
 import type {
   CanvasObject,
@@ -86,6 +87,12 @@ export interface EditorState {
   setPanel: (panel: PanelId | null) => void;
 
   setActivePage: (pageId: string) => void;
+  /** Adds a blank page after the active one and opens it. */
+  addPage: () => void;
+  /** Copies the active page — objects and all — and opens the copy. */
+  duplicatePage: () => void;
+  /** Removes a page. Refuses the last one: a project with no page has nothing to show. */
+  removePage: (pageId: string) => void;
 
   setZoom: (zoom: number) => void;
   zoomIn: () => void;
@@ -199,6 +206,22 @@ function reorderObjects(
   return next;
 }
 
+/**
+ * A default name for a page about to sit at `index`.
+ *
+ * Named after where it lands, because the strip shows it next to that position
+ * and a page labelled "Halaman 4" sitting second reads as a bug. Counting past
+ * names already taken keeps that from colliding with a page somebody renamed —
+ * or with one added, deleted, and added again.
+ */
+function nextPageName(pages: CanvasPage[], index: number): string {
+  const taken = new Set(pages.map((page) => page.name));
+
+  let number = index + 1;
+  while (taken.has(`Halaman ${number}`)) number += 1;
+  return `Halaman ${number}`;
+}
+
 /** Pushes the current project onto the undo stack and clears the redo stack. */
 function commit(
   state: EditorState,
@@ -258,6 +281,110 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
   setActivePage: (activePageId) =>
     set({ activePageId, selectedIds: [], zoomMode: "fit", pan: { x: 0, y: 0 } }),
+
+  addPage: () =>
+    set((state) => {
+      const index = state.project.pages.findIndex(
+        (page) => page.id === state.activePageId,
+      );
+      const current = state.project.pages[index] ?? state.project.pages[0];
+
+      // Inherits size and background from the page it follows: a project full of
+      // photostrips almost never wants its next page to be something else, and
+      // changing it is one control away.
+      const page: CanvasPage = {
+        id: createId("page"),
+        name: nextPageName(state.project.pages, index + 1),
+        width: current.width,
+        height: current.height,
+        background: current.background,
+        objects: [],
+      };
+
+      const pages = [...state.project.pages];
+      // After the current one, not at the end: pages are read in order, and a
+      // page added while looking at page two belongs next to page two.
+      pages.splice(index + 1, 0, page);
+
+      return {
+        ...commit(state, {
+          ...state.project,
+          updatedAt: new Date().toISOString(),
+          pages,
+        }),
+        activePageId: page.id,
+        selectedIds: [],
+        zoomMode: "fit",
+        pan: { x: 0, y: 0 },
+      };
+    }),
+
+  duplicatePage: () =>
+    set((state) => {
+      const index = state.project.pages.findIndex(
+        (page) => page.id === state.activePageId,
+      );
+      const current = state.project.pages[index];
+      if (!current) return {};
+
+      // Fresh ids for the objects too. Two objects sharing an id would make
+      // selection and the layer list act on both at once — a copy that is
+      // haunted by its original.
+      const page: CanvasPage = {
+        ...current,
+        id: createId("page"),
+        name: `${current.name} (salinan)`,
+        objects: current.objects.map((object) => ({
+          ...object,
+          id: createId(object.kind),
+        })),
+      };
+
+      const pages = [...state.project.pages];
+      pages.splice(index + 1, 0, page);
+
+      return {
+        ...commit(state, {
+          ...state.project,
+          updatedAt: new Date().toISOString(),
+          pages,
+        }),
+        activePageId: page.id,
+        selectedIds: [],
+        zoomMode: "fit",
+        pan: { x: 0, y: 0 },
+      };
+    }),
+
+  removePage: (pageId) =>
+    set((state) => {
+      // The last page stays. Deleting it would leave the stage with nothing to
+      // render and no way back except undo, which is a worse experience than
+      // simply not offering the button.
+      if (state.project.pages.length <= 1) return {};
+
+      const index = state.project.pages.findIndex((page) => page.id === pageId);
+      if (index === -1) return {};
+
+      const pages = state.project.pages.filter((page) => page.id !== pageId);
+
+      // Land on the neighbour rather than jumping to the first page: after
+      // deleting page four, page three is where the person was looking.
+      const neighbour = pages[Math.min(index, pages.length - 1)];
+
+      return {
+        ...commit(state, {
+          ...state.project,
+          updatedAt: new Date().toISOString(),
+          pages,
+        }),
+        activePageId:
+          state.activePageId === pageId ? neighbour.id : state.activePageId,
+        selectedIds: [],
+        zoomMode: "fit",
+        pan: { x: 0, y: 0 },
+      };
+    }),
 
   setZoom: (zoom) => set({ zoom: clampZoom(zoom), zoomMode: "manual" }),
 

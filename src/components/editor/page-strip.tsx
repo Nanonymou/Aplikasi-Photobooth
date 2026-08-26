@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useEditorStore } from "@/store/editor-store";
+import { toast } from "@/store/toast-store";
 import { pageOrientation } from "@/types/editor";
 import { cn } from "@/lib/utils";
 
@@ -23,13 +32,39 @@ import { cn } from "@/lib/utils";
  * Each chip says the page's shape as well as its name. Two pages called
  * "Halaman 2" and "Halaman 3" are impossible to tell apart in a list; a tall one
  * and a wide one are not.
+ *
+ * Adding, duplicating, and deleting all act on the page that is open, so there
+ * is never a question of which one a button meant. None of them asks for
+ * confirmation — the editor deletes objects the same way, and undo is one
+ * keystroke — but deleting says so, because a whole page leaving the screen is
+ * worth a sentence.
  */
 export function PageStrip() {
   const pages = useEditorStore((state) => state.project.pages);
   const activePageId = useEditorStore((state) => state.activePageId);
   const setActivePage = useEditorStore((state) => state.setActivePage);
+  const addPage = useEditorStore((state) => state.addPage);
+  const duplicatePage = useEditorStore((state) => state.duplicatePage);
+  const removePage = useEditorStore((state) => state.removePage);
 
   const activeRef = useRef<HTMLButtonElement>(null);
+
+  // The last page has no delete button rather than a disabled one: a control
+  // that is never usable in a one-page project is a control that only ever
+  // teaches people it does nothing.
+  const canRemove = pages.length > 1;
+
+  function remove() {
+    const page = pages.find((candidate) => candidate.id === activePageId);
+    if (!page || !canRemove) return;
+
+    removePage(page.id);
+    toast({
+      variant: "info",
+      title: `"${page.name}" dihapus`,
+      description: "Ctrl+Z mengembalikannya.",
+    });
+  }
 
   // Pages can also change from the keyboard and from the canvas, so the strip
   // follows the selection rather than assuming a click put it there.
@@ -42,8 +77,60 @@ export function PageStrip() {
       role="tablist"
       aria-label="Halaman"
       aria-orientation="horizontal"
-      className="bg-editor-chrome border-editor-border flex shrink-0 items-center gap-1.5 overflow-x-auto border-t px-3 py-2"
+      className="bg-editor-chrome border-editor-border flex shrink-0 items-center gap-1.5 overflow-x-auto border-t py-2 pr-3 pl-2"
     >
+      {/* Actions first, pinned left, so they stay put as the strip grows and
+          scrolls — a button that walks away is a button people stop reaching
+          for. */}
+      <div className="sticky left-0 z-10 flex shrink-0 items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={addPage}
+              aria-label="Tambah halaman"
+            >
+              <Plus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Tambah halaman kosong</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={duplicatePage}
+              aria-label="Duplikasi halaman"
+            >
+              <Copy />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Duplikasi halaman ini</TooltipContent>
+        </Tooltip>
+
+        {canRemove && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={remove}
+                aria-label="Hapus halaman"
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Hapus halaman ini</TooltipContent>
+          </Tooltip>
+        )}
+
+        <Separator orientation="vertical" className="mx-1 h-6" />
+      </div>
+
       {pages.map((page, index) => {
         const active = page.id === activePageId;
         const landscape = pageOrientation(page) === "landscape";
