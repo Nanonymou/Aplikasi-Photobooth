@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Heart, Images, Sparkles, Wand2 } from "lucide-react";
+import { Bookmark, GitBranch, Heart, Images, Wand2 } from "lucide-react";
 
 import { initials } from "@/lib/auth/initials";
 import {
@@ -46,12 +46,12 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
 
   return (
     <article className="bg-card border-border hover:border-primary/50 mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-xl border transition-colors">
-      {/* Straight into the editor, not to a detail page that does not exist yet:
-          "start from this" is the only thing a signed-out visitor can actually
-          do with a template. */}
+      {/* Straight into the editor, not to a detail page that does not exist yet.
+          The id rides along so the new session can credit what it came from —
+          a remix without the name of what was remixed is just a copy. */}
       <Link
-        href="/tamu"
-        aria-label={`Buat desain dari ${item.title} oleh ${item.author}`}
+        href={`/tamu?remix=${item.id}`}
+        aria-label={`Remix ${item.title} oleh ${item.author}`}
         className="focus-visible:ring-ring/50 group/preview relative flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         style={{
           aspectRatio: `${item.width} / ${item.height}`,
@@ -70,7 +70,7 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
             focus-within would light it up while the like button has focus. */}
         <span className="bg-background/85 text-foreground pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium opacity-0 backdrop-blur transition-opacity group-hover/preview:opacity-100 group-focus-visible/preview:opacity-100">
           <Wand2 className="size-3.5" />
-          Pakai desain ini
+          Remix desain ini
         </span>
       </Link>
 
@@ -91,6 +91,17 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
             <p className="text-muted-foreground truncate text-xs">
               {item.author} · {item.at}
             </p>
+            {/* Credit where the design came from, on the card rather than only
+                on a detail page: this line is the reason the person underneath
+                it was willing to publish at all. */}
+            {item.remixOf && (
+              <p className="text-muted-foreground/80 mt-0.5 flex items-center gap-1 truncate text-[11px]">
+                <GitBranch className="size-3 shrink-0" />
+                <span className="truncate">
+                  Remix dari {item.remixOf.title} · {item.remixOf.author}
+                </span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -141,8 +152,8 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
           </div>
 
           <span className="flex items-center gap-1">
-            <Sparkles className="size-3.5" />
-            {formatCount(item.uses)} dipakai
+            <GitBranch className="size-3.5" />
+            {formatCount(item.remixes)} remix
           </span>
         </div>
       </div>

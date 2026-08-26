@@ -35,12 +35,12 @@ export const CATEGORIES: { id: CategoryId; label: string }[] = [
   { id: "komunitas", label: "Komunitas" },
 ];
 
-export type SortId = "terbaru" | "populer" | "dipakai";
+export type SortId = "terbaru" | "populer" | "remix";
 
 export const SORTS: { id: SortId; label: string }[] = [
   { id: "terbaru", label: "Terbaru" },
   { id: "populer", label: "Terpopuler" },
-  { id: "dipakai", label: "Paling dipakai" },
+  { id: "remix", label: "Paling diremix" },
 ];
 
 export const DEFAULT_SORT: SortId = "populer";
@@ -55,7 +55,9 @@ export interface ShowcaseItem {
   height: number;
   tags: string[];
   /** How many people have started a design from this one. */
-  uses: number;
+  remixes: number;
+  /** The design this one was started from, when it was not started from blank. */
+  remixOf?: { id: string; title: string; author: string };
   likes: number;
   /** Pre-formatted for display, so there is no clock to hydrate. */
   at: string;
@@ -74,7 +76,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1800,
     tags: ["wisuda", "photostrip"],
-    uses: 1284,
+    remixes: 1284,
     likes: 342,
     at: "2 hari lalu",
     publishedAt: "2026-08-24T09:00:00.000Z",
@@ -88,7 +90,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1200,
     tags: ["pernikahan", "kartu"],
-    uses: 968,
+    remixes: 968,
     likes: 511,
     at: "4 hari lalu",
     publishedAt: "2026-08-22T14:30:00.000Z",
@@ -102,7 +104,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1800,
     height: 1200,
     tags: ["reuni", "sampul"],
-    uses: 412,
+    remixes: 412,
     likes: 126,
     at: "5 hari lalu",
     publishedAt: "2026-08-21T08:15:00.000Z",
@@ -116,7 +118,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1000,
     height: 2000,
     tags: ["ulang tahun", "photostrip"],
-    uses: 2130,
+    remixes: 2130,
     likes: 874,
     at: "6 hari lalu",
     publishedAt: "2026-08-20T19:45:00.000Z",
@@ -130,7 +132,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1400,
     tags: ["kantor", "polaroid"],
-    uses: 733,
+    remixes: 733,
     likes: 208,
     at: "1 minggu lalu",
     publishedAt: "2026-08-19T11:00:00.000Z",
@@ -144,7 +146,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1400,
     height: 1400,
     tags: ["keluarga", "grid"],
-    uses: 356,
+    remixes: 356,
     likes: 97,
     at: "1 minggu lalu",
     publishedAt: "2026-08-18T16:20:00.000Z",
@@ -158,7 +160,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 900,
     height: 2100,
     tags: ["konser", "photostrip"],
-    uses: 1502,
+    remixes: 1502,
     likes: 640,
     at: "2 minggu lalu",
     publishedAt: "2026-08-12T21:10:00.000Z",
@@ -172,7 +174,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1600,
     tags: ["lebaran", "keluarga"],
-    uses: 1876,
+    remixes: 1876,
     likes: 921,
     at: "2 minggu lalu",
     publishedAt: "2026-08-11T07:40:00.000Z",
@@ -182,11 +184,16 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     id: "sc_sampul_wisuda",
     title: "Banner wisuda memanjang",
     author: "Kampus Kreatif",
+    remixOf: {
+      id: "sc_strip_wisuda",
+      title: "Photostrip wisuda klasik",
+      author: "Rara Puspita",
+    },
     category: "wisuda",
     width: 2000,
     height: 900,
     tags: ["wisuda", "banner"],
-    uses: 288,
+    remixes: 288,
     likes: 74,
     at: "3 minggu lalu",
     publishedAt: "2026-08-05T10:05:00.000Z",
@@ -200,7 +207,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1500,
     tags: ["valentine", "hati"],
-    uses: 1104,
+    remixes: 1104,
     likes: 588,
     at: "3 minggu lalu",
     publishedAt: "2026-08-04T13:25:00.000Z",
@@ -210,11 +217,16 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     id: "sc_strip_anak",
     title: "Strip ulang tahun anak",
     author: "Mama Kirana",
+    remixOf: {
+      id: "sc_strip_ultah",
+      title: "Strip ulang tahun neon",
+      author: "Nadia Ayu",
+    },
     category: "ulang-tahun",
     width: 1000,
     height: 1900,
     tags: ["anak", "photostrip"],
-    uses: 645,
+    remixes: 645,
     likes: 231,
     at: "1 bulan lalu",
     publishedAt: "2026-07-26T09:30:00.000Z",
@@ -228,7 +240,7 @@ export const SHOWCASE_ITEMS: ShowcaseItem[] = [
     width: 1200,
     height: 1200,
     tags: ["natal", "kartu"],
-    uses: 812,
+    remixes: 812,
     likes: 405,
     at: "1 bulan lalu",
     publishedAt: "2026-07-24T18:00:00.000Z",
@@ -284,7 +296,7 @@ export function browseShowcase(
   } else if (sort === "populer") {
     ordered.sort((a, b) => b.likes - a.likes);
   } else {
-    ordered.sort((a, b) => b.uses - a.uses);
+    ordered.sort((a, b) => b.remixes - a.remixes);
   }
 
   return ordered;
@@ -298,4 +310,9 @@ export function categoryCounts(items: ShowcaseItem[]): Record<CategoryId, number
 
   for (const item of items) counts[item.category] += 1;
   return counts;
+}
+
+/** One design by id, for a remix credit that has only the id to go on. */
+export function showcaseItem(id: string): ShowcaseItem | null {
+  return SHOWCASE_ITEMS.find((item) => item.id === id) ?? null;
 }
