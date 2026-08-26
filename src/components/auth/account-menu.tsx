@@ -10,6 +10,7 @@ import {
   Projector,
   ShieldCheck,
   Settings,
+  TrendingUp,
 } from "lucide-react";
 
 import { RoleGate } from "@/components/auth/role-gate";
@@ -104,6 +105,12 @@ export function AccountMenu() {
           <Link href="/galeri">
             <Images />
             Galeri saya
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/kreator">
+            <TrendingUp />
+            Dasbor kreator
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
