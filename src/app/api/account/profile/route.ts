@@ -8,7 +8,6 @@ export const runtime = "nodejs";
 
 /** Long enough for a real name, short enough not to be a paragraph. */
 const NAME_MAX = 120;
-const URL_MAX = 2048;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -40,10 +39,17 @@ export async function GET(): Promise<Response> {
 /**
  * Updates the caller's own profile.
  *
- * Only the display name and avatar. A request that names a `role` is refused
+ * The display name, and nothing else. A request that names a `role` is refused
  * outright rather than quietly ignored: silently dropping it would let a caller
  * believe they had changed something they had not, and the attempt is worth
  * being explicit about — this is the exact shape of a privilege-escalation try.
+ *
+ * The picture is not here either, and no longer settable as a URL. `avatar_url`
+ * means one thing — what the sign-in provider sent (migration 0027) — and
+ * letting a caller write it turned the profile into a way to have the app
+ * display an arbitrary remote address under somebody's name, with the server
+ * fetching it on their behalf. A picture is now uploaded to
+ * `PUT /api/account/avatar`, which holds the bytes we serve.
  *
  * `null` clears a field; omitting it leaves the stored value alone. That
  * distinction is why the body is inspected key by key rather than spread.
@@ -63,7 +69,16 @@ export async function PATCH(request: Request): Promise<Response> {
     );
   }
 
-  const patch: { displayName?: string | null; avatarUrl?: string | null } = {};
+  // Named rather than ignored, for the same reason as `role`: a caller sending
+  // this believes it did something, and the honest answer is where to send it.
+  if ("avatarUrl" in body.value || "avatarKey" in body.value) {
+    return jsonError(
+      400,
+      "Foto profil diunggah lewat PUT /api/account/avatar.",
+    );
+  }
+
+  const patch: { displayName?: string | null } = {};
 
   if ("displayName" in body.value) {
     const name = body.value.displayName;
@@ -80,19 +95,6 @@ export async function PATCH(request: Request): Promise<Response> {
         return jsonError(400, `Nama maksimal ${NAME_MAX} karakter.`);
       } else patch.displayName = trimmed;
     }
-  }
-
-  if ("avatarUrl" in body.value) {
-    const url = body.value.avatarUrl;
-    if (url === null || url === "") {
-      patch.avatarUrl = null;
-    } else if (
-      typeof url !== "string" ||
-      !url.startsWith("https://") ||
-      url.length > URL_MAX
-    ) {
-      return jsonError(400, "URL avatar harus https dan wajar panjangnya.");
-    } else patch.avatarUrl = url;
   }
 
   if (Object.keys(patch).length === 0) {

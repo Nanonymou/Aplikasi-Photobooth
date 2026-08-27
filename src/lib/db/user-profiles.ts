@@ -29,9 +29,22 @@ interface UserProfileRow {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
+  avatar_key: string | null;
   role: UserRole;
   provider: AuthProvider;
   last_sign_in_at: Date | null;
+}
+
+/**
+ * The picture to draw for this person.
+ *
+ * An uploaded one wins over the provider's, because it is the one they chose.
+ * Both are kept (migration 0027) so removing the upload falls back to whatever
+ * Google or Apple sent rather than to a blank circle.
+ */
+function avatarFor(row: UserProfileRow): string | null {
+  if (row.avatar_key) return `/api/avatars/${row.avatar_key}`;
+  return row.avatar_url;
 }
 
 function toProfile(row: UserProfileRow): UserProfile {
@@ -39,7 +52,7 @@ function toProfile(row: UserProfileRow): UserProfile {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
-    avatarUrl: row.avatar_url,
+    avatarUrl: avatarFor(row),
     role: row.role,
     provider: row.provider,
     lastSignInAt: row.last_sign_in_at?.toISOString() ?? null,
@@ -114,12 +127,18 @@ export async function getUserProfile(id: string): Promise<UserProfile | null> {
  */
 export async function updateOwnProfile(
   id: string,
-  patch: { displayName?: string | null; avatarUrl?: string | null },
+  patch: {
+    displayName?: string | null;
+    avatarUrl?: string | null;
+    /** Blob-store key of a picture they uploaded; `null` removes it. */
+    avatarKey?: string | null;
+  },
 ): Promise<UserProfile | null> {
   const rows = await query<UserProfileRow>(
     `update user_profiles set
        display_name = case when $2::boolean then $3 else display_name end,
-       avatar_url   = case when $4::boolean then $5 else avatar_url end
+       avatar_url   = case when $4::boolean then $5 else avatar_url end,
+       avatar_key   = case when $6::boolean then $7 else avatar_key end
      where id = $1
      returning *`,
     [
@@ -128,6 +147,8 @@ export async function updateOwnProfile(
       patch.displayName ?? null,
       "avatarUrl" in patch,
       patch.avatarUrl ?? null,
+      "avatarKey" in patch,
+      patch.avatarKey ?? null,
     ],
   );
 
