@@ -16,9 +16,16 @@ export interface Plan {
   id: PlanId;
   name: string;
   tagline: string;
-  /** Rupiah per month, billed monthly. 0 for the free tier. */
+  /**
+   * Rupiah per month, billed monthly. 0 for the free tier.
+   *
+   * @deprecated Prices live in `plan_prices` (migration 0028) and arrive with
+   * `GET /api/billing/subscription` as `prices`. These two fields remain only
+   * until the screens that read them are moved across; a constant cannot express
+   * a price that changed last month, and it is not what anybody is charged.
+   */
   priceMonthly: number;
-  /** Rupiah per month, billed yearly (the discounted rate). */
+  /** @deprecated See `priceMonthly`. */
   priceYearly: number;
   features: string[];
   /**

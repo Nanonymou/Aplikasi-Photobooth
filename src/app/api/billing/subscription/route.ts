@@ -1,6 +1,7 @@
 import { getAccountId } from "@/lib/api/account";
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { callerOwners } from "@/lib/api/scope";
+import { currentPlanPrices } from "@/lib/db/plan-prices";
 import {
   cancelSubscription,
   FREE_PLAN,
@@ -37,6 +38,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The limits come back with it rather than being left for the client to look
  * up: the number the bar fills from and the sentence in the feature list are the
  * same promise, and the endpoint is where they are kept from drifting.
+ *
+ * Two different prices travel with it, and the difference is the point.
+ * `subscription.priceIdr` is what this account agreed to and does not move when
+ * the catalogue does; `prices` is what somebody signing up today would pay. A
+ * screen that showed the second where the first belongs would re-price every
+ * existing subscriber the first time marketing changed a number.
  */
 export async function GET(): Promise<Response> {
   try {
@@ -45,16 +52,18 @@ export async function GET(): Promise<Response> {
       callerOwners(),
     ]);
 
-    const subscription = accountId
-      ? await getSubscription(accountId)
-      : FREE_PLAN;
-    const usage = await planUsage(owners);
+    const [subscription, usage, prices] = await Promise.all([
+      accountId ? getSubscription(accountId) : Promise.resolve(FREE_PLAN),
+      planUsage(owners),
+      currentPlanPrices(),
+    ]);
 
     return Response.json(
       {
         subscription,
         usage,
         limits: planById(subscription.plan).limits,
+        prices,
         signedIn: accountId !== null,
       },
       { headers: { "cache-control": "private, no-store" } },
