@@ -32,7 +32,8 @@ semuanya bertanya lewat sana.
 | `user_profiles` (0012, 0027) | Satu baris per akun: email, nama tampilan, avatar, `role`, penyedia login. |
 | `role_permissions` (0014) | Kebijakan akses: peran mana boleh melakukan apa. |
 | `role_changes` (0023) | Riwayat: siapa mengubah peran siapa, dan kapan. |
-| `subscriptions` (0020) | Paket akun, siklus tagihan, status, dan periode berjalan. |
+| `subscriptions` (0020, 0028) | Paket akun, siklus tagihan, status, periode berjalan, dan harga yang disepakati. |
+| `plan_prices` (0028) | Riwayat harga tiap paket per siklus. Perubahan harga adalah baris baru. |
 
 Beberapa keputusan yang disengaja:
 
@@ -62,8 +63,20 @@ Beberapa keputusan yang disengaja:
   akan ikut terseret hanya untuk menggambar lingkaran 28 piksel.
 - **`subscriptions.plan` tidak pernah dinaikkan oleh permintaan.** Pilihan
   berbayar mendarat di `pending_plan`; hanya pembayaran terkonfirmasi yang boleh
-  memindahkannya. Harga dan daftar fiturnya sendiri hidup di aplikasi, bukan di
-  sini — itu copy yang berubah karena keputusan pemasaran.
+  memindahkannya.
+- **Copy hidup di aplikasi, uang hidup di sini.** Nama paket, tagline, dan
+  daftar fitur di halaman harga tetap di `src/lib/billing/plans.ts` — itu copy
+  yang berubah karena keputusan pemasaran, dan tabel hanya akan berarti menulis
+  ke basis data untuk membetulkan salah ketik. Harganya lain: konstanta yang
+  berubah membuat setiap pelanggan lama diam-diam jadi orang yang membayar harga
+  baru, dan harga lamanya berhenti ada — jadi tidak ada yang bisa menjawab
+  pertanyaan "kenapa saya ditagih segini bulan Maret". Karena itu `plan_prices`
+  (0028) menyimpan riwayatnya: perubahan harga adalah baris baru dengan
+  `effective_from`, bukan sebuah update.
+- **`subscriptions.price_idr` adalah potret, bukan pencarian.** Ia mencatat apa
+  yang disepakati akun ini, dan tidak ikut bergerak saat katalog berubah — itulah
+  yang membuat pelanggan lama bisa dipertahankan di harga lamanya. Membacanya
+  dari katalog saat menampilkan justru bug yang ditutup migrasi ini.
 
 ## Sesi
 
