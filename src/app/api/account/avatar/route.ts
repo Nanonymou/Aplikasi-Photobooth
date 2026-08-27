@@ -18,6 +18,52 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const MAX_EDGE = 2048;
 
 /**
+ * How many pictures one account may store in a window.
+ *
+ * Not a security boundary — the caller is signed in and the files are capped —
+ * but every upload is a write to disk, and nothing about a profile picture needs
+ * to happen eleven times in ten minutes. Ten is far above anybody adjusting
+ * their crop and far below a loop.
+ */
+const MAX_UPLOADS = 10;
+const WINDOW_MS = 10 * 60 * 1000;
+
+interface Window {
+  count: number;
+  /** When this window closes and the count starts again. */
+  until: number;
+}
+
+/**
+ * Upload counts per account, in memory.
+ *
+ * Deliberately not a table, for the same reason the kiosk's PIN attempts are
+ * not: this is throttling state that is worthless ten minutes later, and a row
+ * per keystroke-sized event would put the busiest path through the database. A
+ * restart forgives the tally, which is an acceptable trade for a limit whose job
+ * is to stop a loop rather than an attacker.
+ */
+const uploads = new Map<string, Window>();
+
+/** Seconds the caller must wait, or 0 when they may proceed. */
+function throttle(accountId: string): number {
+  const now = Date.now();
+  const window = uploads.get(accountId);
+
+  if (!window || window.until <= now) {
+    uploads.set(accountId, { count: 1, until: now + WINDOW_MS });
+    return 0;
+  }
+
+  if (window.count >= MAX_UPLOADS) {
+    return Math.ceil((window.until - now) / 1000);
+  }
+
+  window.count += 1;
+  return 0;
+}
+
+/**
  * Sets the caller's profile picture.
  *
  * One request stores the bytes *and* attaches them, rather than the upload-then-
@@ -33,6 +79,13 @@ const MAX_EDGE = 2048;
 export async function PUT(request: Request): Promise<Response> {
   const viewer = await getViewer();
   if (!viewer) return jsonError(401, "Masuk dulu untuk mengubah foto profil.");
+
+  const wait = throttle(viewer.profile.id);
+  if (wait > 0) {
+    return jsonError(429, "Terlalu sering mengganti foto. Coba lagi nanti.", {
+      retryAfterSeconds: wait,
+    });
+  }
 
   const type = request.headers.get("content-type") ?? "";
   if (!type.includes("multipart/form-data")) {

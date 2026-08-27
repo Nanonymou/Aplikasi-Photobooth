@@ -14,7 +14,7 @@
  *
  * Meant for cron, or for a serverless scheduler calling it on a timer.
  */
-import { rm } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import pg from "pg";
@@ -29,7 +29,18 @@ const BUCKETS = {
   photos: path.join(STORAGE, "photos"),
   renders: path.join(STORAGE, "renders"),
   shares: path.join(STORAGE, "shares"),
+  avatars: path.join(STORAGE, "avatars"),
 };
+
+/**
+ * A file this new might be mid-upload.
+ *
+ * The avatar sweep is the one that enumerates from disk, so it has to allow for
+ * the gap between storing the bytes and writing the key onto the profile. A
+ * picture uploaded a second ago and not yet attached looks exactly like an
+ * orphan; a day later, it is one.
+ */
+const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 
 /** Same sharded layout the storage driver writes. */
 function pathFor(bucket, key) {
@@ -79,6 +90,47 @@ async function sweep(client, { table, keyColumn, where }) {
   return { rows: taken.length, files: keys.filter((key) => !used.has(key)) };
 }
 
+/**
+ * Avatar files no profile points at any more.
+ *
+ * Lists what is on disk, asks the database which of those keys are still spoken
+ * for, and reports the difference. Files younger than the grace period are left
+ * alone whatever the answer, because "not referenced yet" and "not referenced
+ * any more" look identical from here.
+ */
+async function sweepAvatars(client) {
+  let shards;
+  try {
+    shards = await readdir(BUCKETS.avatars, { withFileTypes: true });
+  } catch {
+    return []; // Nobody has uploaded a picture yet.
+  }
+
+  const cutoff = Date.now() - ORPHAN_GRACE_MS;
+  const candidates = [];
+
+  for (const shard of shards) {
+    if (!shard.isDirectory()) continue;
+
+    const dir = path.join(BUCKETS.avatars, shard.name);
+    for (const name of await readdir(dir)) {
+      const info = await stat(path.join(dir, name));
+      if (info.mtimeMs < cutoff) candidates.push(name);
+    }
+  }
+
+  if (candidates.length === 0) return [];
+
+  const { rows } = await client.query(
+    `select distinct avatar_key as key from user_profiles
+      where avatar_key = any($1::text[])`,
+    [candidates],
+  );
+  const used = new Set(rows.map((row) => row.key));
+
+  return candidates.filter((key) => !used.has(key));
+}
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -126,6 +178,17 @@ async function main() {
       : await client.query(`delete from shares where ${staleShares}`);
 
     /*
+     * Avatars have no expiry and no doomed rows: `user_profiles.avatar_key` is a
+     * live reference that is simply replaced when somebody changes their
+     * picture. So this is the one sweep that enumerates candidates from disk —
+     * and it still lets the database decide, because a key no profile points at
+     * is a key nothing points at. There is no second table that can hold an
+     * avatar.
+     */
+    const avatars = await sweepAvatars(client);
+    await removeFiles("avatars", avatars);
+
+    /*
      * Sign-in links have no file behind them, so they are a plain delete. Kept
      * a day past their usefulness rather than removed the instant they are
      * spent: "that link was already used" is a better answer than "that link
@@ -141,6 +204,7 @@ async function main() {
       `${DRY_RUN ? "[dry run] " : ""}renders: ${renders.rows} rows, ${renders.files.length} files; ` +
         `photos: ${photos.rows} rows, ${photos.files.length} files; ` +
         `shares: ${deadShares.length} files, ${shares ?? 0} rows; ` +
+        `avatars: ${avatars.length} files; ` +
         `magic links: ${links ?? 0} rows`,
     );
   } finally {
