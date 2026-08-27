@@ -42,7 +42,12 @@ async function loadCatalogue() {
 
   await writeFile(path.join(out, "package.json"), '{"type":"module"}');
 
-  for (const file of ["decorations.js", "templates.js", "filters.js", "textures.js"]) {
+  for (const file of [
+    "editor/decorations.js",
+    "editor/templates.js",
+    "editor/filters.js",
+    "editor/textures.js",
+  ]) {
     const target = path.join(out, file);
     const source = await readFile(target, "utf8");
     await writeFile(
@@ -51,13 +56,14 @@ async function loadCatalogue() {
     );
   }
 
-  const decorations = await import(path.join(out, "decorations.js"));
-  const templates = await import(path.join(out, "templates.js"));
-  const filters = await import(path.join(out, "filters.js"));
-  const textures = await import(path.join(out, "textures.js"));
+  const decorations = await import(path.join(out, "editor/decorations.js"));
+  const templates = await import(path.join(out, "editor/templates.js"));
+  const filters = await import(path.join(out, "editor/filters.js"));
+  const textures = await import(path.join(out, "editor/textures.js"));
+  const help = await import(path.join(out, "help/articles.js"));
   await rm(out, { recursive: true, force: true });
 
-  return { ...decorations, ...templates, ...filters, ...textures };
+  return { ...decorations, ...templates, ...filters, ...textures, ...help };
 }
 
 function compile(out) {
@@ -70,6 +76,12 @@ function compile(out) {
       "src/lib/editor/filters.ts",
       "src/lib/editor/textures.ts",
       "src/lib/editor/id.ts",
+      "src/lib/help/articles.ts",
+      // Pinned so the emitted layout does not shift when the input list gains a
+      // file outside `editor/` — tsc otherwise derives the root from the common
+      // prefix, and every path below would move.
+      "--rootDir",
+      "src/lib",
       "--outDir",
       out,
       "--module",
@@ -319,6 +331,39 @@ async function main() {
       );
     }
 
+    /*
+     * Help articles. The catalogue in src/lib/help/articles.ts stays the
+     * authored source — it is where somebody writes an answer, in a diff a
+     * reviewer can read — and the table is where the app reads it from, so a
+     * support person can add or amend one later without a deploy. Existing rows
+     * are updated rather than replaced, and `published_at` is preserved: an
+     * article an admin unpublished must not come back published on the next
+     * seed.
+     */
+    for (const [position, article] of catalogue.HELP_ARTICLES.entries()) {
+      await client.query(
+        `insert into help_articles
+           (slug, title, summary, body, category_id, position, published_at)
+         values ($1, $2, $3, $4,
+                 (select id from help_categories where slug = $5), $6, now())
+         on conflict (slug) do update
+            set title = excluded.title,
+                summary = excluded.summary,
+                body = excluded.body,
+                category_id = excluded.category_id,
+                position = excluded.position,
+                published_at = help_articles.published_at`,
+        [
+          article.slug,
+          article.title,
+          article.summary,
+          article.body,
+          article.category,
+          position,
+        ],
+      );
+    }
+
     await client.query("commit");
 
     console.log(
@@ -328,7 +373,8 @@ async function main() {
         `${catalogue.TEXT_STYLES.length} text styles, ` +
         `${catalogue.PHOTO_FILTERS.length} filters, ` +
         `${catalogue.VISUAL_EFFECTS.length} effects, ` +
-        `${catalogue.FRAME_TEXTURES.length} textures.`,
+        `${catalogue.FRAME_TEXTURES.length} textures, ` +
+        `${catalogue.HELP_ARTICLES.length} help articles.`,
     );
   } catch (error) {
     await client.query("rollback");

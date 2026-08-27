@@ -35,6 +35,8 @@ semuanya bertanya lewat sana.
 | `subscriptions` (0020, 0028) | Paket akun, siklus tagihan, status, periode berjalan, dan harga yang disepakati. |
 | `plan_prices` (0028) | Riwayat harga tiap paket per siklus. Perubahan harga adalah baris baru. |
 | `payments` (0029) | Satu baris per upaya membayar. Hanya baris `paid` yang boleh menaikkan paket. |
+| `help_categories` (0030) | Kategori pusat bantuan, dengan urutan yang dikurasi. |
+| `help_articles` (0030) | Satu baris per jawaban. `published_at` null berarti draf. |
 
 Beberapa keputusan yang disengaja:
 
@@ -65,6 +67,16 @@ Beberapa keputusan yang disengaja:
 - **`subscriptions.plan` tidak pernah dinaikkan oleh permintaan.** Pilihan
   berbayar mendarat di `pending_plan`; hanya pembayaran terkonfirmasi yang boleh
   memindahkannya.
+- **Artikel bantuan justru masuk basis data, tidak seperti copy paket.**
+  Perbedaannya siapa yang mengubahnya dan kenapa: nama paket berubah karena
+  keputusan pemasaran, sementara artikel bantuan bertambah karena sebuah
+  pertanyaan terus berdatangan — dan yang menyadarinya adalah orang yang
+  menjawab dukungan, bukan yang melakukan deploy. Katalog di
+  `src/lib/help/articles.ts` tetap jadi sumber yang ditulis (jawaban baru lahir
+  sebagai diff yang bisa direview) dan `npm run db:seed` menyalinnya ke tabel;
+  sesudah itu, siapa pun yang memegang `admin.content.manage` bisa menyunting
+  atau menambah tanpa deploy. Seed tidak pernah menghidupkan kembali
+  `published_at` yang sudah dimatikan admin.
 - **Copy hidup di aplikasi, uang hidup di sini.** Nama paket, tagline, dan
   daftar fitur di halaman harga tetap di `src/lib/billing/plans.ts` — itu copy
   yang berubah karena keputusan pemasaran, dan tabel hanya akan berarti menulis
