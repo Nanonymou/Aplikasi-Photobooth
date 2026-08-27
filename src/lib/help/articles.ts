@@ -11,12 +11,18 @@
  * after that all read one catalogue instead of three.
  */
 
-export type HelpCategory = "memulai" | "editor" | "berbagi" | "akun";
+export type HelpCategory =
+  | "memulai"
+  | "editor"
+  | "berbagi"
+  | "booth"
+  | "akun";
 
 export const HELP_CATEGORIES: { id: HelpCategory; label: string }[] = [
   { id: "memulai", label: "Memulai" },
   { id: "editor", label: "Editor" },
   { id: "berbagi", label: "Berbagi & cetak" },
+  { id: "booth", label: "Booth & acara" },
   { id: "akun", label: "Akun & paket" },
 ];
 
@@ -112,6 +118,102 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Tidak ada kata sandi untuk dilupakan. Masukkan alamat email, lalu buka tautan yang kami kirim — tautan itu berlaku 15 menit dan hanya bisa dipakai sekali.",
       "Kalau tautannya sudah dipakai atau kedaluwarsa, minta yang baru; permintaan berikutnya bisa dilakukan setelah satu menit, supaya kotak surat tidak dibanjiri.",
       "Masuk dengan Google atau Apple juga tersedia, dan mendarat di akun yang sama selama alamat emailnya sama.",
+    ],
+  },
+  {
+    slug: "halaman-dan-orientasi",
+    title: "Menambah halaman dan memutar orientasinya",
+    category: "editor",
+    summary:
+      "Satu proyek bisa berisi beberapa halaman dengan bentuk berbeda, dan tiap halaman diputar sendiri-sendiri.",
+    body: [
+      "Baris di bawah kanvas adalah halaman-halaman proyekmu. Tombol di ujung kirinya menambah halaman kosong, menggandakan halaman yang sedang terbuka, atau menghapusnya — semuanya bekerja pada halaman yang sedang kamu lihat, dan Ctrl+Z mengembalikan yang terhapus.",
+      "Alt+panah kiri dan kanan berpindah halaman tanpa melepas tangan dari keyboard. Tiap chip menampilkan bentuk dan ukuran halamannya, karena \"Halaman 2\" dan \"Halaman 3\" mustahil dibedakan dari namanya saja.",
+      "Orientasi diatur per halaman lewat panel properti di kanan, bukan sekali untuk seluruh proyek: photostrip yang tegak dan kartu ucapan yang menyertainya memang beda bentuk. Memutar halaman menukar ukurannya dan mengecilkan isinya agar tetap muat, tanpa mengubah perbandingan sisi foto mana pun.",
+    ],
+  },
+  {
+    slug: "ekspor-vertikal-horizontal",
+    title: "Mencetak photostrip memanjang",
+    category: "berbagi",
+    summary:
+      "Pilih orientasi di panel ekspor; hasilnya diputar saat disimpan tanpa mengubah desainmu.",
+    body: [
+      "Photostrip digambar tegak, tapi banyak pencetak foto memuat kertasnya memanjang. Panel ekspor punya pilihan Vertikal dan Horizontal untuk itu.",
+      "Yang diputar hanya berkasnya, seperempat putaran saat disimpan — tata letak halamanmu tidak ikut berubah, dan kamu bisa mengekspor keduanya dari desain yang sama tanpa menyunting apa pun.",
+      "Semua angka di panel mengikuti arah yang dipilih: ukuran keluaran, pilihan resolusi, perkiraan ukuran berkas, dan ukuran cetaknya dalam sentimeter. Halaman yang persegi tidak diberi pilihan ini, karena diputar atau tidak berkasnya sama persis.",
+    ],
+  },
+  {
+    slug: "mode-kiosk",
+    title: "Menjalankan booth dengan mode kiosk",
+    category: "booth",
+    summary:
+      "Satu layar untuk seluruh sesi tamu, terkunci layar penuh, dan hanya bisa ditutup dengan PIN penyelenggara.",
+    body: [
+      "Mode kiosk membuat perangkat booth bisa ditinggal: tamu melihat layar sambutan bernama acaramu, mengetuknya, berpose mengikuti hitungan mundur, melihat hasilnya, lalu layarnya kembali sendiri untuk tamu berikutnya. Tidak ada tautan ke bagian lain aplikasi yang bisa dijelajahi.",
+      "Layar penuh dinyalakan saat sesi dimulai. Tamu yang keluar dari layar penuh — lewat Escape, F11, atau sapuan — akan melihat tirai yang hanya menawarkan satu hal: kembali ke layar penuh. Halaman web tidak bisa menolak tombol-tombol itu, jadi yang bisa dilakukan booth adalah menyadarinya dan memintanya kembali.",
+      "Keluar dari mode kiosk butuh PIN penyelenggara, yang diperiksa di server dan tidak pernah dikirim ke peramban. Lima tebakan salah mengunci pad-nya selama lima belas menit. Atur PIN-nya di Branding event sebelum meninggalkan booth — sampai itu dilakukan, siapa pun yang menemukan tombolnya bisa keluar.",
+    ],
+  },
+  {
+    slug: "slideshow-acara",
+    title: "Menayangkan foto tamu di layar besar",
+    category: "booth",
+    summary:
+      "Live slideshow memutar foto yang dibagikan tamu, dengan kecepatan yang kamu atur sendiri.",
+    body: [
+      "Slideshow menampilkan foto yang tamu bagikan, satu per satu dengan silang-pudar, di atas latar buram supaya bentuk foto apa pun terlihat disengaja di layar lebar.",
+      "Kecepatannya diatur di bilah bawah: 3, 5, 8, atau 15 detik per foto. Panah atas dan bawah melakukan hal yang sama dari jarak jauh, dan garis tipis di atas layar menghabiskan durasi tahannya supaya kecepatannya terlihat, bukan cuma tertulis. Pilihanmu diingat kalau layarnya dimuat ulang tengah acara.",
+      "Kendali penyelenggara memudar sendiri saat tidak ada gerakan, jadi dinding tetap bersih. Spasi menjeda, panah kiri dan kanan melangkah satu foto.",
+    ],
+  },
+  {
+    slug: "branding-acara",
+    title: "Mengganti nama acara di layar booth",
+    category: "booth",
+    summary:
+      "Nama, kalimat sambutan, warna aksen, dan PIN keluar diatur di satu halaman dan langsung dipakai kiosk maupun slideshow.",
+    body: [
+      "Halaman Branding event di konsol mengatur wajah booth: nama acara, satu kalimat sambutan, warna aksen, dan PIN untuk keluar dari mode kiosk. Pratinjau di sebelahnya menampilkan layar sambutan seperti yang akan dilihat tamu.",
+      "Kiosk dan slideshow membaca baris yang sama, jadi tidak ada dua tempat yang perlu disamakan. Halaman ini juga menyebut siapa yang terakhir mengubahnya — booth punya layar setup sendiri, dan dua orang yang menyunting hal yang sama sebaiknya bisa saling melihat.",
+      "PIN keluar tidak bisa dibaca kembali, hanya diganti atau dihapus. Membetulkan salah ketik pada nama acara tidak akan menghapus PIN yang sudah diatur.",
+    ],
+  },
+  {
+    slug: "remix-karya-komunitas",
+    title: "Memakai desain orang lain sebagai titik awal",
+    category: "memulai",
+    summary:
+      "Jelajah karya berisi desain yang dibagikan komunitas; me-remix salah satunya membuka salinannya di editor dengan kredit pembuatnya.",
+    body: [
+      "Halaman Jelajah karya bisa dibuka tanpa akun. Isinya desain yang dipublikasikan orang lain, dengan bentuk aslinya tetap terjaga — photostrip tegak, kartu persegi, sampul melebar — karena bentuk itulah yang biasanya sedang dicari.",
+      "Tombol Remix membuka desain itu sebagai titik awal milikmu. Editornya menyebutkan asalnya di sebuah strip tipis, dan kredit itu ikut tersimpan bersama sesimu. Kamu bisa menghapusnya kalau hasilmu sudah menyimpang jauh dari sumbernya.",
+      "Suka dan simpan diingat di peramban ini. Chip Tersimpan menyaring dinding jadi hanya yang kamu tandai, dan itu tetap ada setelah halamannya dimuat ulang.",
+    ],
+  },
+  {
+    slug: "foto-profil",
+    title: "Mengganti foto profil",
+    category: "akun",
+    summary:
+      "Unggah gambar dari perangkatmu; kalau dihapus, foto dari akun Google atau Apple-mu yang dipakai lagi.",
+    body: [
+      "Di Pengaturan → Profil, ketuk fotonya untuk memilih berkas dari perangkatmu. Gambarnya dipotong persegi dan dikecilkan di peramban sebelum dikirim, jadi yang naik ke server sudah kecil.",
+      "Foto dari penyedia login tetap disimpan terpisah dan tidak tertimpa. Menghapus foto yang kamu unggah mengembalikan foto dari Google atau Apple, bukan lingkaran kosong.",
+      "Alamat email tidak bisa diubah dari sini. Alamat itu yang menentukan akunmu, dan menggantinya sama saja dengan pindah akun.",
+    ],
+  },
+  {
+    slug: "membayar-paket",
+    title: "Bagaimana pembayaran paket bekerja?",
+    category: "akun",
+    summary:
+      "Paketmu baru naik setelah pembayarannya dikonfirmasi, bukan saat kamu memilihnya.",
+    body: [
+      "Memilih paket berbayar mencatat pilihanmu dan mengarahkanmu ke halaman pembayaran. Sampai gateway memastikan uangnya masuk, akunmu tetap di paket yang sekarang — tidak ada paket yang naik hanya karena tombolnya ditekan.",
+      "Harga yang kamu setujui saat berlangganan itulah yang tercatat di akunmu. Kalau daftar harga kami berubah kemudian, tagihanmu tidak ikut berubah dengan sendirinya.",
+      "Memperpanjang lebih awal menambah bulan ke periode yang sudah kamu bayar, bukan mengulanginya dari hari ini. Membatalkan pun tidak langsung mematikan fitur: sisa periode yang sudah dibayar tetap berjalan sampai habis.",
     ],
   },
   {

@@ -332,6 +332,23 @@ async function main() {
     }
 
     /*
+     * Help categories come from the same catalogue as the articles that sit in
+     * them. Migration 0030 seeded the four that existed when it was written;
+     * seeding them here as well is what lets a fifth be added in a diff instead
+     * of a migration, and keeps the labels and the curated order in one place.
+     */
+    for (const [position, category] of catalogue.HELP_CATEGORIES.entries()) {
+      await client.query(
+        `insert into help_categories (slug, label, position)
+         values ($1, $2, $3)
+         on conflict (slug) do update
+            set label = excluded.label,
+                position = excluded.position`,
+        [category.id, category.label, position],
+      );
+    }
+
+    /*
      * Help articles. The catalogue in src/lib/help/articles.ts stays the
      * authored source — it is where somebody writes an answer, in a diff a
      * reviewer can read — and the table is where the app reads it from, so a
@@ -374,7 +391,8 @@ async function main() {
         `${catalogue.PHOTO_FILTERS.length} filters, ` +
         `${catalogue.VISUAL_EFFECTS.length} effects, ` +
         `${catalogue.FRAME_TEXTURES.length} textures, ` +
-        `${catalogue.HELP_ARTICLES.length} help articles.`,
+        `${catalogue.HELP_ARTICLES.length} help articles ` +
+        `in ${catalogue.HELP_CATEGORIES.length} categories.`,
     );
   } catch (error) {
     await client.query("rollback");

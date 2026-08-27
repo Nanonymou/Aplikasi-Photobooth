@@ -97,8 +97,17 @@ export interface HelpQuery {
  * a query that matches the title exactly would be missed by a comparison that
  * only ever looked at both together.
  *
- * Ordered by similarity first so a near-exact title wins, then by the curated
- * position — which is the whole order when the query is blank.
+ * An article whose title or summary carries the words comes before one where
+ * only the body does. Substring matching is generous in Indonesian — searching
+ * "PIN" also finds every article that says "berpindah" — and what separates the
+ * article that is *about* something from one that mentions it in passing is
+ * whether the word made it into the part somebody wrote as a summary.
+ *
+ * Then by similarity so a near-exact title wins, then by category and
+ * the curated position within it — which is the whole order when the query is
+ * blank. Grouping by category there rather than relying on the order articles
+ * happen to be written in means the unfiltered list still reads as a contents
+ * page, however the catalogue is edited.
  */
 export async function searchHelpArticles(
   filter: HelpQuery = {},
@@ -120,10 +129,12 @@ export async function searchHelpArticles(
           or a.title % $3
           or (a.title || ' ' || a.summary) % $3
         )
-      order by greatest(
+      order by (a.title || ' ' || a.summary) ilike all ($2::text[]) desc,
+               greatest(
                  similarity(a.title, $3),
                  similarity(a.title || ' ' || a.summary, $3)
                ) desc,
+               c.position,
                a.position,
                a.title`,
     [filter.category ?? null, words, text],
