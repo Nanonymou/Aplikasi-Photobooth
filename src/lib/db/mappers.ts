@@ -22,6 +22,9 @@ function rowToPage(row: DesignPageRow): CanvasPage {
     height: row.height,
     background: row.background,
     objects: row.objects,
+    // Page-wide effects — weather and the like. Read back even when empty, so a
+    // page that had one removed reads as "none" rather than as "unknown".
+    effects: row.effects,
   };
 }
 
@@ -47,6 +50,7 @@ export interface PageWrite {
   backgroundType: PageBackground["type"];
   background: PageBackground;
   objects: CanvasPage["objects"];
+  effects: string[];
 }
 
 export function projectToPageWrites(project: EditorProject): PageWrite[] {
@@ -60,5 +64,6 @@ export function projectToPageWrites(project: EditorProject): PageWrite[] {
     backgroundType: page.background.type,
     background: page.background,
     objects: page.objects,
+    effects: page.effects ?? [],
   }));
 }

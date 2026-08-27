@@ -30,6 +30,7 @@ export interface DesignPageRow {
   background_type: PageBackground["type"];
   background: PageBackground;
   objects: CanvasObject[];
+  effects: string[];
   created_at: Date;
   updated_at: Date;
 }

@@ -33,7 +33,7 @@ export interface SavedDesign {
 
 const PAGE_COLUMNS = `
   design_id, id, position, name, template_id, width, height,
-  background_type, background, objects
+  background_type, background, objects, effects
 `;
 
 /**
@@ -60,7 +60,7 @@ async function writePages(
   for (const write of writes) {
     await client.query(
       `insert into design_pages (${PAGE_COLUMNS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        on conflict (design_id, id) do update set
          position = excluded.position,
          name = excluded.name,
@@ -69,7 +69,8 @@ async function writePages(
          height = excluded.height,
          background_type = excluded.background_type,
          background = excluded.background,
-         objects = excluded.objects`,
+         objects = excluded.objects,
+         effects = excluded.effects`,
       [
         designId,
         write.id,
@@ -81,6 +82,7 @@ async function writePages(
         write.backgroundType,
         JSON.stringify(write.background),
         JSON.stringify(write.objects),
+        write.effects,
       ],
     );
   }
@@ -405,9 +407,9 @@ export async function duplicateDesign(
     await client.query(
       `insert into design_pages
          (design_id, id, position, name, template_id, width, height,
-          background_type, background, objects)
+          background_type, background, objects, effects)
        select $2, id, position, name, template_id, width, height,
-              background_type, background, objects
+              background_type, background, objects, effects
          from design_pages
         where design_id = $1`,
       [designId, copy.id],

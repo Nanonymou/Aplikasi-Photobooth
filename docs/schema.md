@@ -129,7 +129,7 @@ yang berisik.
 | Tabel | Isi |
 | --- | --- |
 | `designs` (0001) | Judul, pemilik, `version`, `deleted_at`. |
-| `design_pages` (0001) | Halaman: ukuran, latar, dan `objects` sebagai JSONB. |
+| `design_pages` (0001, 0031) | Halaman: ukuran, latar, `objects` sebagai JSONB, dan `effects` per halaman. |
 | `photos` (0002) | Foto tamu: kunci storage, sumber (kamera/unggahan/contoh), kedaluwarsa. |
 | `shares` (0008, 0019) | Tautan bagikan: kode, berkas, kedaluwarsa, dan desain asalnya. |
 | `render_files` (0009) | Hasil ekspor yang dititipkan sebentar. |
