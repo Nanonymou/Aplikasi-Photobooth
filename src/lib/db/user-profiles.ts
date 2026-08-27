@@ -21,6 +21,8 @@ export interface UserProfile {
   avatarUrl: string | null;
   role: UserRole;
   provider: AuthProvider;
+  /** When the account first appeared — the "bergabung sejak" on a profile. */
+  createdAt: string;
   lastSignInAt: string | null;
 }
 
@@ -32,6 +34,7 @@ interface UserProfileRow {
   avatar_key: string | null;
   role: UserRole;
   provider: AuthProvider;
+  created_at: Date;
   last_sign_in_at: Date | null;
 }
 
@@ -55,6 +58,7 @@ function toProfile(row: UserProfileRow): UserProfile {
     avatarUrl: avatarFor(row),
     role: row.role,
     provider: row.provider,
+    createdAt: row.created_at.toISOString(),
     lastSignInAt: row.last_sign_in_at?.toISOString() ?? null,
   };
 }
@@ -166,13 +170,12 @@ export interface UserListQuery {
 }
 
 export interface UserListPage {
-  users: (UserProfile & { createdAt: string })[];
+  users: UserProfile[];
   /** Total matching the filters, so the console can page and show a count. */
   total: number;
 }
 
 interface ListRow extends UserProfileRow {
-  created_at: Date;
   total: string;
 }
 
@@ -214,10 +217,7 @@ export async function listUserProfiles(
   );
 
   return {
-    users: rows.map((row) => ({
-      ...toProfile(row),
-      createdAt: row.created_at.toISOString(),
-    })),
+    users: rows.map(toProfile),
     // `count(*) over ()` is absent when nothing matched, which is itself zero.
     total: rows[0] ? Number(rows[0].total) : 0,
   };

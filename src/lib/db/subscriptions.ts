@@ -21,6 +21,15 @@ export interface Subscription {
   plan: PlanId;
   cycle: BillingCycle;
   status: SubscriptionStatus;
+  /**
+   * Rupiah per month this account agreed to.
+   *
+   * Read from the row, never looked up in the catalogue (migration 0028). The
+   * difference matters the first time a price changes: a lookup would quietly
+   * re-price every existing subscriber, and this is the number on their
+   * receipt.
+   */
+  priceIdr: number;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   /** The plan being paid for, while a change is pending. */
@@ -32,6 +41,7 @@ interface SubscriptionRow {
   plan: PlanId;
   cycle: BillingCycle;
   status: SubscriptionStatus;
+  price_idr: number;
   current_period_end: Date | null;
   cancel_at_period_end: boolean;
   pending_plan: PlanId | null;
@@ -42,6 +52,7 @@ export const FREE_PLAN: Subscription = {
   plan: "gratis",
   cycle: "monthly",
   status: "active",
+  priceIdr: 0,
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
   pendingPlan: null,
@@ -53,6 +64,7 @@ function toSubscription(row: SubscriptionRow): Subscription {
     plan: row.plan,
     cycle: row.cycle,
     status: row.status,
+    priceIdr: row.price_idr,
     currentPeriodEnd: row.current_period_end?.toISOString() ?? null,
     cancelAtPeriodEnd: row.cancel_at_period_end,
     pendingPlan: row.pending_plan,
@@ -90,8 +102,12 @@ export async function requestUpgrade(
   cycle: BillingCycle,
 ): Promise<Subscription> {
   const rows = await query<SubscriptionRow>(
-    `insert into subscriptions (account_id, status, pending_plan, pending_cycle)
-     values ($1, 'pending', $2, $3)
+    // `price_idr` is 0 on insert because the *current* plan is still the free
+    // one — the row records an intent, not a purchase, and the constraint that
+    // a free plan costs nothing is exactly right here. The agreed price is
+    // written when a confirmed payment moves `plan`.
+    `insert into subscriptions (account_id, status, price_idr, pending_plan, pending_cycle)
+     values ($1, 'pending', 0, $2, $3)
      on conflict (account_id) do update
         set status = 'pending',
             pending_plan = excluded.pending_plan,
