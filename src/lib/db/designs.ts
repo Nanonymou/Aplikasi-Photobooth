@@ -31,6 +31,19 @@ export interface SavedDesign {
   updatedAt: string;
 }
 
+/**
+ * Whether a string could be a design id at all.
+ *
+ * `designs.id` is a uuid column, so anything else reaching it makes Postgres
+ * raise 22P02 rather than answer "no such row" — and a guessed id that is not
+ * even a uuid deserves the same 404 as one that is. Checked here rather than in
+ * each route, because three routes had grown three different answers to it: a
+ * regex in one, an error-code catch in another, and nothing in the third.
+ */
+export function isDesignId(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 const PAGE_COLUMNS = `
   design_id, id, position, name, template_id, width, height,
   background_type, background, objects, effects
@@ -277,7 +290,7 @@ export async function loadDesign(
   owners: string[],
   designId: string,
 ): Promise<LoadedDesign | null> {
-  if (owners.length === 0) return null;
+  if (owners.length === 0 || !isDesignId(designId)) return null;
 
   const designs = await query<DesignRow>(
     `select * from designs
@@ -382,6 +395,8 @@ export async function duplicateDesign(
   owners: string[],
   designId: string,
 ): Promise<GalleryDesign | null> {
+  if (owners.length === 0 || !isDesignId(designId)) return null;
+
   const copyId = await transaction(async (client) => {
     const { rows: source } = await client.query<{
       id: string;
@@ -419,4 +434,97 @@ export async function duplicateDesign(
   });
 
   return copyId ? getGalleryDesign(owners, copyId) : null;
+}
+
+export interface PageSummary {
+  id: string;
+  name: string;
+  position: number;
+  width: number;
+  height: number;
+  /** Derived from the size, so the strip can shape a chip without the objects. */
+  orientation: "portrait" | "landscape" | "square";
+  /** How many objects the page holds, and how many of those are photo slots. */
+  objectCount: number;
+  slotCount: number;
+  /** How many of those slots have a photo in them. */
+  filledSlots: number;
+  effects: string[];
+  templateId: string | null;
+}
+
+interface PageSummaryRow {
+  id: string;
+  name: string;
+  position: number;
+  width: number;
+  height: number;
+  object_count: number;
+  slot_count: number;
+  filled_slots: number;
+  effects: string[];
+  template_id: string | null;
+}
+
+/**
+ * A project's pages, without their contents.
+ *
+ * The page strip needs a chip per page: its name, its shape, and enough of a
+ * hint about what is on it to be worth looking at. It does not need the objects,
+ * and the objects are almost the whole document — a strip with photos in it is
+ * megabytes, and sending that to draw a row of chips is the difference between
+ * a panel that opens and one that waits.
+ *
+ * So the counts are computed in the database, over the JSONB, and only the
+ * numbers travel. `loadDesign` remains the way to get a page you intend to
+ * render; this is the way to get a list you intend to click.
+ */
+export async function listDesignPages(
+  owners: string[],
+  designId: string,
+): Promise<PageSummary[] | null> {
+  if (owners.length === 0 || !isDesignId(designId)) return null;
+
+  const design = await query<{ id: string }>(
+    `select id from designs
+      where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null`,
+    [designId, owners],
+  );
+  // Null and an empty array are different answers: "no such design" and "a
+  // design with no pages". The route turns the first into a 404.
+  if (design.length === 0) return null;
+
+  const rows = await query<PageSummaryRow>(
+    `select p.id, p.name, p.position, p.width, p.height,
+            p.effects, p.template_id,
+            jsonb_array_length(p.objects) as object_count,
+            (select count(*)::int from jsonb_array_elements(p.objects) o
+              where o ->> 'kind' = 'slot') as slot_count,
+            (select count(*)::int from jsonb_array_elements(p.objects) o
+              where o ->> 'kind' = 'slot'
+                and coalesce(jsonb_typeof(o -> 'photo'), 'null') <> 'null') as filled_slots
+       from design_pages p
+      where p.design_id = $1
+      order by p.position`,
+    [designId],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    position: row.position,
+    width: row.width,
+    height: row.height,
+    orientation:
+      row.width === row.height
+        ? "square"
+        : row.width > row.height
+          ? "landscape"
+          : "portrait",
+    objectCount: row.object_count,
+    slotCount: row.slot_count,
+    filledSlots: row.filled_slots,
+    effects: row.effects,
+    templateId: row.template_id,
+  }));
 }

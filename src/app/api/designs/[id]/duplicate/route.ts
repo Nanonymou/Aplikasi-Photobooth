@@ -5,8 +5,6 @@ import { duplicateDesign } from "@/lib/db/designs";
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Copies a design.
  *
@@ -25,7 +23,6 @@ export async function POST(
   context: RouteContext<"/api/designs/[id]/duplicate">,
 ): Promise<Response> {
   const { id } = await context.params;
-  if (!UUID.test(id)) return jsonError(404, "Desain tidak ditemukan.");
 
   try {
     const owners = await callerOwners();
