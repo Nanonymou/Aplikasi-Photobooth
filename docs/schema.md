@@ -34,6 +34,7 @@ semuanya bertanya lewat sana.
 | `role_changes` (0023) | Riwayat: siapa mengubah peran siapa, dan kapan. |
 | `subscriptions` (0020, 0028) | Paket akun, siklus tagihan, status, periode berjalan, dan harga yang disepakati. |
 | `plan_prices` (0028) | Riwayat harga tiap paket per siklus. Perubahan harga adalah baris baru. |
+| `payments` (0029) | Satu baris per upaya membayar. Hanya baris `paid` yang boleh menaikkan paket. |
 
 Beberapa keputusan yang disengaja:
 
@@ -73,6 +74,14 @@ Beberapa keputusan yang disengaja:
   pertanyaan "kenapa saya ditagih segini bulan Maret". Karena itu `plan_prices`
   (0028) menyimpan riwayatnya: perubahan harga adalah baris baru dengan
   `effective_from`, bukan sebuah update.
+- **Hanya `payments` yang boleh menaikkan paket.** `subscriptions` adalah
+  keadaan sekarang — satu baris per akun, ditimpa saat berubah — sementara
+  `payments` adalah peristiwa yang terjadi, disimpan selamanya, dan satu-satunya
+  hal yang bisa menyelesaikan perdebatan soal tagihan. Melipat yang kedua ke
+  dalam yang pertama berarti riwayat tagihan sebuah akun adalah apa pun yang
+  kebetulan tertulis di barisnya sekarang, alias tidak ada. `(provider,
+  provider_ref)` unik supaya webhook yang datang dua kali tidak membayar dua
+  bulan; tiap gateway mengirim ulang notifikasinya, tanpa kecuali.
 - **`subscriptions.price_idr` adalah potret, bukan pencarian.** Ia mencatat apa
   yang disepakati akun ini, dan tidak ikut bergerak saat katalog berubah — itulah
   yang membuat pelanggan lama bisa dipertahankan di harga lamanya. Membacanya
