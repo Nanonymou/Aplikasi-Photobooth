@@ -21,7 +21,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { AuthError, claimSession, EMAIL, sendMagicLink } from "@/lib/auth/client";
 import { refreshAccount, useAccount } from "@/lib/auth/use-account";
-import { useGuestSession } from "@/lib/session/guest-session";
+import {
+  refreshGuestSession,
+  useGuestSession,
+} from "@/lib/session/guest-session";
 import { toast } from "@/store/toast-store";
 import { useEditorStore } from "@/store/editor-store";
 
@@ -69,7 +72,7 @@ function ClaimSheet({ onClose }: { onClose: () => void }) {
       const result = await claimSession(session.code);
       setMoved(result);
       setClaimedTo(account.email);
-      await refreshAccount();
+      await Promise.all([refreshAccount(), refreshGuestSession()]);
       toast({
         variant: "success",
         title: "Karyamu diamankan",
@@ -118,6 +121,32 @@ function ClaimSheet({ onClose }: { onClose: () => void }) {
             sekarang ada di akun{" "}
             <span className="text-foreground font-medium">{claimedTo}</span> —
             tetap ada meski browser dibersihkan atau kamu ganti perangkat.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button size="sm" onClick={onClose}>
+            Selesai
+          </Button>
+        </DialogFooter>
+      </>
+    );
+  }
+
+  // Claimed already, so there is nothing here to move: the server hands a
+  // session over once and then refuses, and offering the button anyway would
+  // spend a round trip to be told the session no longer exists.
+  if (session?.claimedAt) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CloudCheck className="text-primary size-5" />
+            Sudah tersimpan di akun
+          </DialogTitle>
+          <DialogDescription>
+            Karya sesi ini sudah dipindahkan ke sebuah akun. Masuk dengan akun
+            itu untuk membukanya di perangkat mana pun.
           </DialogDescription>
         </DialogHeader>
 

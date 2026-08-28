@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, Copy, Hourglass, UserRound, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   daysUntilExpiry,
+  startGuestSession,
   useGuestSession,
   type GuestSession,
 } from "@/lib/session/guest-session";
@@ -69,6 +70,15 @@ function ExpiryNote({ session }: { session: GuestSession }) {
 export function GuestSessionBanner() {
   const session = useGuestSession();
   const reduceMotion = useReducedMotion();
+
+  // This strip only exists on the guest screen, and that screen *is* a guest
+  // session — so opening it starts one rather than waiting for the first save.
+  // The code shown here is then a code the server will recognise when the guest
+  // reads it out on another device. Idempotent: a returning guest gets the same
+  // session with its clock pushed forward.
+  useEffect(() => {
+    void startGuestSession();
+  }, []);
 
   // Hidden during the server render (getServerSnapshot → true), re-read on the
   // client once mounted.

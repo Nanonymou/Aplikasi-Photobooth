@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { logout } from "@/lib/auth/client";
 import { clearDeviceData } from "@/lib/session/end-session";
+import { endGuestSession } from "@/lib/session/guest-session";
 
 /**
  * "End session" for a shared device.
@@ -30,10 +31,14 @@ function EndSessionConfirm({ onCancel }: { onCancel: () => void }) {
   async function end() {
     if (busy) return;
     setBusy(true);
-    // Sign out the (mock) account first, then erase everything this device
-    // stored. A full reload, not a client route change, guarantees no cached
-    // session or project outlives the wipe for the next person.
+    // Sign out, end the guest session, then erase everything this device stored.
+    // The guest session has to go on the server as well: it is the owner cookie
+    // that decides whose gallery this browser sees, so wiping only local storage
+    // would hand the next person the last guest's work — the exact thing this
+    // dialog promises will not happen. A full reload, not a client route change,
+    // guarantees no cached session or project outlives the wipe.
     await logout();
+    await endGuestSession();
     clearDeviceData();
     window.location.assign("/");
   }
