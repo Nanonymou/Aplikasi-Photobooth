@@ -108,7 +108,7 @@ Tiga hal berbeda memakai kata yang sama, jadi ketiganya tabel terpisah:
 | `auth_sessions` (0013) | Sesi login sebuah perangkat. | Geser 30 hari, plafon mutlak 180 hari. |
 | `magic_links` (0022) | Bukti kepemilikan kotak surat: tautan masuk sekali pakai. | 15 menit, sekali pakai. |
 | `guest_sessions` (0011) | Identitas tamu di booth, punya kode pendek. | 30 hari sejak dibuat, disegarkan tiap autosave. |
-| `photo_sessions` (0002) | Satu sesi pemotretan: sederet jepretan. | Selamanya; fotonya yang kedaluwarsa. |
+| `photo_sessions` (0002, 0032) | Satu sesi pemotretan: sederet jepretan, boleh menempel pada sebuah acara. | Selamanya; fotonya yang kedaluwarsa. |
 
 Yang penting soal `auth_sessions`: **cookie berisi token acak, database hanya
 menyimpan sha256-nya**. Tabel yang bocor tidak memberi siapa pun sesi yang bisa
@@ -123,6 +123,32 @@ lebih dulu tidak bisa menghabiskan tautan itu dari bawah pemiliknya.
 `guest_sessions.code` adalah alfabet tanpa huruf yang mirip angka
 (`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`): kode itu dibacakan keras-keras di booth
 yang berisik.
+
+## Acara
+
+| Tabel | Isi |
+| --- | --- |
+| `events` (0032) | Satu baris per acara: nama, sambutan, aksen, PIN keluar, jadwal. |
+| `event_branding` (0018, 0032) | Setelan booth: acara mana yang sedang berjalan, plus branding cadangan. |
+
+- **Branding pindah ke acara, dan singleton-nya tinggal satu tugas.**
+  `event_branding` semula satu baris, yang benar selama pertanyaannya "instalasi
+  ini menyebut dirinya apa". Itu bentuk yang salah untuk yang sebenarnya
+  dikerjakan operator: pernikahan hari Sabtu dan gathering kantor hari Minggu,
+  masing-masing dengan nama, sambutan, PIN, dan — terutama — fotonya sendiri.
+  Sekarang branding hidup di `events`, dan singleton-nya menyimpan
+  `active_event_id`: acara mana yang sedang dijalankan booth. "Sedang hidup"
+  adalah sifat booth, bukan sifat acara — dua baris yang sama-sama mengaku hidup
+  adalah keadaan yang tidak mungkin ada kalau hanya satu kolom yang bisa
+  menyebut satu.
+- **PIN per acara.** Yang menjalankan pernikahan Sabtu belum tentu yang
+  menjalankan pesta Minggu, dan memberi keduanya PIN yang sama adalah cara PIN
+  berhenti jadi batas.
+- **Menghapus acara tidak membawa fotonya.** `photo_sessions.event_id` dan
+  `event_branding.active_event_id` keduanya `on delete set null`: sesi fotonya
+  tetap ada (cuma jadi tak berinduk), dan booth-nya kembali ke branding
+  cadangan alih-alih menunjuk ke sesuatu yang tidak ada. Ada `archived_at` justru
+  supaya operator jarang perlu memilih antara keduanya.
 
 ## Desain
 
