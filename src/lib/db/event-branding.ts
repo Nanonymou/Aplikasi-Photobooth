@@ -249,3 +249,11 @@ export async function checkExitPin(pin: string): Promise<boolean> {
   if (!row?.pin_hash) return false;
   return verifyPin(pin, row.pin_hash);
 }
+
+/** The id of the event the booth is running, or null. */
+export async function activeEventId(): Promise<string | null> {
+  const rows = await query<{ active_event_id: string | null }>(
+    "select active_event_id from event_branding where id",
+  );
+  return rows[0]?.active_event_id ?? null;
+}

@@ -147,13 +147,23 @@ interface SessionRow {
 
 export async function startSession(
   ownerId: string,
-  options: { label?: string | null; designId?: string | null } = {},
+  options: {
+    label?: string | null;
+    designId?: string | null;
+    /** The event this sitting happened at, when a booth is running one. */
+    eventId?: string | null;
+  } = {},
 ): Promise<PhotoSession> {
   const rows = await query<SessionRow>(
-    `insert into photo_sessions (owner_id, label, design_id)
-     values ($1, $2, $3)
+    `insert into photo_sessions (owner_id, label, design_id, event_id)
+     values ($1, $2, $3, $4)
      returning *`,
-    [ownerId, options.label ?? null, options.designId ?? null],
+    [
+      ownerId,
+      options.label ?? null,
+      options.designId ?? null,
+      options.eventId ?? null,
+    ],
   );
 
   const row = rows[0];
@@ -271,4 +281,28 @@ export async function collectPurgeable(limit = 500): Promise<string[]> {
   const used = new Set(stillUsed.map((row) => row.storage_key));
 
   return keys.filter((key) => !used.has(key));
+}
+
+/**
+ * Whether a session belongs to this owner, so a photo cannot be filed into
+ * somebody else's sitting by guessing its id.
+ */
+export async function sessionBelongsTo(
+  ownerId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    "select id from photo_sessions where id = $1 and owner_id = $2",
+    [sessionId, ownerId],
+  );
+  return rows.length > 0;
+}
+
+/** How many photos are already filed under a session, for the next position. */
+export async function countSessionPhotos(sessionId: string): Promise<number> {
+  const rows = await query<{ count: string }>(
+    "select count(*) as count from photos where session_id = $1 and deleted_at is null",
+    [sessionId],
+  );
+  return Number(rows[0].count);
 }
