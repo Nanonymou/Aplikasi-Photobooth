@@ -40,7 +40,10 @@ export async function GET(request: Request): Promise<Response> {
   if (category && !SHOWCASE_CATEGORIES.includes(category as ShowcaseCategory)) {
     // An unknown category returns nothing rather than everything: a filter that
     // silently stops filtering is worse than one that says it found nothing.
-    return Response.json({ items: [] }, { headers: { "cache-control": "no-store" } });
+    // The counts still come back, so the chips can offer a way out.
+    return Response.json(await listShowcase({ category: null, limit: 0 }).then(
+      (page) => ({ items: [], total: 0, counts: page.counts }),
+    ), { headers: { "cache-control": "private, no-store" } });
   }
 
   const sort = params.get("urut");
@@ -49,19 +52,23 @@ export async function GET(request: Request): Promise<Response> {
     ? Math.min(Math.max(asked, 1), MAX_LIMIT)
     : 60;
 
+  const skipped = Number(params.get("offset") ?? 0);
+  const offset = Number.isInteger(skipped) && skipped > 0 ? skipped : 0;
+
   try {
-    const items = await listShowcase({
+    const page = await listShowcase({
       category: (category as ShowcaseCategory) ?? null,
       sort: SORTS.includes(sort as (typeof SORTS)[number])
         ? (sort as (typeof SORTS)[number])
         : "populer",
       search: params.get("q"),
       limit,
+      offset,
       viewer: await getOwnerId(),
     });
 
     return Response.json(
-      { items },
+      page,
       // Per-visitor, because each card says whether *they* liked it.
       { headers: { "cache-control": "private, no-store" } },
     );

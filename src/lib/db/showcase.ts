@@ -117,14 +117,36 @@ export interface ShowcaseQuery {
   sort?: "terbaru" | "populer" | "remix";
   search?: string | null;
   limit?: number;
+  offset?: number;
   /** Who is asking, so each card can say whether they have liked it. */
   viewer?: string | null;
 }
 
-/** The wall. */
+export interface ShowcasePage {
+  items: ShowcaseItem[];
+  /** Everything matching the filter, not just this page. */
+  total: number;
+  /** How many sit in each category under the current search. */
+  counts: Record<ShowcaseCategory, number>;
+}
+
+/**
+ * The wall, filtered, ordered, and counted.
+ *
+ * The counts ignore the chosen category but respect the search, which is the
+ * only combination that makes the chips useful: they have to say how many are
+ * behind each of the *other* chips, or tapping one lands on an empty wall with
+ * no way to have known.
+ *
+ * `total` is derived from those same counts rather than from the rows, and that
+ * is not a shortcut: a window count only sees the rows it returns, so paging one
+ * step past the end would report a collection of zero and flip the "6 karya"
+ * above the wall to "0 karya" on the last page. The counts already answer the
+ * question exactly, for one category or for all of them, whatever the offset.
+ */
 export async function listShowcase(
   params: ShowcaseQuery = {},
-): Promise<ShowcaseItem[]> {
+): Promise<ShowcasePage> {
   const order =
     params.sort === "terbaru"
       ? "p.published_at desc"
@@ -134,18 +156,45 @@ export async function listShowcase(
 
   const search = params.search?.trim() ?? "";
 
-  const rows = await query<ItemRow>(
-    `select ${ITEM_SELECT}
-     ${ITEM_FROM}
-      where p.unpublished_at is null
-        and ($2::text is null or p.category = $2)
-        and ($3 = '' or p.title ilike '%' || $3 || '%' or $3 = any(p.tags))
-      order by ${order}
-      limit $4`,
-    [params.viewer ?? null, params.category ?? null, search, params.limit ?? 60],
-  );
+  const [rows, counts] = await Promise.all([
+    query<ItemRow>(
+      `select ${ITEM_SELECT}
+       ${ITEM_FROM}
+        where p.unpublished_at is null
+          and ($2::text is null or p.category = $2)
+          and ($3 = '' or p.title ilike '%' || $3 || '%' or $3 = any(p.tags))
+        order by ${order}
+        limit $4 offset $5`,
+      [
+        params.viewer ?? null,
+        params.category ?? null,
+        search,
+        params.limit ?? 60,
+        params.offset ?? 0,
+      ],
+    ),
+    query<{ category: ShowcaseCategory; count: string }>(
+      `select p.category, count(*) as count
+         from published_designs p
+        where p.unpublished_at is null
+          and ($1 = '' or p.title ilike '%' || $1 || '%' or $1 = any(p.tags))
+        group by p.category`,
+      [search],
+    ),
+  ]);
 
-  return rows.map(toItem);
+  const byCategory = Object.fromEntries(
+    SHOWCASE_CATEGORIES.map((category) => [category, 0]),
+  ) as Record<ShowcaseCategory, number>;
+  for (const row of counts) byCategory[row.category] = Number(row.count);
+
+  return {
+    items: rows.map(toItem),
+    total: params.category
+      ? byCategory[params.category]
+      : Object.values(byCategory).reduce((sum, count) => sum + count, 0),
+    counts: byCategory,
+  };
 }
 
 /**
