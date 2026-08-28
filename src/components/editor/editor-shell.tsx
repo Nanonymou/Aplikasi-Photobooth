@@ -15,6 +15,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAutosave } from "@/hooks/use-autosave";
 import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
+import { useRemoteDesign } from "@/hooks/use-remote-design";
 
 /**
  * Editor chrome.
@@ -27,20 +28,34 @@ import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
  * and `topbarActions` slots extra buttons into the top bar — both let a
  * session-scoped entry (the anonymous guest page) frame the editor without the
  * plain `/editor` route carrying anything it does not need.
+ *
+ * Where the work is kept depends on who is holding it, and the two paths are
+ * exclusive on purpose. A guest's only copy is in this browser, so autosave
+ * writes `localStorage`. An account's copy belongs to the server, so the remote
+ * sync writes there and the local one stays out of the way — running both would
+ * be two sources of truth for one canvas, and the stale one would win on the
+ * next visit.
  */
 export function EditorShell({
   sessionBanner,
   topbarActions,
   showAccount,
+  designId = null,
+  remote = false,
 }: {
   sessionBanner?: ReactNode;
   topbarActions?: ReactNode;
   /** Forwarded to the top bar; the guest page sets it false. */
   showAccount?: boolean;
+  /** An existing design to open, from `?desain=`. */
+  designId?: string | null;
+  /** Whether this editor saves to the account rather than to the device. */
+  remote?: boolean;
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   useEditorShortcuts();
-  useAutosave();
+  useAutosave(!remote);
+  useRemoteDesign(designId, remote);
 
   return (
     <TooltipProvider>

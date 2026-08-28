@@ -80,6 +80,17 @@ export interface EditorState {
    * then, so an empty first render can never overwrite a real saved project.
    */
   hydrated: boolean;
+  /**
+   * The server's id for this design, and the version the editor last saw.
+   *
+   * Null while the canvas exists only in this browser — a guest's whole life,
+   * and an account's first few seconds before the first save creates the row.
+   * The version is what the next write presents so the server can refuse to
+   * clobber an edit made in another tab.
+   */
+  remoteId: string | null;
+  remoteVersion: number;
+  setRemote: (id: string | null, version: number) => void;
 
   hydrateProject: (project: EditorProject | null) => void;
   setSaveStatus: (status: SaveStatus, savedAt?: string) => void;
@@ -257,6 +268,10 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
   saveStatus: "idle",
   lastSavedAt: null,
   hydrated: false,
+  remoteId: null,
+  remoteVersion: 0,
+
+  setRemote: (remoteId, remoteVersion) => set({ remoteId, remoteVersion }),
 
   /**
    * Adopts the project restored from storage (or just marks hydration done when

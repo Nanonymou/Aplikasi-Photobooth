@@ -28,16 +28,22 @@ const DEBOUNCE_MS = 800;
  * Restoring happens in an effect rather than during render on purpose: the page
  * is prerendered, so reading `localStorage` any earlier would make the server
  * and client markup disagree.
+ *
+ * `enabled` is false for a signed-in editor, whose copy lives on the server
+ * (`useRemoteDesign`). Two autosaves over one canvas would be two sources of
+ * truth, and the device-local one would win the next time the page opened.
  */
-export function useAutosave() {
+export function useAutosave(enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     // The store outlives client-side navigation, so a second screen mounting
     // this hook must not re-read storage and clobber in-memory edits.
     if (useEditorStore.getState().hydrated) return;
     useEditorStore.getState().hydrateProject(loadStoredProject());
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let pending = false;
     // Set just before adopting another tab's project, so the subscription below
@@ -114,5 +120,5 @@ export function useAutosave() {
       flush();
       clearTimeout(timer);
     };
-  }, []);
+  }, [enabled]);
 }

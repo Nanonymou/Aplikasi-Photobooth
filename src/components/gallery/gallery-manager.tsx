@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Copy,
@@ -30,11 +30,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { MY_DESIGNS, type MyDesign } from "@/lib/gallery/my-designs";
-import { createId } from "@/lib/editor/id";
-
-type Sort = "recent" | "name";
-type Scope = "all" | "shared";
+import {
+  deleteDesign,
+  duplicateDesign,
+  listMyDesigns,
+  relativeTime,
+  renameDesign,
+  type MyDesign,
+  type Scope,
+  type Sort,
+} from "@/lib/gallery/my-designs";
+import { toast } from "@/store/toast-store";
 
 function thumbStyle(hue: number) {
   return {
@@ -42,52 +48,110 @@ function thumbStyle(hue: number) {
   };
 }
 
+/** How long to sit on a keystroke before asking the server again. */
+const SEARCH_DEBOUNCE_MS = 250;
+
 /**
  * A user's design gallery.
  *
- * The regular user's home for what they have made: find a design, then act on the
- * card — open it, rename, duplicate, or delete. Search and the sort run on the
- * client over the account's designs, and rename/duplicate/delete mutate the list
- * in place so the management is real ahead of the API. Opening a design hands off
- * to the editor.
+ * The regular user's home for what they have made: find a design, then act on
+ * the card — open it, rename, duplicate, or delete.
+ *
+ * Search, scope and sort are the server's, because `GET /api/gallery` already
+ * answers all three and only it can see past the page it returned. Filtering the
+ * arrived page here instead is how a search box starts missing results that sit
+ * one page further down.
+ *
+ * Every action writes first and then refetches. An optimistic list that renamed
+ * a card locally would show a title that exists nowhere else the moment a write
+ * fails, and the failure a person needs to see is exactly the one they would
+ * then not see.
  */
 export function GalleryManager() {
-  const [designs, setDesigns] = useState<MyDesign[]>(MY_DESIGNS);
+  const [page, setPage] = useState<{
+    designs: MyDesign[];
+    total: number;
+    sharedCount: number;
+  }>({ designs: [], total: 0, sharedCount: 0 });
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState<string | null>(null);
+
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [sort, setSort] = useState<Sort>("recent");
 
   const [renaming, setRenaming] = useState<MyDesign | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [deleting, setDeleting] = useState<MyDesign | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const sharedCount = useMemo(
-    () => designs.filter((design) => design.shared).length,
-    [designs],
+  /**
+   * Fetches the current filter's page.
+   *
+   * Called from the effect below and again after every write. `alive` drops a
+   * response whose request has been superseded, which is the difference between
+   * a search box that settles on what you typed and one that settles on
+   * whatever answered last.
+   */
+  const load = useCallback(
+    async (alive: () => boolean = () => true) => {
+      try {
+        const next = await listMyDesigns({ search, scope, sort });
+        if (!alive()) return;
+        setPage(next);
+        setFailed(null);
+      } catch (cause) {
+        if (!alive()) return;
+        setFailed(
+          cause instanceof Error ? cause.message : "Galeri gagal dimuat.",
+        );
+      } finally {
+        if (alive()) setLoading(false);
+      }
+    },
+    [search, scope, sort],
   );
 
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = designs.filter(
-      (design) =>
-        design.title.toLowerCase().includes(q) &&
-        (scope === "all" || design.shared),
-    );
-    if (sort === "name") {
-      return [...list].sort((a, b) => a.title.localeCompare(b.title, "id"));
+  // The await is inside the effect so the state updates are visibly after it:
+  // nothing here runs synchronously during the render that scheduled it.
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      await load(() => current);
+    })();
+    return () => {
+      current = false;
+    };
+  }, [load]);
+
+  // A round trip per keystroke would be one per keystroke. setState in the
+  // timeout callback is the allowed pattern, not a synchronous one in the body.
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  /** Runs a write, reports what went wrong, and refetches either way. */
+  async function run(action: () => Promise<void>, failure: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await action();
+      await load();
+    } catch (cause) {
+      toast({
+        variant: "error",
+        title: failure,
+        description: cause instanceof Error ? cause.message : undefined,
+      });
+    } finally {
+      setBusy(false);
     }
-    return list; // Already newest-first.
-  }, [designs, query, scope, sort]);
+  }
 
   function duplicate(design: MyDesign) {
-    const copy: MyDesign = {
-      ...design,
-      id: createId("design"),
-      title: `${design.title} (salinan)`,
-      updated: "baru saja",
-      shared: false,
-    };
-    setDesigns((current) => [copy, ...current]);
+    void run(() => duplicateDesign(design.id), "Salinan gagal dibuat");
   }
 
   function openRename(design: MyDesign) {
@@ -97,24 +161,22 @@ export function GalleryManager() {
 
   function commitRename() {
     const next = renameDraft.trim();
-    if (renaming && next) {
-      setDesigns((current) =>
-        current.map((design) =>
-          design.id === renaming.id ? { ...design, title: next } : design,
-        ),
-      );
-    }
+    const target = renaming;
     setRenaming(null);
+    if (!target || !next || next === target.title) return;
+    void run(() => renameDesign(target.id, next), "Nama gagal diganti");
   }
 
   function confirmDelete() {
-    if (deleting) {
-      setDesigns((current) =>
-        current.filter((design) => design.id !== deleting.id),
-      );
-    }
+    const target = deleting;
     setDeleting(null);
+    if (!target) return;
+    void run(() => deleteDesign(target.id), "Desain gagal dihapus");
   }
+
+  const designs = page.designs;
+  const shown = designs;
+  const sharedCount = page.sharedCount;
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -163,11 +225,19 @@ export function GalleryManager() {
         </div>
       </div>
 
-      {shown.length === 0 ? (
+      {failed ? (
+        <div className="border-destructive/40 text-destructive rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+          {failed}
+        </div>
+      ) : loading ? (
         <div className="border-border text-muted-foreground rounded-xl border border-dashed px-4 py-16 text-center text-sm">
-          {designs.length === 0
-            ? "Galerimu masih kosong. Buat desain pertamamu."
-            : "Tidak ada desain yang cocok."}
+          Memuat galeri…
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+          {search || scope === "shared"
+            ? "Tidak ada desain yang cocok."
+            : "Galerimu masih kosong. Buat desain pertamamu."}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -177,7 +247,7 @@ export function GalleryManager() {
               className="bg-card border-border group flex flex-col overflow-hidden rounded-xl border"
             >
               <Link
-                href="/editor"
+                href={`/editor?desain=${design.id}`}
                 aria-label={`Buka ${design.title}`}
                 className="relative flex aspect-[4/3] items-center justify-center"
                 style={thumbStyle(design.hue)}
@@ -195,7 +265,7 @@ export function GalleryManager() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{design.title}</p>
                   <p className="text-muted-foreground text-xs">
-                    {design.pages} halaman · {design.updated}
+                    {design.pageCount} halaman · {relativeTime(design.updatedAt)}
                   </p>
                 </div>
 
@@ -212,7 +282,9 @@ export function GalleryManager() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem asChild>
-                      <Link href="/editor">Buka di editor</Link>
+                      <Link href={`/editor?desain=${design.id}`}>
+                        Buka di editor
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => openRename(design)}>
                       <Pencil />
@@ -239,7 +311,7 @@ export function GalleryManager() {
       )}
 
       <p className="text-muted-foreground text-xs">
-        {designs.length} desain · {sharedCount} dibagikan.
+        {page.total} desain · {sharedCount} dibagikan.
       </p>
 
       {/* Rename */}
@@ -287,7 +359,7 @@ export function GalleryManager() {
               <span className="text-foreground font-medium">
                 {deleting?.title}
               </span>{" "}
-              akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+              akan dihapus dari galerimu.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
