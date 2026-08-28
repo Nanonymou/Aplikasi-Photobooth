@@ -838,3 +838,95 @@ export async function turnDesignPage(
   const page = summaries?.find((candidate) => candidate.id === pageId);
   return page ? { page, version: outcome.version } : "not-found";
 }
+
+/**
+ * Saves one page's content.
+ *
+ * The whole-document autosave (`saveDesign`) sends every page on every keystroke
+ * pause. That was free when a project was one page; with five photostrips it
+ * means re-uploading four pages of inline photos to move one sticker. This is
+ * the same save, narrowed to the page actually being edited.
+ *
+ * The version check is the design's, not the page's, and deliberately so: two
+ * people editing different pages of one document still have to find out about
+ * each other, and a per-page version would let their two views of the project
+ * drift apart while both believed they were current.
+ *
+ * A page id that is not in the design is a 404 rather than an insert. Creating a
+ * page is `POST .../pages`, and a save that quietly created one would turn a
+ * stale client's retry into a duplicate.
+ */
+export async function savePageContent(
+  owners: string[],
+  designId: string,
+  pageId: string,
+  page: {
+    name?: string;
+    width: number;
+    height: number;
+    background: unknown;
+    objects: unknown[];
+    effects?: string[];
+    templateId?: string | null;
+  },
+  expectedVersion: number,
+): Promise<SavedDesign> {
+  if (owners.length === 0 || !isDesignId(designId)) {
+    throw new DesignNotFoundError();
+  }
+
+  return transaction(async (client) => {
+    const { rows } = await client.query<DesignRow>(
+      `select * from designs
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null
+        for update`,
+      [designId, owners],
+    );
+
+    const design = rows[0];
+    if (!design) throw new DesignNotFoundError();
+    if (design.version !== expectedVersion) {
+      throw new DesignConflictError(design.version);
+    }
+
+    const background = page.background as { type: string };
+    const { rowCount } = await client.query(
+      `update design_pages set
+         name = coalesce($3, name),
+         width = $4,
+         height = $5,
+         background_type = $6,
+         background = $7,
+         objects = $8,
+         effects = coalesce($9, effects),
+         template_id = $10
+       where design_id = $1 and id = $2`,
+      [
+        designId,
+        pageId,
+        page.name ?? null,
+        page.width,
+        page.height,
+        background.type,
+        JSON.stringify(page.background),
+        JSON.stringify(page.objects),
+        page.effects ?? null,
+        page.templateId ?? null,
+      ],
+    );
+    if (rowCount === 0) throw new DesignNotFoundError();
+
+    const { rows: updated } = await client.query<DesignRow>(
+      `update designs set version = version + 1, updated_at = now()
+        where id = $1
+       returning *`,
+      [designId],
+    );
+
+    return {
+      id: designId,
+      version: updated[0].version,
+      updatedAt: updated[0].updated_at.toISOString(),
+    };
+  });
+}

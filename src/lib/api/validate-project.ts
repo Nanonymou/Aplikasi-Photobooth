@@ -64,7 +64,15 @@ function validateObject(value: unknown, where: string): string | null {
   return null;
 }
 
-function validatePage(value: unknown, index: number): string | null {
+/**
+ * One page, checked.
+ *
+ * Exported so the single-page autosave applies exactly the same rules as the
+ * whole-document one. A page saved through the narrow endpoint and the same page
+ * saved through the wide one must be able to fail for the same reasons, or the
+ * narrow one becomes a way in for documents the wide one refuses.
+ */
+export function validatePage(value: unknown, index: number): string | null {
   const where = `Halaman ${index + 1}`;
   if (!isRecord(value)) return `${where} bukan objek`;
   if (typeof value.id !== "string" || value.id.length === 0) {

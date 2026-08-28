@@ -1,7 +1,14 @@
 import { jsonError, readJsonBody } from "@/lib/api/http";
 import { callerOwners } from "@/lib/api/scope";
-import { removeDesignPage, turnDesignPage } from "@/lib/db/designs";
-import type { PageOrientation } from "@/types/editor";
+import { validatePage } from "@/lib/api/validate-project";
+import {
+  DesignConflictError,
+  DesignNotFoundError,
+  removeDesignPage,
+  savePageContent,
+  turnDesignPage,
+} from "@/lib/db/designs";
+import type { CanvasPage, PageOrientation } from "@/types/editor";
 
 export const runtime = "nodejs";
 
@@ -9,6 +16,82 @@ const ORIENTATIONS: PageOrientation[] = ["portrait", "landscape"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/**
+ * Autosave, for one page.
+ *
+ * `PUT /api/designs/[id]` saves the whole document, which is what the editor
+ * holds and the right shape for "everything changed". This is the other case,
+ * and it is the common one: a project of five photostrips re-uploads four pages
+ * of inline photos every time somebody nudges a sticker on the fifth.
+ *
+ * Same contract as the wide save otherwise — `{ version, page }` in,
+ * `{ id, version, updatedAt }` out, 409 with the current version when the
+ * document moved underneath. The version is the *design's*, because two people
+ * editing different pages still have to find out about each other.
+ *
+ * The page has to exist. Creating one is `POST .../pages`, and a save that
+ * quietly created a page would turn a stale client's retry into a duplicate.
+ */
+export async function PUT(
+  request: Request,
+  context: RouteContext<"/api/designs/[id]/pages/[pageId]">,
+): Promise<Response> {
+  const { id, pageId } = await context.params;
+
+  const owners = await callerOwners();
+  if (owners.length === 0) return jsonError(404, "Desain tidak ditemukan.");
+
+  const body = await readJsonBody(request);
+  if (!body.ok) return body.response;
+  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+
+  const version = body.value.version;
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+    return jsonError(400, "`version` wajib berupa bilangan bulat.");
+  }
+
+  const page = body.value.page;
+  // The same validator the whole-document save uses, so this cannot become a
+  // way in for a page that one would refuse.
+  const problem = validatePage({ ...(isRecord(page) ? page : {}), id: pageId }, 0);
+  if (problem) return jsonError(400, `Halaman tidak valid: ${problem}.`);
+
+  const valid = page as unknown as CanvasPage;
+
+  try {
+    const saved = await savePageContent(
+      owners,
+      id,
+      pageId,
+      {
+        name: valid.name,
+        width: valid.width,
+        height: valid.height,
+        background: valid.background,
+        objects: valid.objects,
+        effects: valid.effects,
+        templateId: valid.templateId ?? null,
+      },
+      version,
+    );
+
+    return Response.json(saved, {
+      headers: { "cache-control": "private, no-store" },
+    });
+  } catch (error) {
+    if (error instanceof DesignConflictError) {
+      return jsonError(409, "Desain sudah berubah di tempat lain.", {
+        version: error.currentVersion,
+      });
+    }
+    if (error instanceof DesignNotFoundError) {
+      return jsonError(404, "Desain atau halaman tidak ditemukan.");
+    }
+    console.error(`PUT /api/designs/${id}/pages/${pageId} failed`, error);
+    return jsonError(500, "Halaman gagal disimpan.");
+  }
 }
 
 /**
