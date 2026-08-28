@@ -1,29 +1,96 @@
+"use client";
+
 /**
  * Quick-share helpers.
  *
- * Sharing needs an upload service to hand out a public URL; that lands with the
- * backend. Until then every link here is a stand-in built from the project id,
- * so the flow — link, QR, hand-off to an app — can be designed and clicked
- * through end to end, and only the URL source has to change later.
+ * A share is a rendered picture uploaded to `POST /api/share`, which mints the
+ * short code and hands back the address. The link used to be a hash of the
+ * project id pointed at `framestudio.id` — a URL that looked right, could be
+ * copied, sent, and opened, and led nowhere.
  *
- * The hand-off itself is real: intent URLs open the actual apps, and where the
- * browser supports it the picture is passed straight to the system share sheet.
+ * The hand-off is real: intent URLs open the actual apps, and where the browser
+ * supports it the picture goes straight to the system share sheet.
  */
 
-const SHARE_ORIGIN = "https://framestudio.id/s";
+import {
+  defaultExportSettings,
+  getQualityPreset,
+  renderExport,
+  type ProgressCallback,
+  type RenderedExport,
+} from "@/lib/editor/export";
+import type { CanvasPage } from "@/types/editor";
 
-/** Stable short code so the same project always shows the same mock link. */
-export function shareCode(projectId: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < projectId.length; index += 1) {
-    hash ^= projectId.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36).padStart(7, "0").slice(0, 7);
+export interface CreatedShare {
+  code: string;
+  /** The address to hand out, absolute, as the server built it. */
+  url: string;
+  expiresAt: string;
+  filename: string;
+  bytes: number;
+  contentType: string;
+  /**
+   * The QR for `url`, rendered by the server that minted the link.
+   *
+   * It rides along with the response rather than being drawn again here: the
+   * server had the address in hand, a data URL of a 1024px code is a few
+   * kilobytes, and one picture of the link cannot disagree with another.
+   */
+  qr: { dataUrl: string; pixels: number };
 }
 
-export function shareLink(projectId: string): string {
-  return `${SHARE_ORIGIN}/${shareCode(projectId)}`;
+/**
+ * Uploads a rendered picture and returns the link to it.
+ *
+ * The design id rides along so the gallery can mark the design as shared, and
+ * so revoking the link later has something to find it by.
+ */
+export async function createShare(
+  blob: Blob,
+  filename: string,
+  designId?: string,
+): Promise<CreatedShare> {
+  const form = new FormData();
+  form.set("file", blob, filename);
+  if (designId) form.set("designId", designId);
+
+  const response = await fetch("/api/share", { method: "POST", body: form });
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const data =
+      typeof payload === "object" && payload !== null
+        ? (payload as Record<string, unknown>)
+        : {};
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Tautan gagal dibuat.",
+    );
+  }
+
+  return (await response.json()) as CreatedShare;
+}
+
+/**
+ * The picture a share hands out: the active page as an HD PNG.
+ *
+ * Lives here rather than in either dialog because both of them publish, and a
+ * QR that led to a different rendering than the one the share sheet previewed
+ * would be a link to something the user never saw.
+ */
+export async function renderSharePng(
+  page: CanvasPage,
+  title: string,
+  onProgress?: ProgressCallback,
+): Promise<RenderedExport> {
+  return renderExport(
+    page,
+    title,
+    {
+      ...defaultExportSettings(),
+      format: "png",
+      scale: getQualityPreset("hd").scale,
+    },
+    onProgress,
+  );
 }
 
 export type ShareTargetId =

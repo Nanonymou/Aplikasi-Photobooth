@@ -1,6 +1,6 @@
 import { getViewer } from "@/lib/api/authorize";
 import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
-import { siteUrl } from "@/lib/api/mailer";
+import { siteUrl } from "@/lib/api/site";
 import { getPaymentGateway } from "@/lib/billing/gateway";
 import { PLANS, type BillingCycle, type PlanId } from "@/lib/billing/plans";
 import { planPrice } from "@/lib/db/plan-prices";

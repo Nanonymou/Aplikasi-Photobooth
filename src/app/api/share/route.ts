@@ -7,6 +7,7 @@ import { findRender } from "@/lib/db/renders";
 import { designBelongsTo } from "@/lib/db/designs";
 import { createShare, type Share } from "@/lib/db/shares";
 import { getRenderStorage } from "@/lib/storage/render-storage";
+import { requestOrigin } from "@/lib/api/site";
 import { getShareStorage } from "@/lib/storage/share-storage";
 
 export const runtime = "nodejs";
@@ -41,11 +42,12 @@ function readDays(value: unknown): number | undefined | null {
 }
 
 /**
- * The link plus its QR, built from the request's own origin so it works behind
- * whatever host, port or proxy this is actually running on.
+ * The link plus its QR, built from the public origin so it works behind
+ * whatever host, port or proxy this is actually running on — a QR is scanned by
+ * a phone that has never heard of this server's own address.
  */
 async function shareResponse(share: Share, request: Request): Promise<Response> {
-  const url = new URL(`/s/${share.code}`, request.url).toString();
+  const url = new URL(`/s/${share.code}`, requestOrigin(request)).toString();
 
   const dataUrl = await QRCode.toDataURL(url, {
     errorCorrectionLevel: "M",

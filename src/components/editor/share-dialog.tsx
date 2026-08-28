@@ -9,6 +9,7 @@ import {
   Info,
   Loader2,
   Maximize2,
+  RotateCcw,
   Share2,
   TriangleAlert,
 } from "lucide-react";
@@ -25,55 +26,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { shareExpiry, useShareLink } from "@/hooks/use-share-link";
 import {
-  defaultExportSettings,
   downloadBlob,
   formatBytes,
-  getQualityPreset,
-  renderExport,
   type ExportProgress,
 } from "@/lib/editor/export";
-import { renderQrDataUrl } from "@/components/editor/qr-dialog";
 import {
   canShareFile,
+  renderSharePng,
   shareCaption,
   shareFile,
-  shareLink,
   SHARE_TARGETS,
   type ShareTarget,
 } from "@/lib/editor/share";
 import { cn } from "@/lib/utils";
 import { useActivePage, useEditorStore } from "@/store/editor-store";
 import { toast } from "@/store/toast-store";
-
-/** Small preview of the same code the QR dialog shows full size. */
-function QrPreview({ value }: { value: string }) {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const url = await renderQrDataUrl(value).catch(() => null);
-      if (!cancelled) setDataUrl(url);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [value]);
-
-  if (!dataUrl) {
-    return (
-      <div className="flex aspect-square items-center justify-center">
-        <Loader2 className="size-4 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- generated data URL, no loader involved
-    <img src={dataUrl} alt={`QR Code untuk ${value}`} className="w-full" />
-  );
-}
 
 const neverChanges = () => () => {};
 
@@ -91,24 +60,6 @@ function useNativeShare(): boolean {
   );
 }
 
-/** HD PNG is what every platform accepts and what people expect to receive. */
-async function renderSharePng(
-  page: Parameters<typeof renderExport>[0],
-  title: string,
-  onProgress: (progress: ExportProgress) => void,
-) {
-  return renderExport(
-    page,
-    title,
-    {
-      ...defaultExportSettings(),
-      format: "png",
-      scale: getQualityPreset("hd").scale,
-    },
-    onProgress,
-  );
-}
-
 function ShareSheet({
   onClose,
   onShowQr,
@@ -117,17 +68,25 @@ function ShareSheet({
   onShowQr: () => void;
 }) {
   const page = useActivePage();
-  const projectId = useEditorStore((state) => state.project.id);
   const title = useEditorStore((state) => state.project.title);
   const nativeShare = useNativeShare();
+  const { link, create } = useShareLink();
 
-  const link = shareLink(projectId);
   const [caption, setCaption] = useState(() => shareCaption(title));
   const [copied, setCopied] = useState<"link" | "caption" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // The sheet exists to hand out a link, so opening it publishes the canvas;
+  // `create` is a no-op once this picture already has one.
+  useEffect(() => {
+    create();
+  }, [create]);
+
+  const share = link.state === "ready" ? link.share : null;
+  const url = share?.url ?? "";
 
   /** One place for the "something went wrong" pair: inline text + a toast. */
   function fail(cause: unknown, title: string) {
@@ -163,7 +122,7 @@ function ShareSheet({
       const result = await renderSharePng(page, title, setProgress);
       downloadBlob(result.blob, result.filename);
       await copy(caption, "caption");
-      window.open(target.href(link, caption), "_blank", "noopener,noreferrer");
+      window.open(target.href(url, caption), "_blank", "noopener,noreferrer");
       setStatus(target.hint ?? null);
       toast({
         variant: "success",
@@ -190,7 +149,7 @@ function ShareSheet({
       });
 
       if (canShareFile(file)) {
-        const shared = await shareFile(file, title, `${caption} ${link}`);
+        const shared = await shareFile(file, title, `${caption} ${url}`);
         setStatus(shared ? "Terkirim lewat menu berbagi perangkat." : null);
         if (shared) {
           toast({ variant: "success", title: "Terkirim lewat menu berbagi" });
@@ -200,7 +159,7 @@ function ShareSheet({
 
       // No file support: share the text, and save the picture separately so the
       // user still has something to attach.
-      await navigator.share({ title, text: `${caption} ${link}` });
+      await navigator.share({ title, text: `${caption} ${url}` });
       downloadBlob(result.blob, result.filename);
       setStatus("Teks dibagikan, gambar tersimpan di unduhan.");
     } catch (cause) {
@@ -240,19 +199,31 @@ function ShareSheet({
       <DialogHeader>
         <DialogTitle>Bagikan cepat</DialogTitle>
         <DialogDescription>
-          Kirim hasil foto ini ke aplikasi lain, atau bagikan tautan galerinya.
+          Kirim hasil foto ini ke aplikasi lain, atau bagikan tautannya.
         </DialogDescription>
       </DialogHeader>
 
       <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
         <figure className="flex flex-col items-center gap-1.5">
           <div className="border-editor-border w-full overflow-hidden rounded-lg border bg-white p-2">
-            <QrPreview value={link} />
+            {share ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data URL from the API, no loader involved
+              <img
+                src={share.qr.dataUrl}
+                alt={`QR Code untuk ${share.url}`}
+                className="w-full"
+              />
+            ) : (
+              <div className="flex aspect-square items-center justify-center">
+                <Loader2 className="size-4 animate-spin text-slate-400" />
+              </div>
+            )}
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={onShowQr}
+            disabled={!share}
             className="h-7 w-full text-[11px]"
           >
             <Maximize2 />
@@ -263,26 +234,32 @@ function ShareSheet({
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" htmlFor="share-link">
-              Tautan galeri
+              Tautan foto
             </label>
             <div className="flex gap-1.5">
               <Input
                 id="share-link"
                 readOnly
-                value={link}
+                value={share ? share.url : "Menyiapkan tautan…"}
                 onFocus={(event) => event.currentTarget.select()}
                 className="h-8 text-xs"
               />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copy(link, "link")}
+                onClick={() => copy(url, "link")}
+                disabled={!share}
                 aria-label="Salin tautan"
               >
                 {copied === "link" ? <Check /> : <Copy />}
                 {copied === "link" ? "Tersalin" : "Salin"}
               </Button>
             </div>
+            {share && (
+              <p className="text-muted-foreground text-[11px]">
+                Aktif sampai {shareExpiry(share)} · {formatBytes(share.bytes)}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -326,14 +303,17 @@ function ShareSheet({
               />
             );
 
-            if (target.mode === "manual") {
+            // Every target sends the link along, so none of them can go out
+            // before there is one — a message carrying an empty URL is worse
+            // than a button that waits.
+            if (target.mode === "manual" || !share) {
               return (
                 <Button
                   key={target.id}
                   variant="outline"
                   size="sm"
                   onClick={() => handleManual(target)}
-                  disabled={busy !== null}
+                  disabled={busy !== null || !share}
                   className="justify-start gap-2"
                 >
                   {busy === target.id ? (
@@ -355,7 +335,7 @@ function ShareSheet({
                 className="justify-start gap-2"
               >
                 <a
-                  href={target.href(link, caption)}
+                  href={target.href(share.url, caption)}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -374,7 +354,7 @@ function ShareSheet({
           <Button
             size="sm"
             onClick={handleNativeShare}
-            disabled={busy !== null}
+            disabled={busy !== null || !share}
             className="flex-1"
           >
             {busy === "native" ? (
@@ -412,13 +392,23 @@ function ShareSheet({
         <Info className="mt-0.5 size-3 shrink-0" />
         Instagram &amp; TikTok hanya menerima unggahan dari aplikasinya, jadi
         tombolnya menyimpan gambar + menyalin caption lalu membuka aplikasi.
-        Tautan galerinya sendiri masih contoh sampai layanan unggah aktif.
+        Siapa pun yang punya tautannya bisa membuka fotonya.
       </p>
 
-      {error && (
+      {(error || link.state === "failed") && (
         <p className="text-destructive flex items-start gap-1.5 text-[11px] leading-relaxed">
           <TriangleAlert className="mt-0.5 size-3 shrink-0" />
-          {error}
+          {error ?? (link.state === "failed" ? link.message : null)}
+          {link.state === "failed" && (
+            <button
+              type="button"
+              onClick={create}
+              className="ml-1 inline-flex items-center gap-1 underline underline-offset-2"
+            >
+              <RotateCcw className="size-3" />
+              Coba lagi
+            </button>
+          )}
         </p>
       )}
 

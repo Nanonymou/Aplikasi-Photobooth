@@ -1,6 +1,6 @@
 import { getViewer } from "@/lib/api/authorize";
 import { jsonError } from "@/lib/api/http";
-import { siteUrl } from "@/lib/api/mailer";
+import { siteUrl } from "@/lib/api/site";
 import { callerOwners } from "@/lib/api/scope";
 import { getPaymentGateway } from "@/lib/billing/gateway";
 import { startTemplatePurchase } from "@/lib/db/marketplace";

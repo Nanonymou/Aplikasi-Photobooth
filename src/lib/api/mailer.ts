@@ -1,5 +1,7 @@
 import "server-only";
 
+import { siteUrl } from "@/lib/api/site";
+
 /**
  * Getting a sign-in link to a person.
  *
@@ -19,20 +21,6 @@ export interface Delivery {
   delivered: boolean;
   /** Why not, when not — shown to nobody, logged for whoever runs the place. */
   reason?: string;
-}
-
-/**
- * Where links point.
- *
- * Taken from configuration rather than from the request's own Host header: a
- * header is attacker-controlled, and a sign-in link built from one is a
- * password-reset poisoning waiting to happen.
- */
-export function siteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
 }
 
 export function magicLinkUrl(token: string): string {

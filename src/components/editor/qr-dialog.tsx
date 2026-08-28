@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
-import { Check, Copy, Download, Loader2, Maximize2, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  Loader2,
+  Maximize2,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,62 +20,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { shareExpiry, useShareLink } from "@/hooks/use-share-link";
 import { downloadDataUrl, exportFilename } from "@/lib/editor/export";
-import { shareLink } from "@/lib/editor/share";
 import { useEditorStore } from "@/store/editor-store";
 import { toast } from "@/store/toast-store";
-
-/** Rendered big enough to stay sharp when the card goes fullscreen. */
-const QR_PIXELS = 1024;
-
-const QR_OPTIONS = {
-  // Medium recovery: survives a smudged kiosk screen without inflating the
-  // module count so far that phones struggle at arm's length.
-  errorCorrectionLevel: "M",
-  margin: 2,
-  width: QR_PIXELS,
-  color: { dark: "#0f172a", light: "#ffffff" },
-} as const;
-
-export async function renderQrDataUrl(value: string): Promise<string> {
-  return QRCode.toDataURL(value, QR_OPTIONS);
-}
 
 /**
  * The QR a guest scans to take their photos home.
  *
- * The code itself is real — it encodes exactly the link shown underneath it.
- * That link is still a stand-in until the upload service exists, which the
- * dialog says out loud rather than hiding behind a decorative pattern.
+ * Opening this dialog publishes the canvas: the picture is uploaded, the server
+ * mints the short code, and the QR it draws for that address is what appears
+ * here. So the code leads to the actual photo — on a phone that has never seen
+ * this app — rather than to a plausible-looking address that resolves to
+ * nothing.
  */
 function QrSheet({ onClose }: { onClose: () => void }) {
-  const projectId = useEditorStore((state) => state.project.id);
   const title = useEditorStore((state) => state.project.title);
-  const link = shareLink(projectId);
+  const { link, create } = useShareLink();
 
   const cardRef = useRef<HTMLDivElement>(null);
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Publishing is the whole point of this dialog, so it starts the moment the
+  // dialog opens; `create` is a no-op once this picture already has a link.
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const url = await renderQrDataUrl(link);
-        if (!cancelled) setDataUrl(url);
-      } catch {
-        if (!cancelled) setError("QR Code gagal dibuat.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [link]);
+    create();
+  }, [create]);
+
+  const share = link.state === "ready" ? link.share : null;
 
   async function copyLink() {
+    if (!share) return;
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(share.url);
       setCopied(true);
       setError(null);
       setTimeout(() => setCopied(false), 2000);
@@ -93,7 +78,7 @@ function QrSheet({ onClose }: { onClose: () => void }) {
       <DialogHeader>
         <DialogTitle>QR unduhan</DialogTitle>
         <DialogDescription>
-          Pindai untuk membuka galeri {title} dan mengunduh fotonya.
+          Pindai untuk membuka foto {title} dan menyimpannya.
         </DialogDescription>
       </DialogHeader>
 
@@ -102,11 +87,11 @@ function QrSheet({ onClose }: { onClose: () => void }) {
         className="flex flex-col items-center justify-center gap-3 rounded-xl bg-white p-5 text-slate-900 fullscreen:gap-6 fullscreen:p-10"
       >
         <div className="flex aspect-square w-full max-w-56 items-center justify-center fullscreen:max-w-[70vmin]">
-          {dataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- generated data URL, no loader involved
+          {share ? (
+            // eslint-disable-next-line @next/next/no-img-element -- data URL from the API, no loader involved
             <img
-              src={dataUrl}
-              alt={`QR Code untuk ${link}`}
+              src={share.qr.dataUrl}
+              alt={`QR Code untuk ${share.url}`}
               className="size-full"
             />
           ) : (
@@ -117,51 +102,67 @@ function QrSheet({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col items-center gap-0.5 text-center">
           <p className="text-sm font-semibold fullscreen:text-2xl">{title}</p>
           <p className="font-mono text-[11px] break-all text-slate-500 fullscreen:text-base">
-            {link}
+            {share ? share.url : "Menyiapkan tautan…"}
           </p>
         </div>
       </div>
 
-      <p className="text-muted-foreground text-[11px] leading-relaxed">
-        QR-nya asli dan berisi tautan di atas. Tautannya sendiri masih contoh
-        sampai layanan unggah aktif.
-      </p>
+      {share && (
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          Tautannya aktif sampai {shareExpiry(share)}. Setelah itu QR ini tidak
+          bisa dipakai lagi.
+        </p>
+      )}
 
-      {error && (
+      {(error || link.state === "failed") && (
         <p className="text-destructive flex items-start gap-1.5 text-[11px] leading-relaxed">
           <TriangleAlert className="mt-0.5 size-3 shrink-0" />
-          {error}
+          {error ?? (link.state === "failed" ? link.message : null)}
         </p>
       )}
 
       <DialogFooter className="sm:justify-between">
         <div className="flex gap-1.5">
-          <Button variant="outline" size="sm" onClick={copyLink}>
-            {copied ? <Check /> : <Copy />}
-            {copied ? "Tersalin" : "Salin tautan"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (!dataUrl) return;
-              const filename = exportFilename(`${title} qr`, "png");
-              downloadDataUrl(dataUrl, filename);
-              toast({
-                variant: "success",
-                title: "QR tersimpan",
-                description: `${filename} · ${QR_PIXELS}×${QR_PIXELS} px`,
-              });
-            }}
-            disabled={!dataUrl}
-          >
-            <Download />
-            Unduh QR
-          </Button>
-          <Button variant="outline" size="sm" onClick={goFullscreen}>
-            <Maximize2 />
-            Layar penuh
-          </Button>
+          {link.state === "failed" ? (
+            <Button variant="outline" size="sm" onClick={create}>
+              <RotateCcw />
+              Coba lagi
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyLink}
+                disabled={!share}
+              >
+                {copied ? <Check /> : <Copy />}
+                {copied ? "Tersalin" : "Salin tautan"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!share) return;
+                  const filename = exportFilename(`${title} qr`, "png");
+                  downloadDataUrl(share.qr.dataUrl, filename);
+                  toast({
+                    variant: "success",
+                    title: "QR tersimpan",
+                    description: `${filename} · ${share.qr.pixels}×${share.qr.pixels} px`,
+                  });
+                }}
+                disabled={!share}
+              >
+                <Download />
+                Unduh QR
+              </Button>
+              <Button variant="outline" size="sm" onClick={goFullscreen}>
+                <Maximize2 />
+                Layar penuh
+              </Button>
+            </>
+          )}
         </div>
 
         <Button variant="ghost" size="sm" onClick={onClose}>
