@@ -129,7 +129,7 @@ yang berisik.
 | Tabel | Isi |
 | --- | --- |
 | `events` (0032) | Satu baris per acara: nama, sambutan, aksen, PIN keluar, jadwal. |
-| `event_branding` (0018, 0032) | Setelan booth: acara mana yang sedang berjalan, plus branding cadangan. |
+| `event_branding` (0018, 0032, 0033) | Setelan booth: acara yang sedang berjalan, branding cadangan, dan kendali slideshow. |
 
 - **Branding pindah ke acara, dan singleton-nya tinggal satu tugas.**
   `event_branding` semula satu baris, yang benar selama pertanyaannya "instalasi
@@ -141,6 +141,12 @@ yang berisik.
   adalah sifat booth, bukan sifat acara — dua baris yang sama-sama mengaku hidup
   adalah keadaan yang tidak mungkin ada kalau hanya satu kolom yang bisa
   menyebut satu.
+- **Kendali slideshow ada di setelan booth, bukan di acara.** Main/jeda dan
+  kecepatannya adalah keadaan booth sekarang, bukan sifat acaranya: menjeda
+  dinding saat sambutan tidak boleh jadi sesuatu yang diingat acara itu akhir
+  pekan depan. Ia di server dan bukan di peramban karena dindingnya proyektor di
+  pojok ruangan sementara operatornya berkeliling memegang ponsel — kendali yang
+  hanya ada di layar itu cuma bisa dijangkau dengan berjalan ke sana.
 - **PIN per acara.** Yang menjalankan pernikahan Sabtu belum tentu yang
   menjalankan pesta Minggu, dan memberi keduanya PIN yang sama adalah cara PIN
   berhenti jadi batas.

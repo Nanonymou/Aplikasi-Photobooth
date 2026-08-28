@@ -1,6 +1,10 @@
 import { withFeature } from "@/lib/api/features";
 import { jsonError } from "@/lib/api/http";
-import { activeEventId, getBranding } from "@/lib/db/event-branding";
+import {
+  activeEventId,
+  getBranding,
+  getSlideshowControl,
+} from "@/lib/db/event-branding";
 import { listEventPhotos } from "@/lib/db/photos";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
@@ -42,14 +46,18 @@ export const GET = withFeature("booth.slideshow", async (_context, request: Requ
   }
 
   try {
-    const [eventId, branding] = await Promise.all([
+    // The control rides along with the photos the wall is already polling for,
+    // so the remote and the screen cannot drift apart for longer than one
+    // interval — and there is nothing extra for the wall to fetch.
+    const [eventId, branding, control] = await Promise.all([
       activeEventId(),
       getBranding(),
+      getSlideshowControl(),
     ]);
 
     if (!eventId) {
       return Response.json(
-        { eventName: branding.eventName, live: false, photos: [] },
+        { eventName: branding.eventName, live: false, control, photos: [] },
         { headers: { "cache-control": "private, no-store" } },
       );
     }
@@ -58,6 +66,7 @@ export const GET = withFeature("booth.slideshow", async (_context, request: Requ
       {
         eventName: branding.eventName,
         live: true,
+        control,
         photos: await listEventPhotos(eventId, limit, since),
       },
       { headers: { "cache-control": "private, no-store" } },

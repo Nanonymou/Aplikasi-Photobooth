@@ -257,3 +257,53 @@ export async function activeEventId(): Promise<string | null> {
   );
   return rows[0]?.active_event_id ?? null;
 }
+
+/** The four paces the wall offers, in seconds per photo. */
+export const SLIDESHOW_PACES = [3, 5, 8, 15] as const;
+export type SlideshowPace = (typeof SLIDESHOW_PACES)[number];
+
+export interface SlideshowControl {
+  playing: boolean;
+  paceSeconds: SlideshowPace;
+}
+
+/**
+ * How the wall should be running.
+ *
+ * Read by the wall on the same poll it already makes for new photos, so the
+ * remote and the screen cannot disagree for longer than one interval — and
+ * written by whoever is holding the remote, which is usually not the machine
+ * showing the slideshow.
+ */
+export async function getSlideshowControl(): Promise<SlideshowControl> {
+  const rows = await query<{
+    slideshow_playing: boolean;
+    slideshow_pace_seconds: SlideshowPace;
+  }>(
+    "select slideshow_playing, slideshow_pace_seconds from event_branding where id",
+  );
+
+  const row = rows[0];
+  return {
+    playing: row?.slideshow_playing ?? true,
+    paceSeconds: row?.slideshow_pace_seconds ?? 5,
+  };
+}
+
+/**
+ * Sets one or both. Omitting a field leaves it alone, so "pause" from a phone
+ * does not quietly reset a pace somebody chose an hour ago.
+ */
+export async function setSlideshowControl(
+  update: Partial<SlideshowControl>,
+): Promise<SlideshowControl> {
+  await query(
+    `update event_branding
+        set slideshow_playing = coalesce($1, slideshow_playing),
+            slideshow_pace_seconds = coalesce($2, slideshow_pace_seconds)
+      where id`,
+    [update.playing ?? null, update.paceSeconds ?? null],
+  );
+
+  return getSlideshowControl();
+}
