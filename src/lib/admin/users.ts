@@ -1,123 +1,123 @@
+"use client";
+
+import { ROLE_LABELS, type Role } from "@/lib/auth/roles";
+
 /**
- * Admin user directory.
+ * The people with accounts, as the console reads and changes them.
  *
- * Stand-in for `GET /api/admin/users` — the fields the management table renders:
- * who the user is, the role that governs what they can do, whether the account is
- * live, and when they joined. Roles use the same ids as the dashboard's role
- * summary so the two never disagree. A plain data module; the real endpoint
- * replaces these constants without moving the table.
+ * `GET /api/admin/users` does the searching, filtering and ordering, because
+ * only it can see past the page it returned — filtering an arrived page here is
+ * how a search box starts missing accounts that sit one page further down.
+ *
+ * There is no "status" here, and that is not an omission. The console used to
+ * show Aktif / Diundang / Ditangguhkan against every row; nothing stores any of
+ * those, no endpoint sets them, and a suspended account could still sign in.
+ * What the schema does keep is when somebody last signed in, which answers the
+ * question the status badge was pretending to.
  */
 
-/** The roles RBAC assigns, most privileged first. */
-export type RoleId = "admin" | "editor" | "operator" | "tamu";
-
-export const ROLE_LABELS: Record<RoleId, string> = {
-  admin: "Admin",
-  editor: "Editor",
-  operator: "Operator",
-  tamu: "Tamu",
-};
-
-export type UserStatus = "active" | "invited" | "suspended";
-
-export const STATUS_LABELS: Record<UserStatus, string> = {
-  active: "Aktif",
-  invited: "Diundang",
-  suspended: "Ditangguhkan",
-};
+export type RoleId = Role;
+export { ROLE_LABELS };
 
 export interface AdminUser {
   id: string;
   name: string;
   email: string;
   role: RoleId;
-  status: UserStatus;
-  /** Pre-formatted join date, so there is no locale/clock to hydrate. */
-  joined: string;
-  /** ISO date for sorting; compares chronologically as plain text. */
+  provider: string;
+  /** ISO; the table formats it. */
   joinedAt: string;
+  lastSignInAt: string | null;
 }
 
-export const ADMIN_USERS: AdminUser[] = [
-  {
-    id: "u1",
-    name: "Rara Prawira",
-    email: "rara@contoh.id",
-    role: "admin",
-    status: "active",
-    joined: "2 Jan 2024",
-    joinedAt: "2024-01-02",
-  },
-  {
-    id: "u2",
-    name: "Dewi Anggraini",
-    email: "dewi@contoh.id",
-    role: "editor",
-    status: "active",
-    joined: "18 Feb 2024",
-    joinedAt: "2024-02-18",
-  },
-  {
-    id: "u3",
-    name: "Fajar Nugroho",
-    email: "fajar@contoh.id",
-    role: "editor",
-    status: "active",
-    joined: "30 Apr 2025",
-    joinedAt: "2025-04-30",
-  },
-  {
-    id: "u4",
-    name: "Sari Utami",
-    email: "sari@contoh.id",
-    role: "editor",
-    status: "invited",
-    joined: "12 Jul 2026",
-    joinedAt: "2026-07-12",
-  },
-  {
-    id: "u5",
-    name: "Budi Santoso",
-    email: "budi@contoh.id",
-    role: "operator",
-    status: "active",
-    joined: "3 Mar 2025",
-    joinedAt: "2025-03-03",
-  },
-  {
-    id: "u6",
-    name: "Rangga Pratama",
-    email: "rangga@contoh.id",
-    role: "operator",
-    status: "active",
-    joined: "21 Nov 2024",
-    joinedAt: "2024-11-21",
-  },
-  {
-    id: "u7",
-    name: "Intan Permata",
-    email: "intan@contoh.id",
-    role: "operator",
-    status: "suspended",
-    joined: "9 Sep 2024",
-    joinedAt: "2024-09-09",
-  },
-  {
-    id: "u8",
-    name: "Agus Salim",
-    email: "agus@contoh.id",
-    role: "tamu",
-    status: "active",
-    joined: "1 Jul 2026",
-    joinedAt: "2026-07-01",
-  },
-  {
-    id: "u9",
-    name: "Maya Sari",
-    email: "maya@contoh.id",
-    role: "tamu",
-    status: "active",
-    joined: "14 Jun 2026",
-    joinedAt: "2026-06-14",
-  },
-];
+export interface UserPage {
+  users: AdminUser[];
+  /** Everyone matching the filter, not just this page. */
+  total: number;
+}
+
+export type SortKey = "name" | "role" | "joined";
+export type SortDir = "asc" | "desc";
+
+interface ApiUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: RoleId;
+  provider: string;
+  createdAt: string;
+  lastSignInAt: string | null;
+}
+
+async function refusal(response: Response, fallback: string): Promise<string> {
+  const payload: unknown = await response.json().catch(() => null);
+  const data =
+    typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>)
+      : {};
+  return typeof data.error === "string" ? data.error : fallback;
+}
+
+export async function listUsers(filter: {
+  search?: string;
+  role?: RoleId | "all";
+  sort?: SortKey;
+  dir?: SortDir;
+} = {}): Promise<UserPage> {
+  const params = new URLSearchParams();
+  if (filter.search?.trim()) params.set("q", filter.search.trim());
+  if (filter.role && filter.role !== "all") params.set("role", filter.role);
+  if (filter.sort) params.set("sort", filter.sort);
+  if (filter.dir) params.set("dir", filter.dir);
+
+  const query = params.toString();
+  const response = await fetch(`/api/admin/users${query ? `?${query}` : ""}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(await refusal(response, "Daftar pengguna gagal dimuat."));
+  }
+
+  const data = (await response.json()) as { users: ApiUser[]; total: number };
+  return {
+    total: data.total,
+    users: data.users.map((user) => ({
+      id: user.id,
+      // The part before the @ for anybody who never set a name — the console is
+      // a list of people, and a column of raw addresses is hard to read down.
+      name: user.displayName?.trim() || user.email.split("@")[0],
+      email: user.email,
+      role: user.role,
+      provider: user.provider,
+      joinedAt: user.createdAt,
+      lastSignInAt: user.lastSignInAt,
+    })),
+  };
+}
+
+/**
+ * Changes somebody's role.
+ *
+ * The server refuses to remove the last admin and says so; that refusal is
+ * passed through rather than pre-empted here, because only the server can know
+ * whether this is the last one at the moment the change lands.
+ */
+export async function changeRole(id: string, role: RoleId): Promise<void> {
+  const response = await fetch(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+  if (!response.ok) {
+    throw new Error(await refusal(response, "Peran gagal diubah."));
+  }
+}
+
+/** A date as a person writes it. */
+export function tanggal(iso: string): string {
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}

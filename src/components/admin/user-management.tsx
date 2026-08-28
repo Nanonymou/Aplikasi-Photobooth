@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -25,20 +25,20 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  ADMIN_USERS,
+  changeRole,
+  listUsers,
+  tanggal,
   ROLE_LABELS,
-  STATUS_LABELS,
   type AdminUser,
   type RoleId,
-  type UserStatus,
 } from "@/lib/admin/users";
 import { initials } from "@/lib/auth/initials";
+import { toast } from "@/store/toast-store";
 import { cn } from "@/lib/utils";
 
 const ROLE_BADGE: Record<RoleId, string> = {
@@ -46,12 +46,6 @@ const ROLE_BADGE: Record<RoleId, string> = {
   editor: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   operator: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   tamu: "bg-muted text-muted-foreground",
-};
-
-const STATUS_BADGE: Record<UserStatus, string> = {
-  active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  invited: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  suspended: "bg-destructive/10 text-destructive",
 };
 
 /** "all" plus each role, in the order the filter shows them. */
@@ -126,9 +120,17 @@ function SortHeader({
   );
 }
 
+/** How long to sit on a keystroke before asking the server again. */
+const SEARCH_DEBOUNCE_MS = 250;
+
 export function UserManagement() {
-  const [users, setUsers] = useState<AdminUser[]>(ADMIN_USERS);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState<string | null>(null);
+
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [role, setRole] = useState<RoleId | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("joined");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -136,37 +138,67 @@ export function UserManagement() {
   // Change-role dialog: which user, and the role being picked.
   const [editingRole, setEditingRole] = useState<AdminUser | null>(null);
   const [roleDraft, setRoleDraft] = useState<RoleId>("editor");
-  // Sign-in help dialog: which user, and whether the mock link was "sent".
+  // Sign-in help dialog: which user, and whether the link was sent.
   const [helping, setHelping] = useState<AdminUser | null>(null);
   const [helpSent, setHelpSent] = useState(false);
+
+  const load = useCallback(
+    async (alive: () => boolean = () => true) => {
+      try {
+        const page = await listUsers({ search, role, sort: sortKey, dir: sortDir });
+        if (!alive()) return;
+        setUsers(page.users);
+        setTotal(page.total);
+        setFailed(null);
+      } catch (cause) {
+        if (!alive()) return;
+        setFailed(
+          cause instanceof Error ? cause.message : "Daftar pengguna gagal dimuat.",
+        );
+      } finally {
+        if (alive()) setLoading(false);
+      }
+    },
+    [search, role, sortKey, sortDir],
+  );
+
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      await load(() => current);
+    })();
+    return () => {
+      current = false;
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [query]);
 
   function openRoleEdit(user: AdminUser) {
     setEditingRole(user);
     setRoleDraft(user.role);
   }
 
-  function applyRole() {
-    if (editingRole) {
-      setUsers((current) =>
-        current.map((user) =>
-          user.id === editingRole.id ? { ...user, role: roleDraft } : user,
-        ),
-      );
-    }
+  async function applyRole() {
+    const target = editingRole;
     setEditingRole(null);
-  }
+    if (!target || target.role === roleDraft) return;
 
-  function toggleSuspend(target: AdminUser) {
-    setUsers((current) =>
-      current.map((user) =>
-        user.id === target.id
-          ? {
-              ...user,
-              status: user.status === "suspended" ? "active" : "suspended",
-            }
-          : user,
-      ),
-    );
+    try {
+      await changeRole(target.id, roleDraft);
+      await load();
+    } catch (cause) {
+      // The server refuses to remove the last admin, and that refusal is the
+      // whole message: it knows something this screen cannot.
+      toast({
+        variant: "error",
+        title: "Peran gagal diubah",
+        description: cause instanceof Error ? cause.message : undefined,
+      });
+    }
   }
 
   function openHelp(user: AdminUser) {
@@ -184,26 +216,15 @@ export function UserManagement() {
     }
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = users.filter((user) => {
-      if (role !== "all" && user.role !== role) return false;
-      if (!q) return true;
-      return (
-        user.name.toLowerCase().includes(q) ||
-        user.email.toLowerCase().includes(q)
-      );
-    });
+  const filtered = users;
 
-    const sorted = [...list].sort((a, b) => {
-      const cmp =
-        sortKey === "name"
-          ? a.name.localeCompare(b.name, "id")
-          : a.joinedAt.localeCompare(b.joinedAt);
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return sorted;
-  }, [users, query, role, sortKey, sortDir]);
+  if (failed) {
+    return (
+      <div className="border-destructive/40 text-destructive rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+        {failed}
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -254,7 +275,7 @@ export function UserManagement() {
                   />
                 </th>
                 <th className="px-4 py-2.5 font-medium">Peran</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium">Terakhir masuk</th>
                 <th className="hidden px-4 py-2.5 font-medium sm:table-cell">
                   <SortHeader
                     label="Bergabung"
@@ -293,13 +314,11 @@ export function UserManagement() {
                       {ROLE_LABELS[user.role]}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge className={STATUS_BADGE[user.status]}>
-                      {STATUS_LABELS[user.status]}
-                    </Badge>
+                  <td className="text-muted-foreground px-4 py-3 whitespace-nowrap">
+                    {user.lastSignInAt ? tanggal(user.lastSignInAt) : "—"}
                   </td>
                   <td className="text-muted-foreground hidden px-4 py-3 whitespace-nowrap sm:table-cell">
-                    {user.joined}
+                    {tanggal(user.joinedAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <DropdownMenu>
@@ -321,19 +340,7 @@ export function UserManagement() {
                           <LifeBuoy />
                           Bantuan masuk
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant={
-                            user.status === "suspended"
-                              ? "default"
-                              : "destructive"
-                          }
-                          onSelect={() => toggleSuspend(user)}
-                        >
-                          {user.status === "suspended"
-                            ? "Aktifkan"
-                            : "Tangguhkan"}
-                        </DropdownMenuItem>
+
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -346,7 +353,7 @@ export function UserManagement() {
                     colSpan={5}
                     className="text-muted-foreground px-4 py-10 text-center text-sm"
                   >
-                    Tidak ada pengguna yang cocok.
+                    {loading ? "Memuat pengguna…" : "Tidak ada pengguna yang cocok."}
                   </td>
                 </tr>
               )}
@@ -356,7 +363,7 @@ export function UserManagement() {
       </div>
 
       <p className="text-muted-foreground text-xs">
-        Menampilkan {filtered.length} dari {users.length} pengguna.
+        Menampilkan {filtered.length} dari {total} pengguna.
       </p>
 
       {/* Change role */}
