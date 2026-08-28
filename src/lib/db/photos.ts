@@ -306,3 +306,67 @@ export async function countSessionPhotos(sessionId: string): Promise<number> {
   );
   return Number(rows[0].count);
 }
+
+export interface SlidePhoto {
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+  /** When it was taken, for the "baru saja" the wall shows. */
+  capturedAt: string;
+  /** The sitting it came from, so the wall can avoid three of one face in a row. */
+  sessionId: string | null;
+}
+
+/**
+ * Photos taken at an event, newest first.
+ *
+ * The wall reads this. Newest first because a slideshow at a live event is
+ * mostly watched by the person who was just photographed, looking for
+ * themselves — and a chronological feed buries them behind the whole evening.
+ *
+ * Scoped to the event, not to the owner: every guest's photos are taken under
+ * the booth account, so "the owner's photos" would be every photo ever taken on
+ * this machine, including last weekend's wedding. The event is what makes
+ * tonight's wall tonight's.
+ *
+ * Deleted photos are excluded, and that is the whole moderation story for now: an
+ * operator who removes a photo removes it from the wall too, immediately, which
+ * is the one thing they need when something goes up that should not have.
+ */
+export async function listEventPhotos(
+  eventId: string,
+  limit = 60,
+  since?: string,
+): Promise<SlidePhoto[]> {
+  const rows = await query<{
+    id: string;
+    storage_key: string;
+    width: number;
+    height: number;
+    captured_at: Date | null;
+    created_at: Date;
+    session_id: string | null;
+  }>(
+    `select p.id, p.storage_key, p.width, p.height,
+            p.captured_at, p.created_at, p.session_id
+       from photos p
+       join photo_sessions s on s.id = p.session_id
+      where s.event_id = $1
+        and p.deleted_at is null
+        and ($3::timestamptz is null
+             or coalesce(p.captured_at, p.created_at) > $3)
+      order by coalesce(p.captured_at, p.created_at) desc
+      limit $2`,
+    [eventId, limit, since ?? null],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    url: `/api/photos/${row.storage_key}`,
+    width: row.width,
+    height: row.height,
+    capturedAt: (row.captured_at ?? row.created_at).toISOString(),
+    sessionId: row.session_id,
+  }));
+}
