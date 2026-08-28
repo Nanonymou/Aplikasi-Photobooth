@@ -40,6 +40,36 @@ interface BrandingRow {
   pin_hash: string | null;
   updated_at: Date;
   updated_by: string | null;
+  active_event_id: string | null;
+}
+
+/** The live event's own branding, when the booth is running one. */
+interface ActiveEventRow {
+  id: string;
+  name: string;
+  tagline: string;
+  accent: AccentId;
+  pin_hash: string | null;
+  updated_at: Date;
+  created_by: string | null;
+}
+
+/**
+ * The event the booth is running, or null.
+ *
+ * One join rather than two round trips, because every caller that wants the
+ * branding wants this first — and a settings row that says "event X" followed by
+ * a second query that finds X deleted is a window the booth would show the wrong
+ * name through.
+ */
+async function readActiveEvent(): Promise<ActiveEventRow | null> {
+  const rows = await query<ActiveEventRow>(
+    `select e.id, e.name, e.tagline, e.accent, e.pin_hash, e.updated_at, e.created_by
+       from event_branding b
+       join events e on e.id = b.active_event_id
+      where b.id`,
+  );
+  return rows[0] ?? null;
 }
 
 /** How long a PIN may be. Four digits is what the pad on screen offers. */
@@ -73,8 +103,30 @@ function toBranding(row: BrandingRow): EventBranding {
 }
 
 /** The branding on its own — what the console's branding form loads. */
+/**
+ * The branding the booth should be wearing.
+ *
+ * The live event's, when there is one — that is the whole point of an event
+ * having a name. The settings row's own copy is the fallback for a booth that
+ * has never had an event created on it, which still has to have a face.
+ *
+ * The live event is the authority while it is live, including about its PIN: an
+ * event nobody set a PIN on has no PIN, and quietly inheriting the installation's
+ * would make `pinSet` a lie and hand Saturday's organizer the key to Sunday.
+ */
 export async function getBranding(): Promise<EventBranding> {
-  const row = await readRow();
+  const [row, event] = await Promise.all([readRow(), readActiveEvent()]);
+
+  if (event) {
+    return {
+      eventName: event.name,
+      tagline: event.tagline,
+      accent: event.accent,
+      pinSet: event.pin_hash !== null,
+      updatedAt: event.updated_at.toISOString(),
+      updatedBy: event.created_by,
+    };
+  }
 
   if (!row) {
     console.error("event_branding row is missing; serving an unconfigured booth");
@@ -120,6 +172,11 @@ export interface BrandingUpdate {
  * has to survive the write. An admin restyling the console must not silently
  * clear the PIN an organizer set at the booth, and an organizer fixing the
  * event name must not reset the accent to whatever the default happened to be.
+ *
+ * It writes wherever the booth is currently reading: the live event when there
+ * is one, the settings row when there is not. Anything else and the branding
+ * form would be editing something the booth is not showing — an admin renaming
+ * the event, watching the kiosk keep the old name, and having no way to tell why.
  */
 export async function saveBranding(
   update: BrandingUpdate,
@@ -127,6 +184,28 @@ export async function saveBranding(
 ): Promise<EventBranding> {
   const changingPin = update.pin !== undefined;
   const hash = update.pin ? await hashPin(update.pin) : null;
+
+  const event = await readActiveEvent();
+
+  if (event) {
+    await query(
+      `update events
+          set name = $1,
+              tagline = $2,
+              accent = coalesce($3, accent),
+              pin_hash = case when $4::boolean then $5 else pin_hash end
+        where id = $6`,
+      [
+        update.eventName.trim(),
+        update.tagline.trim(),
+        update.accent ?? null,
+        changingPin,
+        hash,
+        event.id,
+      ],
+    );
+    return getBranding();
+  }
 
   await query(
     `update event_branding
@@ -157,6 +236,15 @@ export async function saveBranding(
  * which is precisely backwards.
  */
 export async function checkExitPin(pin: string): Promise<boolean> {
+  // The live event answers for itself, PIN or no PIN. Falling back to the
+  // installation's would let an event nobody set a PIN on be opened with the
+  // one from a different night — which is exactly what per-event PINs exist to
+  // prevent.
+  const event = await readActiveEvent();
+  if (event) {
+    return event.pin_hash ? verifyPin(pin, event.pin_hash) : false;
+  }
+
   const row = await readRow();
   if (!row?.pin_hash) return false;
   return verifyPin(pin, row.pin_hash);
