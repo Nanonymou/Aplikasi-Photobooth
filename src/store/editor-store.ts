@@ -4,7 +4,7 @@ import { create } from "zustand";
 
 import { createId } from "@/lib/editor/id";
 import { MOCK_PROJECT } from "@/lib/editor/mock-project";
-import { pageOrientation } from "@/types/editor";
+import { turnPage } from "@/lib/editor/refit";
 import type {
   CanvasObject,
   CanvasPage,
@@ -229,46 +229,6 @@ function nextPageName(pages: CanvasPage[], index: number): string {
   return `Halaman ${number}`;
 }
 
-/**
- * Re-lays a page's objects into a new page size.
- *
- * One scale factor for both axes, chosen so everything fits, and the whole
- * arrangement centred in what is left over. Scaling each axis separately would
- * fit more tightly and squash every photo doing it — a face stretched sideways
- * is a worse outcome than a margin.
- *
- * Rotation and everything else about an object is untouched: turning a page is
- * a statement about the page, and a text box that started upright should not
- * come back lying on its side.
- */
-function refitObjects(
-  objects: CanvasObject[],
-  from: { width: number; height: number },
-  to: { width: number; height: number },
-): CanvasObject[] {
-  if (objects.length === 0) return objects;
-
-  const scale = Math.min(to.width / from.width, to.height / from.height);
-
-  // Centre by the content's own bounds rather than the old page's, so a layout
-  // that already sat off to one side keeps its composition instead of being
-  // silently re-centred.
-  const left = Math.min(...objects.map((object) => object.x));
-  const top = Math.min(...objects.map((object) => object.y));
-  const right = Math.max(...objects.map((object) => object.x + object.width));
-  const bottom = Math.max(...objects.map((object) => object.y + object.height));
-
-  const offsetX = (to.width - (right - left) * scale) / 2 - left * scale;
-  const offsetY = (to.height - (bottom - top) * scale) / 2 - top * scale;
-
-  return objects.map((object) => ({
-    ...object,
-    x: object.x * scale + offsetX,
-    y: object.y * scale + offsetY,
-    width: object.width * scale,
-    height: object.height * scale,
-  }));
-}
 
 /** Pushes the current project onto the undo stack and clears the redo stack. */
 function commit(
@@ -337,22 +297,16 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       );
       if (!page) return {};
 
-      // A square has no other side to turn to, and `pageOrientation` has to call
-      // it something — so the guard below would let one of the two buttons swap
-      // 1200x1200 for 1200x1200 and push a do-nothing entry onto the undo stack.
-      if (page.width === page.height) return {};
-      if (pageOrientation(page) === orientation) return {};
-
-      const size = { width: page.height, height: page.width };
+      // Null means there was nothing to turn — a square, or a page already that
+      // way round. Both would be a change that changes nothing, and pushing one
+      // onto the undo stack means Ctrl+Z appearing to do nothing too.
+      const turned = turnPage(page, orientation);
+      if (!turned) return {};
 
       return {
         ...commit(
           state,
-          withActivePage(state.project, state.activePageId, (current) => ({
-            ...current,
-            ...size,
-            objects: refitObjects(current.objects, current, size),
-          })),
+          withActivePage(state.project, state.activePageId, () => turned),
         ),
         selectedIds: [],
         zoomMode: "fit",

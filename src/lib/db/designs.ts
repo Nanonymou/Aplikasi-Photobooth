@@ -3,12 +3,17 @@ import "server-only";
 import { query, transaction } from "@/lib/db/client";
 import { getGalleryDesign, type GalleryDesign } from "@/lib/db/gallery";
 import { projectToPageWrites, rowsToProject } from "@/lib/db/mappers";
+import { turnPage } from "@/lib/editor/refit";
 import {
   ensureGuestSession,
   type GuestSession,
 } from "@/lib/db/guest-sessions";
 import type { DesignPageRow, DesignRow } from "@/lib/db/types";
-import type { EditorProject } from "@/types/editor";
+import type {
+  CanvasObject,
+  EditorProject,
+  PageOrientation,
+} from "@/types/editor";
 
 /** Raised when a save is based on a version someone else has already replaced. */
 export class DesignConflictError extends Error {
@@ -760,4 +765,76 @@ export async function removeDesignPage(
       version: updated[0].version,
     };
   });
+}
+
+export interface TurnedPage {
+  page: PageSummary;
+  version: number;
+}
+
+/**
+ * Turns a page portrait or landscape.
+ *
+ * The geometry is `turnPage` from the editor's own module, not a second copy of
+ * it in SQL: what happens to a layout when its page is turned is one answer, and
+ * two implementations of it is how the same design ends up looking different
+ * depending on which button somebody pressed. So the page is read out, turned by
+ * the shared function, and written back.
+ *
+ * `"unchanged"` is not a failure. A square has no other orientation, and a page
+ * already that way round has nothing to do — both would otherwise cost a version
+ * bump for a write that changed nothing, and would tell an editor its document
+ * is stale when it is not.
+ */
+export async function turnDesignPage(
+  owners: string[],
+  designId: string,
+  pageId: string,
+  orientation: PageOrientation,
+): Promise<TurnedPage | "not-found" | "unchanged"> {
+  if (owners.length === 0 || !isDesignId(designId)) return "not-found";
+
+  const outcome = await transaction(async (client) => {
+    const { rows: designs } = await client.query<{ id: string }>(
+      `select id from designs
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null
+        for update`,
+      [designId, owners],
+    );
+    if (designs.length === 0) return "not-found" as const;
+
+    const { rows } = await client.query<{
+      width: number;
+      height: number;
+      objects: CanvasObject[];
+    }>(
+      "select width, height, objects from design_pages where design_id = $1 and id = $2",
+      [designId, pageId],
+    );
+    const page = rows[0];
+    if (!page) return "not-found" as const;
+
+    const turned = turnPage(page, orientation);
+    if (!turned) return "unchanged" as const;
+
+    await client.query(
+      `update design_pages
+          set width = $3, height = $4, objects = $5
+        where design_id = $1 and id = $2`,
+      [designId, pageId, turned.width, turned.height, JSON.stringify(turned.objects)],
+    );
+
+    const { rows: updated } = await client.query<{ version: number }>(
+      "update designs set version = version + 1 where id = $1 returning version",
+      [designId],
+    );
+
+    return { version: updated[0].version };
+  });
+
+  if (outcome === "not-found" || outcome === "unchanged") return outcome;
+
+  const summaries = await listDesignPages(owners, designId);
+  const page = summaries?.find((candidate) => candidate.id === pageId);
+  return page ? { page, version: outcome.version } : "not-found";
 }
