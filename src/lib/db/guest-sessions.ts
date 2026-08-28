@@ -3,6 +3,7 @@ import "server-only";
 import type pg from "pg";
 
 import { query, transaction } from "@/lib/db/client";
+import { guestRetentionDays } from "@/lib/db/policy";
 
 /**
  * The anonymous session behind a guest's designs.
@@ -98,14 +99,19 @@ export async function ensureGuestSession(
         client.query<Row>(text, values).then((result) => result.rows)
     : query;
 
+  const retentionDays = await guestRetentionDays();
+
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt += 1) {
     try {
       const rows = await run<GuestSessionRow>(
-        `insert into guest_sessions (owner_id, code)
-         values ($1, $2)
+        // The expiry is the installation's retention setting, not the column
+        // default: an admin who shortens it means the next guest's work goes
+        // sooner, and a default baked into the schema would quietly ignore them.
+        `insert into guest_sessions (owner_id, code, expires_at)
+         values ($1, $2, now() + make_interval(days => $3::int))
          on conflict (owner_id) do update set last_seen_at = now()
          returning *`,
-        [ownerId, randomCode()],
+        [ownerId, randomCode(), retentionDays],
       );
       return toSession(rows[0]);
     } catch (error) {

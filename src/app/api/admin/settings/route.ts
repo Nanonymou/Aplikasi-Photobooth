@@ -1,5 +1,5 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   getSettings,
   RETENTION_MAX,
@@ -22,28 +22,28 @@ const QUALITIES = EXPORT_QUALITY_OPTIONS.map((option) => option.id);
 
 const MAX_BRAND_LENGTH = 80;
 
-/** Every key the body must carry, and nothing else. */
+/** Every key the body must carry. */
 const FIELDS = [
   "brandName",
   "language",
   "allowGuest",
   "guestRetentionDays",
   "exportQuality",
-  "requireEmailVerification",
   "allowRegistration",
-  "adminTwoFactor",
 ] as const;
 
-const FLAGS = [
-  "allowGuest",
-  "requireEmailVerification",
-  "allowRegistration",
-  "adminTwoFactor",
-] as const;
+const FLAGS = ["allowGuest", "allowRegistration"] as const;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+/**
+ * Fields the read returns that the write owns, and therefore ignores.
+ *
+ * The write demands a complete object, so the only way to change one knob is to
+ * read, edit, and send back — and a read that returns two fields the write then
+ * refuses makes that the one workflow the API forces you into and rejects.
+ * Ignored rather than accepted: they are the server's to set, and a caller that
+ * sends a different `updatedBy` is not going to get it.
+ */
+const SERVER_OWNED = ["updatedAt", "updatedBy"] as const;
 
 type Parsed = { settings: SystemSettings } | { error: string };
 
@@ -56,9 +56,8 @@ type Parsed = { settings: SystemSettings } | { error: string };
  * admin believes they changed and did not.
  */
 function parse(body: Record<string, unknown>): Parsed {
-  const extra = Object.keys(body).filter(
-    (key) => !(FIELDS as readonly string[]).includes(key),
-  );
+  const known: readonly string[] = [...FIELDS, ...SERVER_OWNED];
+  const extra = Object.keys(body).filter((key) => !known.includes(key));
   if (extra.length > 0) {
     return { error: `Bidang tidak dikenal: ${extra.join(", ")}.` };
   }
@@ -111,9 +110,7 @@ function parse(body: Record<string, unknown>): Parsed {
       allowGuest: body.allowGuest as boolean,
       guestRetentionDays: retention,
       exportQuality: body.exportQuality as ExportQuality,
-      requireEmailVerification: body.requireEmailVerification as boolean,
       allowRegistration: body.allowRegistration as boolean,
-      adminTwoFactor: body.adminTwoFactor as boolean,
     },
   };
 }
@@ -152,7 +149,7 @@ export const PUT = withPermission(
   async (viewer, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const parsed = parse(body.value);
     if ("error" in parsed) return jsonError(400, parsed.error);

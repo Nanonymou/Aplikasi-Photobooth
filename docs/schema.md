@@ -37,6 +37,7 @@ semuanya bertanya lewat sana.
 | `payments` (0029) | Satu baris per upaya membayar. Hanya baris `paid` yang boleh menaikkan paket. |
 | `help_categories` (0030) | Kategori pusat bantuan, dengan urutan yang dikurasi. |
 | `help_articles` (0030) | Satu baris per jawaban. `published_at` null berarti draf. |
+| `app_settings` (0013, 0037) | Satu baris: setelan seluruh instalasi. Setiap kolomnya ditegakkan di suatu tempat. |
 
 Beberapa keputusan yang disengaja:
 
@@ -98,6 +99,20 @@ Beberapa keputusan yang disengaja:
   yang disepakati akun ini, dan tidak ikut bergerak saat katalog berubah — itulah
   yang membuat pelanggan lama bisa dipertahankan di harga lamanya. Membacanya
   dari katalog saat menampilkan justru bug yang ditutup migrasi ini.
+
+- **Setelan hanya boleh ada kalau ada yang membacanya.** `app_settings` sempat
+  punya delapan sakelar dan enam di antaranya tidak dibaca oleh apa pun: admin
+  bisa mematikan akses tamu, menutup pendaftaran, atau mengubah retensi ke 7 hari
+  dan tidak ada yang berubah. Empat di antaranya sekarang ditegakkan lewat
+  `src/lib/db/policy.ts` — satu fungsi per pintu, supaya tidak ada cara menambah
+  setelan lalu lupa memasangnya. Dua sisanya dihapus (0037) alih-alih diberi arti
+  palsu: verifikasi email sudah melekat pada masuk-lewat-tautan dan sisi sosial
+  belum menukar tokennya sendiri, sedangkan 2FA butuh pendaftaran TOTP yang belum
+  ada. Sakelar keamanan yang tidak melakukan apa-apa lebih berbahaya daripada
+  tidak ada sakelarnya.
+- **`app_settings.updated_by` punya foreign key** (0037, `on delete set null`).
+  Sebelumnya uuid lepas: menghapus seorang admin meninggalkan penunjuk
+  menggantung dan layar "terakhir diubah oleh" kosong tanpa sebab.
 
 ## Sesi
 
@@ -163,7 +178,7 @@ yang berisik.
 | `published_designs` (0034) | Desain yang dipublikasikan ke galeri publik; salinan judul, kategori, ukuran. |
 | `design_likes` (0034) | Satu baris per orang per desain publik — sinyal untuk pembuatnya. |
 | `design_saves` (0035) | Satu baris per orang per desain yang disimpan — catatan untuk dirinya sendiri. |
-| `template_purchases` (0036) | Satu baris per upaya membeli template. Hanya baris `paid` yang memberi akses. |
+| `template_purchases` (0036, 0038) | Satu baris per upaya membeli template. Hanya baris `paid` yang memberi akses, dan hanya satu per pembeli. |
 | `creator_payouts` (0036) | Satu baris per pembuat per bulan — uang yang benar-benar keluar untuknya. |
 | `designs` (0001) | Judul, pemilik, `version`, `deleted_at`. |
 | `design_pages` (0001, 0031) | Halaman: ukuran, latar, `objects` sebagai JSONB, dan `effects` per halaman. |
@@ -229,6 +244,14 @@ yang berisik.
   periode, dan bisa gagal sendirian tanpa satu pun penjualannya jadi diragukan.
   `(account_id, period)` unik supaya bayar dua kali untuk bulan yang sama mustahil,
   bukan sekadar tertangkap saat diperiksa.
+- **Satu lisensi per pembeli, dan satu checkout berjalan** (0038, dua indeks
+  parsial). Pemeriksaan "sudah dibeli?" adalah baca-lalu-tulis; tanpa indeks di
+  belakangnya, klik ganda pada tombol Beli menghasilkan dua baris `pending`, dan
+  kalau dua-duanya lunas pembeli membayar dua kali untuk satu template. Diukur:
+  tiga klik serentak → tiga baris, dua lunas → Rp40.000 untuk template Rp20.000.
+  Indeks `pending` membuat klik kedua menemukan checkout yang sama; indeks `paid`
+  adalah garis terakhir, dan pembayaran kedua yang terlanjur masuk dilaporkan
+  sebagai perlu-dikembalikan alih-alih diam-diam jadi penjualan kedua.
 | `photo_filters`, `visual_effects` (0024) | Katalog tampilan: perlakuan warna, dan lapisan di atas foto. |
 | `frame_textures` (0026) | Tekstur bingkai: rutinitas penggambar plus dua warnanya. |
 | `export_events` (0015) | Catatan bahwa sebuah ekspor terjadi — untuk laporan, bukan untuk berkasnya. |

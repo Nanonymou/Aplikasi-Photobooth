@@ -1,15 +1,11 @@
 import { suggestLayouts } from "@/lib/ai/layout";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 
 export const runtime = "nodejs";
 
 const MAX_SLOTS = 60;
 const MIN_SIDE = 16;
 const MAX_SIDE = 20_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Layout recommendations for a page.
@@ -33,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const { width, height, slotCount } = body.value;
 

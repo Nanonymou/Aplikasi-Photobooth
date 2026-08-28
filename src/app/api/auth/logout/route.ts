@@ -1,14 +1,10 @@
 import { clearAccountId } from "@/lib/api/account";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { clearOwnerId, getOwnerId } from "@/lib/api/owner";
 import { endGuestSession } from "@/lib/db/guest-sessions";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Signs out.
@@ -33,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function POST(request: Request): Promise<Response> {
   // A body is optional: the common case is a bare sign-out.
   const body = await readJsonBody(request).catch(() => null);
-  const value = body && body.ok && isRecord(body.value) ? body.value : {};
+  const value = body && body.ok && isJsonObject(body.value) ? body.value : {};
 
   if (value.endDeviceSession !== undefined && typeof value.endDeviceSession !== "boolean") {
     return jsonError(400, "endDeviceSession harus boolean.");

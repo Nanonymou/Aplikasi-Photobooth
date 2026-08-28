@@ -8,7 +8,9 @@ import {
   getGuestSession,
   GuestSessionNotFoundError,
 } from "@/lib/db/guest-sessions";
+import { registrationAllowed } from "@/lib/db/policy";
 import {
+  getUserProfile,
   recordSignIn,
   type AuthProvider,
   type UserProfile,
@@ -22,7 +24,19 @@ import {
  * the profile, bring the guest's work along. Keeping them in one function is
  * what stops the two paths drifting, which is how you end up with an app where
  * signing in with Google quietly forgets to claim your strip.
+ *
+ * It is also the only place an account is created, which is why closing
+ * registration is enforced here rather than at each entrance: a rule checked in
+ * two routes is a rule the third route added later will not have.
  */
+
+/** Thrown when the installation has closed registration to new accounts. */
+export class RegistrationClosedError extends Error {
+  constructor() {
+    super("Pendaftaran akun baru sedang ditutup.");
+    this.name = "RegistrationClosedError";
+  }
+}
 
 export interface SignInResult {
   profile: UserProfile;
@@ -37,6 +51,13 @@ export async function signIn(identity: {
   avatarUrl?: string | null;
 }): Promise<SignInResult> {
   const accountId = accountIdForEmail(identity.email);
+
+  // Signing in is not registering. Only an address with no profile behind it is
+  // a registration, so closing the door leaves everyone already inside alone —
+  // which is what an admin means by closing it in the middle of an event.
+  if (!(await getUserProfile(accountId)) && !(await registrationAllowed())) {
+    throw new RegistrationClosedError();
+  }
 
   // The profile first: a session pointing at an account with no profile row
   // would resolve to an identity nothing else can describe.

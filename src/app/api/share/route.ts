@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
 
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
 import { findRender } from "@/lib/db/renders";
@@ -16,10 +16,6 @@ const MAX_BYTES = 40 * 1024 * 1024;
 
 /** Big enough to stay sharp on a kiosk screen and when printed on a card. */
 const QR_PIXELS = 1024;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -180,7 +176,7 @@ async function ownedDesign(
 async function shareRender(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const renderKey = body.value.renderKey;
   if (typeof renderKey !== "string") {

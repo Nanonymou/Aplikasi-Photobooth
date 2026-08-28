@@ -1,4 +1,4 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { callerOwners } from "@/lib/api/scope";
 import { validatePage } from "@/lib/api/validate-project";
 import {
@@ -13,10 +13,6 @@ import type { CanvasPage, PageOrientation } from "@/types/editor";
 export const runtime = "nodejs";
 
 const ORIENTATIONS: PageOrientation[] = ["portrait", "landscape"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Autosave, for one page.
@@ -45,7 +41,7 @@ export async function PUT(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
   const version = body.value.version;
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
@@ -55,7 +51,7 @@ export async function PUT(
   const page = body.value.page;
   // The same validator the whole-document save uses, so this cannot become a
   // way in for a page that one would refuse.
-  const problem = validatePage({ ...(isRecord(page) ? page : {}), id: pageId }, 0);
+  const problem = validatePage({ ...(isJsonObject(page) ? page : {}), id: pageId }, 0);
   if (problem) return jsonError(400, `Halaman tidak valid: ${problem}.`);
 
   const valid = page as unknown as CanvasPage;
@@ -117,7 +113,7 @@ export async function PATCH(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
   const extra = Object.keys(body.value).filter((key) => key !== "orientation");
   if (extra.length > 0) {

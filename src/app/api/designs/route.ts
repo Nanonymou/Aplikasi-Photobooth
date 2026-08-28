@@ -1,5 +1,7 @@
 import { jsonError, readJsonBody } from "@/lib/api/http";
+import { getAccountId } from "@/lib/api/account";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
+import { guestsAllowed } from "@/lib/db/policy";
 import { callerOwners } from "@/lib/api/scope";
 import { validateProject } from "@/lib/api/validate-project";
 import { createDesign, listDesigns } from "@/lib/db/designs";
@@ -67,6 +69,12 @@ export async function POST(request: Request): Promise<Response> {
   if (!validated.ok) return jsonError(400, validated.error);
 
   try {
+    // The other door a guest comes through. An account passes regardless: the
+    // switch closes the booth to walk-ups, not to the people who run it.
+    if (!(await getAccountId()) && !(await guestsAllowed())) {
+      return jsonError(403, "Booth ini menutup akses tamu. Masuk dulu untuk menyimpan.");
+    }
+
     const owner = await requireOwnerId();
     const { saved, session } = await createDesign(owner, validated.project);
     return Response.json({ ...saved, session }, { status: 201 });

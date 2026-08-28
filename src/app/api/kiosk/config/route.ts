@@ -1,5 +1,5 @@
 import { withFeature } from "@/lib/api/features";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   getKioskConfig,
   PIN_PATTERN,
@@ -14,10 +14,6 @@ const MAX_EVENT_NAME = 120;
 const MAX_TAGLINE = 200;
 
 const FIELDS = ["eventName", "tagline", "pin"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 type Parsed = { update: BrandingUpdate } | { error: string };
 
@@ -102,7 +98,7 @@ export const PUT = withFeature(
   async (context, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const parsed = parse(body.value);
     if ("error" in parsed) return jsonError(400, parsed.error);

@@ -1,4 +1,4 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
 import { callerOwners } from "@/lib/api/scope";
 import { validateProject } from "@/lib/api/validate-project";
@@ -12,10 +12,6 @@ import {
 } from "@/lib/db/designs";
 
 export const runtime = "nodejs";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /** A design is only ever its own owner's, so nothing here may be cached shared. */
 const PRIVATE = "private, no-store";
@@ -55,7 +51,7 @@ export async function GET(
       headers: { etag, "cache-control": PRIVATE },
     });
   } catch (error) {
-    if (isRecord(error) && error.code === "22P02") {
+    if (isJsonObject(error) && error.code === "22P02") {
       return jsonError(404, "Desain tidak ditemukan.");
     }
     console.error(`GET /api/designs/${id} failed`, error);
@@ -89,7 +85,7 @@ export async function PUT(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const version = body.value.version;
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
@@ -119,7 +115,7 @@ export async function PUT(
     }
     // An id that is not a uuid never matches a row; it is a bad request, not a
     // server fault, and PostgreSQL is the one that notices.
-    if (isRecord(error) && error.code === "22P02") {
+    if (isJsonObject(error) && error.code === "22P02") {
       return jsonError(404, "Desain tidak ditemukan.");
     }
 
@@ -150,7 +146,7 @@ export async function PATCH(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const extra = Object.keys(body.value).filter((key) => key !== "title");
   if (extra.length > 0) {
@@ -175,7 +171,7 @@ export async function PATCH(
 
     return Response.json({ design }, { headers: { "cache-control": PRIVATE } });
   } catch (error) {
-    if (isRecord(error) && error.code === "22P02") {
+    if (isJsonObject(error) && error.code === "22P02") {
       return jsonError(404, "Desain tidak ditemukan.");
     }
     console.error(`PATCH /api/designs/${id} failed`, error);
@@ -210,7 +206,7 @@ export async function DELETE(
       { headers: { "cache-control": PRIVATE } },
     );
   } catch (error) {
-    if (isRecord(error) && error.code === "22P02") {
+    if (isJsonObject(error) && error.code === "22P02") {
       return jsonError(404, "Desain tidak ditemukan.");
     }
     console.error(`DELETE /api/designs/${id} failed`, error);

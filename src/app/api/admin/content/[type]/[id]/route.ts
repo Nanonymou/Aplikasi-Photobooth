@@ -1,5 +1,5 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   deleteContent,
   editContent,
@@ -14,10 +14,6 @@ import {
 export const runtime = "nodejs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /** Matches the columns' own limit, so a rename fails here rather than in SQL. */
 const MAX_LABEL = 120;
@@ -72,7 +68,7 @@ export const PATCH = withPermission(
 
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const allowed = ["label", "categorySlug", "status"];
     const extra = Object.keys(body.value).filter((key) => !allowed.includes(key));

@@ -1,5 +1,5 @@
 import { getViewer } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { describeMe } from "@/lib/api/me";
 import { updateOwnProfile } from "@/lib/db/user-profiles";
 
@@ -8,10 +8,6 @@ export const runtime = "nodejs";
 
 /** Long enough for a real name, short enough not to be a paragraph. */
 const NAME_MAX = 120;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * The signed-in user's own profile, role, and what that role may do.
@@ -60,7 +56,7 @@ export async function PATCH(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   if ("role" in body.value || "permissions" in body.value) {
     return jsonError(

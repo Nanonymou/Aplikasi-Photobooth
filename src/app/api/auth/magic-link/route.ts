@@ -1,4 +1,4 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { deliverMagicLink, magicLinkUrl } from "@/lib/api/mailer";
 import { issueMagicLink } from "@/lib/db/magic-links";
 
@@ -6,10 +6,6 @@ import { issueMagicLink } from "@/lib/db/magic-links";
 export const runtime = "nodejs";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Asks for a sign-in link.
@@ -27,7 +23,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const email = body.value.email;
   if (typeof email !== "string" || !EMAIL.test(email.trim())) {

@@ -1,5 +1,5 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
 import { getPhotoStorage } from "@/lib/storage/photo-storage";
 import {
@@ -198,10 +198,6 @@ export const POST = withPermission(
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 /**
  * Adds a frame texture from a JSON body.
  *
@@ -215,7 +211,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function addTexture(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   if (body.value.type !== undefined && body.value.type !== "texture") {
     return jsonError(400, "Body JSON di sini hanya untuk `type: \"texture\"`.");

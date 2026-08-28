@@ -31,9 +31,7 @@ interface SettingsRow {
   allow_guest: boolean;
   guest_retention_days: number;
   export_quality: ExportQuality;
-  require_email_verification: boolean;
   allow_registration: boolean;
-  admin_two_factor: boolean;
   updated_at: Date;
   updated_by: string | null;
 }
@@ -45,9 +43,7 @@ function toSettings(row: SettingsRow): StoredSettings {
     allowGuest: row.allow_guest,
     guestRetentionDays: row.guest_retention_days,
     exportQuality: row.export_quality,
-    requireEmailVerification: row.require_email_verification,
     allowRegistration: row.allow_registration,
-    adminTwoFactor: row.admin_two_factor,
     updatedAt: row.updated_at.toISOString(),
     updatedBy: row.updated_by,
   };
@@ -73,7 +69,7 @@ export async function getSettings(): Promise<StoredSettings> {
 }
 
 /**
- * Writes all eight knobs at once.
+ * Writes every knob at once.
  *
  * A whole-object write, matching the form: the settings screen shows every value
  * and saves what it shows, so a partial update would mean the server guessing
@@ -93,10 +89,8 @@ export async function saveSettings(
             allow_guest = $3,
             guest_retention_days = $4,
             export_quality = $5,
-            require_email_verification = $6,
-            allow_registration = $7,
-            admin_two_factor = $8,
-            updated_by = $9
+            allow_registration = $6,
+            updated_by = $7
       where id
      returning *`,
     [
@@ -105,9 +99,7 @@ export async function saveSettings(
       settings.allowGuest,
       settings.guestRetentionDays,
       settings.exportQuality,
-      settings.requireEmailVerification,
       settings.allowRegistration,
-      settings.adminTwoFactor,
       updatedBy,
     ],
   );

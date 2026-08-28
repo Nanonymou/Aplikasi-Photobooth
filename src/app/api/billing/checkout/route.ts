@@ -1,5 +1,5 @@
 import { getViewer } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { siteUrl } from "@/lib/api/mailer";
 import { getPaymentGateway } from "@/lib/billing/gateway";
 import { PLANS, type BillingCycle, type PlanId } from "@/lib/billing/plans";
@@ -13,10 +13,6 @@ const PAID_PLANS = PLANS.map((plan) => plan.id).filter(
   (plan): plan is Exclude<PlanId, "gratis"> => plan !== "gratis",
 );
 const CYCLES: BillingCycle[] = ["monthly", "yearly"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Starts a payment for a paid plan.
@@ -39,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
   const extra = Object.keys(body.value).filter(
     (key) => key !== "plan" && key !== "cycle",

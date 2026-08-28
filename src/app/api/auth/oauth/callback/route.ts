@@ -1,5 +1,5 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
-import { signIn } from "@/lib/api/sign-in";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
+import { RegistrationClosedError, signIn } from "@/lib/api/sign-in";
 import type { AuthProvider } from "@/lib/db/user-profiles";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
@@ -9,10 +9,6 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Only the social providers land here; email sign-in has its own route. */
 const PROVIDERS = new Set<AuthProvider>(["google", "apple"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function optionalString(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -42,7 +38,7 @@ function optionalString(value: unknown, max: number): string | null {
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const provider = body.value.provider;
   if (
@@ -71,6 +67,12 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json({ profile, claimed });
   } catch (error) {
+    // Not a failure to be logged as one: the installation closed the door, and
+    // the person holding a valid link deserves to be told that rather than
+    // shown a 500.
+    if (error instanceof RegistrationClosedError) {
+      return jsonError(403, "Pendaftaran akun baru sedang ditutup. Hubungi penyelenggara.");
+    }
     console.error("POST /api/auth/oauth/callback failed", error);
     return jsonError(500, "Masuk lewat penyedia gagal diselesaikan.");
   }

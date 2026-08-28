@@ -1,5 +1,6 @@
+import { featureContext } from "@/lib/api/features";
 import { jsonError } from "@/lib/api/http";
-import { LIBRARY_CACHE, parseListParams } from "@/lib/api/library-params";
+import { parseListParams } from "@/lib/api/library-params";
 import { listCategories, listTemplates } from "@/lib/db/library";
 
 export const runtime = "nodejs";
@@ -16,24 +17,36 @@ export const runtime = "nodejs";
  *
  * The items are summaries — a template's composition comes from the detail
  * endpoint, once the user actually picks one.
+ *
+ * Each carries `locked`, which is the server's answer to "may this caller use
+ * it", not the client's. `isPremium` alone would leave every screen re-deriving
+ * "premium and on the free plan" and drifting from the endpoint that actually
+ * refuses. Locked templates are still listed: somebody has to see what the paid
+ * plan is for.
  */
 export async function GET(request: Request): Promise<Response> {
   const params = parseListParams(request);
   if (!params.ok) return params.response;
 
   try {
-    const [listing, categories] = await Promise.all([
+    const [listing, categories, { plan }] = await Promise.all([
       listTemplates(params.query),
       listCategories("template", "design_templates"),
+      featureContext(),
     ]);
 
     return Response.json(
       {
-        templates: listing.templates,
+        templates: listing.templates.map((template) => ({
+          ...template,
+          locked: template.isPremium && plan === "gratis",
+        })),
         total: listing.total,
         categories,
+        plan,
       },
-      { headers: { "cache-control": LIBRARY_CACHE } },
+      // Per-viewer now that the answer depends on their plan.
+      { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
     console.error("GET /api/library/templates failed", error);

@@ -1,5 +1,5 @@
 import { getAccountId } from "@/lib/api/account";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { callerOwners } from "@/lib/api/scope";
 import { currentPlanPrices } from "@/lib/db/plan-prices";
 import {
@@ -21,10 +21,6 @@ export const runtime = "nodejs";
 
 const PLAN_IDS = PLANS.map((plan) => plan.id);
 const CYCLES: BillingCycle[] = ["monthly", "yearly"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * The account's plan, and how much of it is used.
@@ -97,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
   const extra = Object.keys(body.value).filter(
     (key) => key !== "plan" && key !== "cycle",

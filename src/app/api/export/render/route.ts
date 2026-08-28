@@ -1,7 +1,8 @@
 import { EXPORT_FORMATS, type ExportFormat } from "@/lib/editor/export";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { requireOwnerId } from "@/lib/api/owner";
 import { validateProject } from "@/lib/api/validate-project";
+import { exportMaxEdge } from "@/lib/db/policy";
 import { recordExport } from "@/lib/db/export-events";
 import { recordRender } from "@/lib/db/renders";
 import { convertRender } from "@/lib/render/convert";
@@ -22,10 +23,6 @@ const DEFAULT_SCALE = 4;
 const DEFAULT_QUALITY = 0.92;
 
 const FORMAT_IDS = EXPORT_FORMATS.map((format) => format.id);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Generates a high-resolution file from a design.
@@ -49,7 +46,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   if (body.value.project === undefined) {
     return jsonError(400, "Bidang `project` wajib diisi.");
@@ -92,12 +89,21 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof rawScale !== "number" || !Number.isFinite(rawScale)) {
     return jsonError(400, "Bidang `scale` harus angka.");
   }
-  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, rawScale));
+  const asked = Math.min(MAX_SCALE, Math.max(MIN_SCALE, rawScale));
 
   try {
     const owner = await requireOwnerId();
 
     const page = validated.project.pages[pageIndex] as CanvasPage;
+
+    // The installation's export-quality setting, as a ceiling on the longest
+    // edge. Clamped rather than refused: the export still arrives, at the size
+    // this booth is willing to spend on it — which is what the knob is for, and
+    // what it did nothing about before.
+    const maxEdge = await exportMaxEdge();
+    const longest = Math.max(page.width, page.height);
+    const scale = Math.min(asked, Math.max(MIN_SCALE, maxEdge / longest));
+
     const dpi = Math.round(72 * scale);
 
     const rendered = await renderPage(page, scale);

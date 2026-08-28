@@ -1,5 +1,5 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   deliverMagicLink,
   deliverSupportNote,
@@ -18,10 +18,6 @@ type Kind = (typeof KINDS)[number];
 
 /** Long enough to explain something, short enough not to be a knowledge base. */
 const MAX_MESSAGE = 2000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Helps a user from the console.
@@ -54,7 +50,7 @@ export const POST = withPermission(
 
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const kind = body.value.kind;
     if (!KINDS.includes(kind as Kind)) {

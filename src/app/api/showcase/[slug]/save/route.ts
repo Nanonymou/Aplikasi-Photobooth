@@ -1,13 +1,9 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { requireOwnerId } from "@/lib/api/owner";
 import { toggleReaction } from "@/lib/db/showcase";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Turns the simpan on or off.
@@ -31,7 +27,7 @@ export async function PUT(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
   if (typeof body.value.on !== "boolean") {
     return jsonError(400, "`on` harus true atau false.");
   }

@@ -1,5 +1,5 @@
 import { withPermission } from "@/lib/api/authorize";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   changeUserRole,
   getUserProfile,
@@ -14,10 +14,6 @@ export const runtime = "nodejs";
 const ROLES: UserRole[] = ["admin", "editor", "operator", "tamu"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Changes one person's role.
@@ -47,7 +43,7 @@ export const PATCH = withPermission(
 
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const extra = Object.keys(body.value).filter((key) => key !== "role");
     if (extra.length > 0) {

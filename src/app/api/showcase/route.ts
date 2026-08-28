@@ -1,5 +1,5 @@
 import { getAccountId } from "@/lib/api/account";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
 import { callerOwners } from "@/lib/api/scope";
 import { loadDesign } from "@/lib/db/designs";
@@ -17,10 +17,6 @@ export const runtime = "nodejs";
 const SORTS = ["terbaru", "populer", "remix"] as const;
 const MAX_LIMIT = 100;
 const MAX_TAGS = 8;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * The wall.
@@ -97,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
   const fields = ["designId", "title", "category", "tags"];
   const extra = Object.keys(body.value).filter((key) => !fields.includes(key));

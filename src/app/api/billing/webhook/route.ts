@@ -117,6 +117,16 @@ async function settleTemplate(
     case "already-settled":
       return Response.json({ received: true, duplicate: true });
 
+    case "duplicate-licence":
+      // Acknowledged, because retrying will not change it, and shouted about,
+      // because somebody paid twice for one template and is owed the second one
+      // back. Left `pending` on purpose: a row marked paid would be counted as
+      // a sale in what the creator is owed.
+      console.error(
+        `[marketplace] REFUND NEEDED — ${result.purchase.buyerOwnerId} paid ${result.purchase.amountIdr} again for ${result.purchase.publishedId} (purchase ${result.purchase.id}); they already hold a licence`,
+      );
+      return Response.json({ received: true, duplicateLicence: true });
+
     case "unknown-reference":
       console.error(
         `[billing] verified ${provider} notice matches no payment or purchase: ${notice.reference}`,

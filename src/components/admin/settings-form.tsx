@@ -196,35 +196,13 @@ export function SettingsForm() {
 
       <Section title="Keamanan">
         <Field
-          label="Wajib verifikasi email"
-          description="Akun baru harus memverifikasi email sebelum masuk."
-        >
-          <Switch
-            checked={settings.requireEmailVerification}
-            onCheckedChange={(value) => set("requireEmailVerification", value)}
-            aria-label="Wajib verifikasi email"
-          />
-        </Field>
-
-        <Field
           label="Izinkan pendaftaran"
-          description="Matikan untuk menutup pendaftaran akun baru."
+          description="Matikan untuk menutup pendaftaran akun baru. Yang sudah punya akun tetap bisa masuk."
         >
           <Switch
             checked={settings.allowRegistration}
             onCheckedChange={(value) => set("allowRegistration", value)}
             aria-label="Izinkan pendaftaran"
-          />
-        </Field>
-
-        <Field
-          label="2FA untuk admin"
-          description="Wajibkan verifikasi dua langkah bagi akun admin."
-        >
-          <Switch
-            checked={settings.adminTwoFactor}
-            onCheckedChange={(value) => set("adminTwoFactor", value)}
-            aria-label="2FA untuk admin"
           />
         </Field>
       </Section>

@@ -304,6 +304,12 @@ export type StartPurchaseResult =
  * A withdrawn listing cannot be bought. A free one cannot either, and that is
  * not pedantry: sending somebody to a payment page for Rp0 is a dead end, and
  * they already have the thing.
+ *
+ * Pressing Beli twice returns the checkout already in flight rather than opening
+ * a second one. Without that the buyer gets two payment pages for one template
+ * and, if they pay both, is charged twice — measured, not theorised. The unique
+ * index behind it (migration 0038) is what makes it hold when the two clicks
+ * land on two connections at the same instant.
  */
 export async function startTemplatePurchase(input: {
   slug: string;
@@ -330,31 +336,78 @@ export async function startTemplatePurchase(input: {
 
   const split = splitPrice(listing.price_idr);
 
-  // Minted here so it can stand in as the provider's reference until the
-  // provider supplies its own: `(provider, provider_ref)` is unique, so a fixed
-  // placeholder would make two people buying at the same moment collide.
-  const id = crypto.randomUUID();
+  return transaction(async (client) => {
+    // A checkout somebody abandoned must not lock them out of ever buying it.
+    // Expiring the stale ones here, in the same transaction that is about to
+    // claim the slot, is what makes the unique index below safe to rely on
+    // without a separate sweeper nobody would remember to run.
+    await client.query(
+      `update template_purchases
+          set status = 'expired'
+        where published_id = $1
+          and buyer_owner_id = $2
+          and status = 'pending'
+          and created_at < now() - make_interval(mins => $3::int)`,
+      [listing.id, input.buyerOwnerId, PENDING_MINUTES],
+    );
 
-  const rows = await query<PurchaseRow>(
-    `insert into template_purchases
-       (id, published_id, buyer_owner_id, seller_account_id,
-        amount_idr, platform_cut_idr, net_idr, provider, provider_ref)
-     values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $1::text)
-     returning *`,
-    [
-      id,
-      listing.id,
-      input.buyerOwnerId,
-      listing.account_id,
-      split.amountIdr,
-      split.platformCutIdr,
-      split.netIdr,
-      input.provider,
-    ],
-  );
+    // The click-twice case: hand back the checkout already in flight rather than
+    // opening a second one, because a second row is a second charge and the
+    // buyer pressed one button.
+    //
+    // `on conflict do nothing` rather than "look, then insert". A prior read
+    // cannot lock a row that does not exist yet, so three simultaneous clicks
+    // all find nothing and all insert — measured, and two of them came back 500
+    // on the unique index. Letting the index pick the winner and re-reading it
+    // is the only version of this that is correct under a race.
+    //
+    // The id is minted here so it can stand in as the provider's reference until
+    // the provider supplies its own: `(provider, provider_ref)` is unique too,
+    // so a fixed placeholder would make two different buyers collide.
+    const id = crypto.randomUUID();
 
-  return { ok: true, purchase: toPurchase(rows[0]), title: listing.title };
+    const { rows: inserted } = await client.query<PurchaseRow>(
+      `insert into template_purchases
+         (id, published_id, buyer_owner_id, seller_account_id,
+          amount_idr, platform_cut_idr, net_idr, provider, provider_ref)
+       values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $1::text)
+       on conflict do nothing
+       returning *`,
+      [
+        id,
+        listing.id,
+        input.buyerOwnerId,
+        listing.account_id,
+        split.amountIdr,
+        split.platformCutIdr,
+        split.netIdr,
+        input.provider,
+      ],
+    );
+
+    if (inserted[0]) {
+      return { ok: true, purchase: toPurchase(inserted[0]), title: listing.title };
+    }
+
+    // Somebody else's click won. Theirs is the checkout, and this caller gets
+    // pointed at it — same template, same buyer, same payment.
+    const { rows: live } = await client.query<PurchaseRow>(
+      `select * from template_purchases
+        where published_id = $1 and buyer_owner_id = $2 and status = 'pending'`,
+      [listing.id, input.buyerOwnerId],
+    );
+    if (live[0]) {
+      return { ok: true, purchase: toPurchase(live[0]), title: listing.title };
+    }
+
+    // Not a pending collision, so it was the paid one: the licence landed
+    // between the ownership check above and this insert.
+    return { ok: false, reason: "already-owned" };
+  });
 }
+
+/** How long an unpaid checkout holds the slot before it is considered gone. */
+const PENDING_MINUTES = 60;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -364,7 +417,9 @@ export type SettlePurchaseOutcome =
   | { outcome: "already-settled"; purchase: TemplatePurchase }
   | { outcome: "recorded"; purchase: TemplatePurchase }
   | { outcome: "unknown-reference" }
-  | { outcome: "amount-mismatch"; expected: number; received: number };
+  | { outcome: "amount-mismatch"; expected: number; received: number }
+  /** Money arrived for a template this buyer already owns. Needs a refund. */
+  | { outcome: "duplicate-licence"; purchase: TemplatePurchase };
 
 /**
  * Settles a purchase the gateway has told us about.
@@ -412,6 +467,22 @@ export async function settleTemplatePurchase(input: {
         expected: existing.amount_idr,
         received: input.amountIdr,
       };
+    }
+
+    // The buyer may already own this, if two payments somehow both went
+    // through. One licence is all there is to grant, so the second payment is
+    // not a second sale — it is money to give back, and it has to be visible as
+    // that rather than quietly counted in what the creator is owed.
+    if (input.status === "paid") {
+      const { rows: owned } = await client.query<{ id: string }>(
+        `select id from template_purchases
+          where published_id = $1 and buyer_owner_id = $2
+            and status = 'paid' and id <> $3`,
+        [existing.published_id, existing.buyer_owner_id, existing.id],
+      );
+      if (owned[0]) {
+        return { outcome: "duplicate-licence", purchase: toPurchase(existing) };
+      }
     }
 
     const { rows: updated } = await client.query<PurchaseRow>(

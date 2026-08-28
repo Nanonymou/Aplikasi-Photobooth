@@ -54,6 +54,14 @@ export interface DesignTemplate extends LibraryItem {
   slots: TemplateSlot[];
   texts?: TemplateText[];
   stickers?: TemplateSticker[];
+  /**
+   * Whether a paid plan is needed to build with it.
+   *
+   * The pricing page sells "Template dasar" against "Semua template", so some
+   * template has to be the second kind or that line is not selling anything.
+   * Absent means free, which is most of them.
+   */
+  premium?: boolean;
 }
 
 export const TEMPLATE_CATEGORIES: LibraryCategory[] = [
@@ -67,8 +75,13 @@ export const TEMPLATE_CATEGORIES: LibraryCategory[] = [
 const WHITE = "#ffffff";
 
 /**
- * Mock catalogue. These stand in for the premium template library the backend
- * will serve; the data shape is what a stored template will look like.
+ * The template catalogue, seeded into `design_templates`.
+ *
+ * The elaborate ones are marked `premium`: the multi-slot grids and the layouts
+ * that come with lettering and decoration already placed. What a free plan keeps
+ * is one of each shape — a strip, a card, a single frame — which is enough to
+ * make something real, and is what "Template dasar" has to mean if it is to
+ * mean anything.
  */
 export const TEMPLATES: DesignTemplate[] = [
   {
@@ -133,6 +146,7 @@ export const TEMPLATES: DesignTemplate[] = [
   },
   {
     id: "ultah-grid",
+    premium: true,
     label: "Grid Ulang Tahun",
     category: "ulang-tahun",
     keywords: ["birthday", "pesta", "kolase"],
@@ -190,6 +204,7 @@ export const TEMPLATES: DesignTemplate[] = [
   },
   {
     id: "wedding-hati",
+    premium: true,
     label: "Cinta Berbingkai",
     category: "wedding",
     keywords: ["nikah", "hati", "love"],
@@ -217,6 +232,7 @@ export const TEMPLATES: DesignTemplate[] = [
   },
   {
     id: "wedding-elegan",
+    premium: true,
     label: "Elegan Gelap",
     category: "wedding",
     keywords: ["luxury", "mewah", "hitam"],
@@ -243,6 +259,7 @@ export const TEMPLATES: DesignTemplate[] = [
   },
   {
     id: "retro-film",
+    premium: true,
     label: "Film Strip Retro",
     category: "retro",
     keywords: ["vintage", "strip", "klasik"],

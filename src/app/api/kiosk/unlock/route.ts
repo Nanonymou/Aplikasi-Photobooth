@@ -1,5 +1,5 @@
 import { withFeature } from "@/lib/api/features";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { checkExitPin, PIN_PATTERN } from "@/lib/db/event-branding";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
@@ -52,10 +52,6 @@ function recordFailure(accountId: string): number {
   return Math.max(0, MAX_ATTEMPTS - record.count);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 /**
  * Checks the organizer's exit PIN.
  *
@@ -85,7 +81,7 @@ export const POST = withFeature(
 
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const pin = body.value.pin;
     if (typeof pin !== "string" || !PIN_PATTERN.test(pin)) {

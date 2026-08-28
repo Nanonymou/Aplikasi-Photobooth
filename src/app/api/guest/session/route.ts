@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api/http";
+import { guestsAllowed } from "@/lib/db/policy";
 import { getOwnerId, requireOwnerId, clearOwnerId } from "@/lib/api/owner";
 import {
   endGuestSession,
@@ -40,9 +41,17 @@ export async function GET(): Promise<Response> {
  * to. Saving a design enrols one too — that path has always existed — so this is
  * idempotent by design rather than by accident: the same call from the same
  * browser returns the same session with its clock pushed forward.
+ *
+ * Closed when the installation has turned guests off. Checked before the owner
+ * cookie is minted, so a refused guest does not leave with an identity the rest
+ * of the app would then honour.
  */
 export async function POST(): Promise<Response> {
   try {
+    if (!(await guestsAllowed())) {
+      return jsonError(403, "Booth ini menutup akses tamu. Masuk dengan akun.");
+    }
+
     const owner = await requireOwnerId();
     return Response.json(
       { session: await ensureGuestSession(owner) },

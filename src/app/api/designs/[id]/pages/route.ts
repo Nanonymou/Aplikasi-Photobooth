@@ -1,4 +1,4 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { callerOwners } from "@/lib/api/scope";
 import { addDesignPage, listDesignPages } from "@/lib/db/designs";
 
@@ -39,10 +39,6 @@ export async function GET(
     console.error(`GET /api/designs/${id}/pages failed`, error);
     return jsonError(500, "Daftar halaman gagal dimuat.");
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 const FIELDS = ["after", "name", "width", "height"];
@@ -108,7 +104,7 @@ export async function POST(
     value = body.value ?? {};
   }
 
-  if (!isRecord(value)) return jsonError(400, "Body bukan objek.");
+  if (!isJsonObject(value)) return jsonError(400, "Body bukan objek.");
 
   const extra = Object.keys(value).filter((key) => !FIELDS.includes(key));
   if (extra.length > 0) {
@@ -116,11 +112,11 @@ export async function POST(
   }
 
   const after = optionalId(value.after, "after");
-  if (isRecord(after)) return jsonError(400, after.error as string);
+  if (isJsonObject(after)) return jsonError(400, after.error as string);
   const width = optionalEdge(value.width, "width");
-  if (isRecord(width)) return jsonError(400, width.error as string);
+  if (isJsonObject(width)) return jsonError(400, width.error as string);
   const height = optionalEdge(value.height, "height");
-  if (isRecord(height)) return jsonError(400, height.error as string);
+  if (isJsonObject(height)) return jsonError(400, height.error as string);
 
   const name = value.name;
   if (name !== undefined && name !== null && typeof name !== "string") {

@@ -1,13 +1,9 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
-import { signIn } from "@/lib/api/sign-in";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
+import { RegistrationClosedError, signIn } from "@/lib/api/sign-in";
 import { redeemMagicLink } from "@/lib/db/magic-links";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /** What each refusal means to the person holding the link. */
 const REASONS: Record<string, string> = {
@@ -32,7 +28,7 @@ const REASONS: Record<string, string> = {
 export async function POST(request: Request): Promise<Response> {
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const token = body.value.token;
   if (typeof token !== "string" || token.trim().length === 0) {
@@ -59,6 +55,12 @@ export async function POST(request: Request): Promise<Response> {
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
+    // Not a failure to be logged as one: the installation closed the door, and
+    // the person holding a valid link deserves to be told that rather than
+    // shown a 500.
+    if (error instanceof RegistrationClosedError) {
+      return jsonError(403, "Pendaftaran akun baru sedang ditutup. Hubungi penyelenggara.");
+    }
     console.error("POST /api/auth/magic-link/verify failed", error);
     return jsonError(500, "Masuk gagal diselesaikan.");
   }

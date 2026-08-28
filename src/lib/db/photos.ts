@@ -1,6 +1,7 @@
 import "server-only";
 
 import { query } from "@/lib/db/client";
+import { guestRetentionDays } from "@/lib/db/policy";
 
 export type PhotoSource = "camera" | "upload" | "demo";
 
@@ -79,6 +80,10 @@ export interface PhotoMetadata {
  * shot, and the unique key on (owner, storage key) is what makes the retry
  * harmless. The capture settings are refreshed on conflict so a correction
  * still lands.
+ *
+ * The expiry comes from the installation's retention setting rather than the
+ * column default, so shortening it in the console actually shortens the life of
+ * the next photo taken.
  */
 export async function recordPhoto(
   ownerId: string,
@@ -87,8 +92,9 @@ export async function recordPhoto(
   const rows = await query<PhotoRow>(
     `insert into photos
        (owner_id, storage_key, content_type, source, width, height, bytes,
-        mirrored, captured_at, session_id, position)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        mirrored, captured_at, session_id, position, expires_at)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+             now() + make_interval(days => $12::int))
      on conflict (owner_id, storage_key) do update set
        source = excluded.source,
        mirrored = excluded.mirrored,
@@ -110,6 +116,7 @@ export async function recordPhoto(
       metadata.capturedAt,
       metadata.sessionId ?? null,
       metadata.position ?? null,
+      await guestRetentionDays(),
     ],
   );
 

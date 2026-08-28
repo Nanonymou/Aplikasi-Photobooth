@@ -1,5 +1,5 @@
 import { getAccountId } from "@/lib/api/account";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { getOwnerId } from "@/lib/api/owner";
 import {
   claimGuestSession,
@@ -11,10 +11,6 @@ import {
 export const runtime = "nodejs";
 
 const CODE = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Moves a guest session's work into the signed-in account.
@@ -35,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   // An explicit code wins; without one the caller means their own session.
   let code: string | null = null;

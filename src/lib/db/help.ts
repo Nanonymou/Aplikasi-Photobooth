@@ -91,6 +91,16 @@ export interface HelpQuery {
  * trigram similarity is the one that survives a typo, which is most of what a
  * help search actually receives.
  *
+ * The similarity threshold is stated here rather than left to the `%` operator.
+ * `%` reads `pg_trgm.similarity_threshold`, which defaults to 0.3 — and no
+ * article title in a catalogue this size ever scores that against a one-word
+ * query, so the trigram half of this search never fired at all: "ekspor" only
+ * worked because it is a substring, and "eksport" found nothing. Measured, the
+ * scores that matter sit around 0.14, and nonsense stays at zero well below
+ * that, so the line goes at 0.12. A session-level `set_limit()` was the other
+ * option and is the wrong one: connections are pooled, so it would set the
+ * threshold for whatever query ran next on that connection.
+ *
  * The title is compared on its own as well as with the summary appended, and
  * the better of the two decides. Similarity is a ratio over the whole string, so
  * appending a sentence to a matching title drags the score under the threshold —
@@ -109,6 +119,14 @@ export interface HelpQuery {
  * happen to be written in means the unfiltered list still reads as a contents
  * page, however the catalogue is edited.
  */
+/**
+ * How close a misspelling has to be to still count as the same word.
+ *
+ * Measured against this catalogue: real typos ("eksport", "tautn", "pothostrip")
+ * land at 0.13–0.2 while nonsense scores 0, so the line has room on both sides.
+ */
+const SIMILARITY_FLOOR = 0.12;
+
 export async function searchHelpArticles(
   filter: HelpQuery = {},
 ): Promise<HelpArticle[]> {
@@ -126,8 +144,8 @@ export async function searchHelpArticles(
           cardinality($2::text[]) = 0
           or a.title || ' ' || a.summary || ' ' || array_to_string(a.body, ' ')
                ilike all ($2::text[])
-          or a.title % $3
-          or (a.title || ' ' || a.summary) % $3
+          or similarity(a.title, $3) >= ${SIMILARITY_FLOOR}
+          or similarity(a.title || ' ' || a.summary, $3) >= ${SIMILARITY_FLOOR}
         )
       order by (a.title || ' ' || a.summary) ilike all ($2::text[]) desc,
                greatest(

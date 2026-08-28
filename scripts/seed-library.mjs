@@ -137,15 +137,15 @@ async function main() {
       await client.query(
         `insert into design_templates
            (slug, label, category_id, keywords, width, height, background_type,
-            background, slots, texts, stickers, published_at, position)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), $12)
+            background, slots, texts, stickers, is_premium, published_at, position)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), $13)
          on conflict (slug) do update set
            label = excluded.label, category_id = excluded.category_id,
            keywords = excluded.keywords, width = excluded.width,
            height = excluded.height, background_type = excluded.background_type,
            background = excluded.background, slots = excluded.slots,
            texts = excluded.texts, stickers = excluded.stickers,
-           position = excluded.position`,
+           is_premium = excluded.is_premium, position = excluded.position`,
         [
           template.id,
           template.label,
@@ -158,6 +158,7 @@ async function main() {
           JSON.stringify(template.slots),
           JSON.stringify(template.texts ?? []),
           JSON.stringify(template.stickers ?? []),
+          template.premium ?? false,
           position,
         ],
       );

@@ -1,4 +1,4 @@
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import { identifyImage } from "@/lib/api/image-file";
 import { getOwnerId, requireOwnerId } from "@/lib/api/owner";
 import { getPhotoByKey, recordPhoto, type PhotoSource } from "@/lib/db/photos";
@@ -7,10 +7,6 @@ import { getPhotoStorage, isValidKey } from "@/lib/storage/photo-storage";
 export const runtime = "nodejs";
 
 const SOURCES: PhotoSource[] = ["camera", "upload", "demo"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Records what a stored photo is.
@@ -33,7 +29,7 @@ export async function POST(
 
   const body = await readJsonBody(request);
   if (!body.ok) return body.response;
-  if (!isRecord(body.value)) return jsonError(400, "Body bukan objek JSON.");
+  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
 
   const source = body.value.source;
   if (typeof source !== "string" || !SOURCES.includes(source as PhotoSource)) {

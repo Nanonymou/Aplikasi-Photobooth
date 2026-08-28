@@ -1,5 +1,5 @@
 import { withFeature } from "@/lib/api/features";
-import { jsonError, readJsonBody } from "@/lib/api/http";
+import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
 import {
   getSlideshowControl,
   setSlideshowControl,
@@ -11,10 +11,6 @@ import {
 export const runtime = "nodejs";
 
 const FIELDS = ["playing", "paceSeconds"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * The wall's remote.
@@ -51,7 +47,7 @@ export const PUT = withFeature(
   async (_context, request: Request) => {
     const body = await readJsonBody(request);
     if (!body.ok) return body.response;
-    if (!isRecord(body.value)) return jsonError(400, "Body bukan objek.");
+    if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek.");
 
     const extra = Object.keys(body.value).filter((key) => !FIELDS.includes(key));
     if (extra.length > 0) {
