@@ -1,74 +1,113 @@
 "use client";
 
-import { useState } from "react";
-import { Info, Loader2, TriangleAlert, UserRoundPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Mail, MailCheck, TriangleAlert } from "lucide-react";
 
-import { PasswordField } from "@/components/auth/password-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthError, EMAIL, MIN_PASSWORD, register } from "@/lib/auth/mock-auth";
+import { AuthError, EMAIL, sendMagicLink } from "@/lib/auth/client";
 
+/** Seconds before a fresh link may be sent again, so mail is not spammed. */
+const RESEND_COOLDOWN = 30;
+
+/**
+ * Making an account.
+ *
+ * The same one field and the same one link as signing in, because on a
+ * passwordless install they are the same act: the first time an address
+ * redeems a link, the account is created. Asking for a name and a password up
+ * front would be collecting two things — one the server has no column for, and
+ * one the person can set later on their profile — in exchange for a step that
+ * makes signing up slower than signing in.
+ *
+ * An installation that has closed registration refuses at the link, and the
+ * message the server sends is what gets shown.
+ */
 export function RegisterForm() {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState(true);
+  const [cooldown, setCooldown] = useState(0);
 
-  const nameOk = name.trim().length > 0;
-  const emailOk = EMAIL.test(email.trim());
-  const passwordOk = password.length >= MIN_PASSWORD;
-  const valid = nameOk && emailOk && passwordOk;
+  const valid = EMAIL.test(email.trim());
 
-  async function submit() {
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(
+      () => setCooldown((left) => Math.max(0, left - 1)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  async function send() {
     if (!valid || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const account = await register(name, email, password);
-      setCreated(account.name);
+      const result = await sendMagicLink(email);
+      setSentTo(email.trim());
+      setDelivered(result.delivered);
+      setCooldown(RESEND_COOLDOWN);
     } catch (cause) {
       setError(
         cause instanceof AuthError
           ? cause.message
-          : "Gagal membuat akun. Coba lagi.",
+          : "Tautan gagal dikirim. Coba lagi.",
       );
     } finally {
       setBusy(false);
     }
   }
 
-  if (created) {
+  if (sentTo) {
     return (
-      <div className="flex flex-col gap-3 text-center">
-        <p className="text-sm">
-          Akun untuk <span className="font-medium">{created}</span> siap.
-        </p>
-        <p className="text-muted-foreground flex items-start gap-1.5 text-left text-[11px] leading-relaxed">
-          <Info className="mt-0.5 size-3 shrink-0" />
-          Layanan akun masih disiapkan — ini pratinjau alurnya. Karyamu di
-          perangkat ini akan dipindahkan begitu fiturnya aktif.
-        </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <span className="bg-primary/10 text-primary flex size-11 items-center justify-center rounded-full">
+            <MailCheck className="size-5" />
+          </span>
+          <p className="text-sm">
+            Tautan dikirim ke <span className="font-medium">{sentTo}</span>.
+          </p>
+          <p className="text-muted-foreground text-xs text-pretty">
+            Tekan tautan di email itu untuk menyelesaikan pendaftaran. Karyamu
+            di perangkat ini ikut pindah ke akun barumu.
+          </p>
+        </div>
+
+        {!delivered && (
+          <p className="text-muted-foreground flex items-start gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[11px] leading-relaxed">
+            <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+            Belum ada penyedia email yang dikonfigurasi di booth ini, jadi
+            tautannya tercatat di log server, bukan terkirim ke inbox.
+          </p>
+        )}
+
+        {error && (
+          <p className="text-destructive flex items-start gap-1.5 text-[11px] leading-relaxed">
+            <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+            {error}
+          </p>
+        )}
+
+        <Button
+          variant="outline"
+          onClick={send}
+          disabled={busy || cooldown > 0}
+          className="w-full"
+        >
+          {busy ? <Loader2 className="animate-spin" /> : <Mail />}
+          {cooldown > 0 ? `Kirim ulang dalam ${cooldown}s` : "Kirim ulang tautan"}
+        </Button>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium" htmlFor="register-name">
-          Nama
-        </label>
-        <Input
-          id="register-name"
-          autoComplete="name"
-          placeholder="Nama kamu"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </div>
-
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium" htmlFor="register-email">
           Email
@@ -81,28 +120,12 @@ export function RegisterForm() {
           placeholder="nama@email.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void send();
+          }}
         />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium" htmlFor="register-password">
-          Kata sandi
-        </label>
-        <PasswordField
-          id="register-password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="new-password"
-          onEnter={submit}
-        />
-        <p
-          className={
-            password.length > 0 && !passwordOk
-              ? "text-destructive text-[11px]"
-              : "text-muted-foreground text-[11px]"
-          }
-        >
-          Minimal {MIN_PASSWORD} karakter.
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          Tanpa kata sandi. Nama tampilan bisa kamu atur nanti di profil.
         </p>
       </div>
 
@@ -113,9 +136,9 @@ export function RegisterForm() {
         </p>
       )}
 
-      <Button onClick={submit} disabled={!valid || busy} className="w-full">
-        {busy ? <Loader2 className="animate-spin" /> : <UserRoundPlus />}
-        Buat akun
+      <Button onClick={send} disabled={!valid || busy} className="w-full">
+        {busy ? <Loader2 className="animate-spin" /> : <Mail />}
+        Daftar dengan tautan email
       </Button>
     </>
   );

@@ -1,10 +1,15 @@
 /**
  * Editing your own profile.
  *
- * Stand-in for `PATCH /api/account/profile` — the two fields an account holder
- * owns about themselves. `saveProfile` imitates the write (a pause, no
- * persistence) so the form's dirty → saving → saved flow is real ahead of the
- * wiring; when it lands, only the body of this function changes.
+ * The two fields an account holder owns about themselves, written through the
+ * two endpoints that own them: the name via `PATCH /api/account/profile`, the
+ * picture via `PUT`/`DELETE /api/account/avatar`. Two calls rather than one,
+ * because the avatar is bytes and the name is a string, and folding an image
+ * into a JSON body means base64 inflating it by a third for no reason.
+ *
+ * The avatar goes first. If it fails, the name has not been written either, and
+ * the form still shows what the user typed; the other order would save half of
+ * a save and report success.
  */
 
 export interface ProfileDraft {
@@ -32,11 +37,52 @@ export function nameProblem(name: string): string | null {
   return null;
 }
 
-const SAVE_LATENCY_MS = 700;
+/** The message the endpoint sent, or a fallback if it sent nothing usable. */
+async function refusal(response: Response, fallback: string): Promise<string> {
+  const payload: unknown = await response.json().catch(() => null);
+  const data =
+    typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>)
+      : {};
+  return typeof data.error === "string" ? data.error : fallback;
+}
+
+/**
+ * The avatar as a file the server will accept.
+ *
+ * `readAvatarFile` already produced a data URL at the stored size, so this is a
+ * decode rather than a second conversion — the bytes crossing the wire are the
+ * ones the preview is showing.
+ */
+async function avatarBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
 
 export async function saveProfile(draft: ProfileDraft): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, SAVE_LATENCY_MS));
-  void draft;
+  if (draft.avatarUrl !== undefined) {
+    const response = draft.avatarUrl
+      ? await (async () => {
+          const form = new FormData();
+          form.append("file", await avatarBlob(draft.avatarUrl!), "avatar.webp");
+          return fetch("/api/account/avatar", { method: "PUT", body: form });
+        })()
+      : await fetch("/api/account/avatar", { method: "DELETE" });
+
+    if (!response.ok) {
+      throw new Error(await refusal(response, "Foto profil gagal disimpan."));
+    }
+  }
+
+  const response = await fetch("/api/account/profile", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ displayName: draft.name.trim() }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await refusal(response, "Profil gagal disimpan."));
+  }
 }
 
 /**

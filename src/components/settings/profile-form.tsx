@@ -6,7 +6,7 @@ import { Check, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/auth/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { setMockProfile, useAccount } from "@/lib/auth/use-account";
+import { refreshAccount, useAccount } from "@/lib/auth/use-account";
 import { toast } from "@/store/toast-store";
 import {
   NAME_MAX,
@@ -134,7 +134,9 @@ export function ProfileForm() {
     try {
       const draft = { name: value.trim(), avatarUrl };
       await saveProfile(draft);
-      setMockProfile(draft);
+      // Re-read rather than patch the store locally: the server is the one that
+      // knows what was stored, including the avatar key it minted.
+      await refreshAccount();
       setName(null);
       setPhoto(null);
       setPhotoTouched(false);

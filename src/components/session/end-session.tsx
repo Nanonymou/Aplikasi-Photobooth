@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { logout } from "@/lib/auth/mock-auth";
+import { logout } from "@/lib/auth/client";
 import { clearDeviceData } from "@/lib/session/end-session";
 
 /**

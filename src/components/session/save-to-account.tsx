@@ -3,13 +3,12 @@
 import { useState } from "react";
 import {
   CloudCheck,
-  Info,
   Loader2,
+  Mail,
+  MailCheck,
   TriangleAlert,
   UserRoundPlus,
 } from "lucide-react";
-
-import { PasswordField } from "@/components/auth/password-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,77 +19,84 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group";
-import {
-  AuthError,
-  claimSession,
-  EMAIL,
-  login,
-  MIN_PASSWORD,
-  register,
-} from "@/lib/auth/mock-auth";
+import { AuthError, claimSession, EMAIL, sendMagicLink } from "@/lib/auth/client";
+import { refreshAccount, useAccount } from "@/lib/auth/use-account";
 import { useGuestSession } from "@/lib/session/guest-session";
 import { toast } from "@/store/toast-store";
 import { useEditorStore } from "@/store/editor-store";
 
-type Mode = "register" | "login";
-
 /**
  * The claim flow: guest work → account.
  *
- * A guest's designs live only on this device under an anonymous session. This
- * is where that changes hands: the guest signs in — new account or existing —
- * and the work stamped with their session moves into it. All three steps are
- * here in one place (choose, authenticate, confirm) because a guest who has to
- * leave the editor to make an account is a guest who abandons it.
+ * A guest's designs live under an anonymous session tied to this browser. This
+ * is where that changes hands, and it has two shapes because the guest arrives
+ * in one of two states.
  *
- * Auth and the claim are mocked (frontend-first), but the flow is complete: the
- * summary names what will move, register and login are the real forms, and the
- * error paths fire. When the endpoints land they replace `runClaim`.
+ * Already signed in on this device — which happens: somebody signs in, then
+ * keeps working under the cookie they had — and the claim is one call, right
+ * now, with the result reported.
+ *
+ * Not signed in, and there is nothing to do here but send a link. On a
+ * passwordless install the account cannot be created inside this dialog; the
+ * link arrives by email and lands on the verify page, which signs them in and
+ * claims this browser's session as part of the same act. So the dialog's job is
+ * to say what will move and get the link sent, not to pretend the transfer
+ * finishes here.
  */
 function ClaimSheet({ onClose }: { onClose: () => void }) {
   const session = useGuestSession();
+  const account = useAccount();
   const title = useEditorStore((state) => state.project.title);
   const pageCount = useEditorStore((state) => state.project.pages.length);
 
-  const [mode, setMode] = useState<Mode>("register");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claimedTo, setClaimedTo] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [moved, setMoved] = useState<{ designs: number; photos: number } | null>(
+    null,
+  );
 
-  const emailOk = EMAIL.test(email.trim());
-  const passwordOk =
-    mode === "register" ? password.length >= MIN_PASSWORD : password.length > 0;
-  const nameOk = mode === "login" || name.trim().length > 0;
-  const valid = emailOk && passwordOk && nameOk;
+  const valid = EMAIL.test(email.trim());
 
-  async function runClaim() {
-    if (!valid || busy || !session) return;
+  /** Signed in already: hand the session over now. */
+  async function claimNow() {
+    if (busy || !session || !account) return;
     setBusy(true);
     setError(null);
     try {
-      // Authenticate first — the account has to exist before work can move into
-      // it — then hand the session over.
-      if (mode === "register") await register(name, email, password);
-      else await login(email, password);
-
-      await claimSession(session.code);
-
-      setClaimedTo(email.trim());
+      const result = await claimSession(session.code);
+      setMoved(result);
+      setClaimedTo(account.email);
+      await refreshAccount();
       toast({
         variant: "success",
         title: "Karyamu diamankan",
-        description: `Dipindahkan ke ${email.trim()}.`,
+        description: `${result.designs} desain dipindahkan ke ${account.email}.`,
       });
     } catch (cause) {
       setError(
         cause instanceof AuthError ? cause.message : "Gagal menyimpan. Coba lagi.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Not signed in: the link does both, on the page it lands on. */
+  async function sendLink() {
+    if (!valid || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await sendMagicLink(email);
+      setSentTo(email.trim());
+    } catch (cause) {
+      setError(
+        cause instanceof AuthError
+          ? cause.message
+          : "Tautan gagal dikirim. Coba lagi.",
       );
     } finally {
       setBusy(false);
@@ -106,22 +112,98 @@ function ClaimSheet({ onClose }: { onClose: () => void }) {
             Karyamu diamankan
           </DialogTitle>
           <DialogDescription>
-            <span className="text-foreground font-medium">{title}</span> dan
-            seluruh isinya sekarang ada di akun{" "}
+            {moved
+              ? `${moved.designs} desain dan ${moved.photos} foto`
+              : "Karyamu"}{" "}
+            sekarang ada di akun{" "}
             <span className="text-foreground font-medium">{claimedTo}</span> —
             tetap ada meski browser dibersihkan atau kamu ganti perangkat.
           </DialogDescription>
         </DialogHeader>
 
-        <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-relaxed">
-          <Info className="mt-0.5 size-3 shrink-0" />
-          Layanan akun masih dalam persiapan — ini pratinjau alurnya. Sementara
-          itu karyamu tetap aman tersimpan di perangkat ini.
-        </p>
+        <DialogFooter>
+          <Button size="sm" onClick={onClose}>
+            Selesai
+          </Button>
+        </DialogFooter>
+      </>
+    );
+  }
+
+  const summary = (
+    /* What is about to move — named, so the claim is concrete, not abstract. */
+    <div className="border-editor-border bg-editor-surface flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{title}</span>
+        <span className="text-muted-foreground"> · {pageCount} halaman</span>
+      </span>
+      {session && (
+        <span className="text-muted-foreground shrink-0 font-mono tracking-wider">
+          {session.code}
+        </span>
+      )}
+    </div>
+  );
+
+  const problem = error && (
+    <p className="text-destructive flex items-start gap-1.5 text-[11px] leading-relaxed">
+      <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+      {error}
+    </p>
+  );
+
+  // Sent, and there is nothing left to do in this dialog: the transfer happens
+  // when the link is opened, not here. Saying otherwise would be a lie the user
+  // discovers later.
+  if (sentTo) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MailCheck className="text-primary size-5" />
+            Cek email kamu
+          </DialogTitle>
+          <DialogDescription>
+            Tautan masuk dikirim ke{" "}
+            <span className="text-foreground font-medium">{sentTo}</span>. Buka
+            di perangkat ini — karyamu ikut pindah begitu kamu masuk.
+          </DialogDescription>
+        </DialogHeader>
+
+        {summary}
 
         <DialogFooter>
           <Button size="sm" onClick={onClose}>
             Selesai
+          </Button>
+        </DialogFooter>
+      </>
+    );
+  }
+
+  // Already signed in on this device: no email round trip needed.
+  if (account) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>Simpan ke akun saya</DialogTitle>
+          <DialogDescription>
+            Kamu sudah masuk sebagai{" "}
+            <span className="text-foreground font-medium">{account.email}</span>.
+            Pindahkan karya di perangkat ini ke akun itu sekarang.
+          </DialogDescription>
+        </DialogHeader>
+
+        {summary}
+        {problem}
+
+        <DialogFooter className="sm:items-center sm:justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Nanti saja
+          </Button>
+          <Button size="sm" onClick={claimNow} disabled={busy || !session}>
+            {busy ? <Loader2 className="animate-spin" /> : <CloudCheck />}
+            Pindahkan sekarang
           </Button>
         </DialogFooter>
       </>
@@ -133,60 +215,13 @@ function ClaimSheet({ onClose }: { onClose: () => void }) {
       <DialogHeader>
         <DialogTitle>Simpan ke akun saya</DialogTitle>
         <DialogDescription>
-          Sekarang karyamu tersimpan di perangkat ini saja. Masuk atau buat akun
-          untuk memindahkannya agar tidak hilang.
+          Sekarang karyamu tersimpan di perangkat ini saja. Masukkan emailmu —
+          kami kirim tautan masuk, dan karyamu ikut pindah begitu kamu tekan
+          tautannya.
         </DialogDescription>
       </DialogHeader>
 
-      {/* What is about to move — named, so the claim is concrete, not abstract. */}
-      <div className="border-editor-border bg-editor-surface flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
-        <span className="min-w-0 truncate">
-          <span className="font-medium">{title}</span>
-          <span className="text-muted-foreground">
-            {" "}
-            · {pageCount} halaman
-          </span>
-        </span>
-        {session && (
-          <span className="text-muted-foreground shrink-0 font-mono tracking-wider">
-            {session.code}
-          </span>
-        )}
-      </div>
-
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        value={mode}
-        onValueChange={(value) => {
-          if (!value) return;
-          setMode(value as Mode);
-          setError(null);
-        }}
-        className="w-full"
-      >
-        <ToggleGroupItem value="register" className="flex-1">
-          Akun baru
-        </ToggleGroupItem>
-        <ToggleGroupItem value="login" className="flex-1">
-          Sudah punya akun
-        </ToggleGroupItem>
-      </ToggleGroup>
-
-      {mode === "register" && (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium" htmlFor="claim-name">
-            Nama
-          </label>
-          <Input
-            id="claim-name"
-            autoComplete="name"
-            placeholder="Nama kamu"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </div>
-      )}
+      {summary}
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium" htmlFor="claim-email">
@@ -200,47 +235,24 @@ function ClaimSheet({ onClose }: { onClose: () => void }) {
           placeholder="nama@email.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void sendLink();
+          }}
         />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium" htmlFor="claim-password">
-          Kata sandi
-        </label>
-        <PasswordField
-          id="claim-password"
-          value={password}
-          onChange={setPassword}
-          autoComplete={mode === "register" ? "new-password" : "current-password"}
-          onEnter={runClaim}
-        />
-        {mode === "register" && (
-          <p
-            className={
-              password.length > 0 && !passwordOk
-                ? "text-destructive text-[11px]"
-                : "text-muted-foreground text-[11px]"
-            }
-          >
-            Minimal {MIN_PASSWORD} karakter.
-          </p>
-        )}
-      </div>
-
-      {error && (
-        <p className="text-destructive flex items-start gap-1.5 text-[11px] leading-relaxed">
-          <TriangleAlert className="mt-0.5 size-3 shrink-0" />
-          {error}
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          Tanpa kata sandi. Akun dibuat otomatis kalau emailnya belum terdaftar.
         </p>
-      )}
+      </div>
+
+      {problem}
 
       <DialogFooter className="sm:items-center sm:justify-end">
         <Button variant="ghost" size="sm" onClick={onClose}>
           Nanti saja
         </Button>
-        <Button size="sm" onClick={runClaim} disabled={!valid || busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <UserRoundPlus />}
-          {mode === "register" ? "Buat akun & simpan" : "Masuk & simpan"}
+        <Button size="sm" onClick={sendLink} disabled={!valid || busy}>
+          {busy ? <Loader2 className="animate-spin" /> : <Mail />}
+          Kirim tautan
         </Button>
       </DialogFooter>
     </>

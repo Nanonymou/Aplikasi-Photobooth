@@ -23,10 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar } from "@/components/auth/avatar";
-import { ROLE_LABELS, ROLES } from "@/lib/auth/roles";
-import { setMockRole, useAccount } from "@/lib/auth/use-account";
+import { ROLE_LABELS } from "@/lib/auth/roles";
+import { useAccount } from "@/lib/auth/use-account";
 import { useLogout } from "@/lib/auth/use-logout";
-import { cn } from "@/lib/utils";
 
 /**
  * The signed-in user's account menu.
@@ -68,6 +67,14 @@ export function AccountMenu() {
             <p className="text-muted-foreground truncate text-xs">
               {profile.email}
             </p>
+            {/* The role, stated rather than only implied by which entries
+                below happen to be visible. It is the server's answer, and it
+                explains why the menu looks the way it does. */}
+            {profile.role !== "tamu" && (
+              <span className="bg-primary/10 text-primary mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium">
+                {ROLE_LABELS[profile.role]}
+              </span>
+            )}
           </div>
         </div>
 
@@ -135,34 +142,6 @@ export function AccountMenu() {
             Bantuan
           </Link>
         </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        {/* Frontend demo: flip the mock account's role and watch the entries
-            above appear and disappear. The real role comes from the server. */}
-        <div className="px-2 py-1.5">
-          <p className="text-muted-foreground mb-1.5 text-[10px] font-medium tracking-wide uppercase">
-            Lihat sebagai · demo
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {ROLES.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setMockRole(role)}
-                aria-pressed={profile.role === role}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-xs transition-colors",
-                  profile.role === role
-                    ? "border-primary bg-primary/10 text-primary font-medium"
-                    : "border-border text-muted-foreground hover:bg-accent",
-                )}
-              >
-                {ROLE_LABELS[role]}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <DropdownMenuSeparator />
 

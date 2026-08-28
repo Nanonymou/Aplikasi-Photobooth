@@ -10,7 +10,7 @@ import {
   oauthAuthorizeUrl,
   SSO_PROVIDERS,
   type SsoProvider,
-} from "@/lib/auth/mock-auth";
+} from "@/lib/auth/client";
 
 const ICONS: Record<SsoProvider, typeof GoogleIcon> = {
   google: GoogleIcon,

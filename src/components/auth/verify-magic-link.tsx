@@ -10,14 +10,19 @@ import {
   AuthError,
   POST_LOGIN_REDIRECT,
   verifyMagicLink,
-} from "@/lib/auth/mock-auth";
+} from "@/lib/auth/client";
 
-/** How long the "signed in" tick shows before the redirect takes over. */
-const REDIRECT_DELAY = 900;
+/**
+ * How long the "signed in" tick shows before the redirect takes over.
+ *
+ * Long enough to read the line about what was claimed, which is the one thing
+ * on this screen somebody might actually want to see.
+ */
+const REDIRECT_DELAY = 1600;
 
 type State =
   | { status: "verifying" }
-  | { status: "ok" }
+  | { status: "ok"; claimed: { designs: number; photos: number } | null }
   | { status: "error"; message: string };
 
 /**
@@ -41,10 +46,10 @@ export function VerifyMagicLink() {
 
     void (async () => {
       try {
-        await verifyMagicLink(params.get("token"));
+        const { claimed } = await verifyMagicLink(params.get("token"));
         if (cancelled) return;
 
-        setState({ status: "ok" });
+        setState({ status: "ok", claimed });
         // `replace`, not `push`, so the one-time token URL never sits in the
         // back stack where re-visiting it would just fail.
         redirect = setTimeout(
@@ -85,6 +90,14 @@ export function VerifyMagicLink() {
           <CheckCircle2 className="size-5" />
         </span>
         <p className="text-sm">Berhasil masuk. Mengalihkan…</p>
+        {/* What came along from this browser's guest session. Worth saying: a
+            guest who just signed in wants to know their work followed them. */}
+        {state.claimed && state.claimed.designs > 0 && (
+          <p className="text-muted-foreground text-xs">
+            {state.claimed.designs} desain dan {state.claimed.photos} foto dari
+            perangkat ini dipindahkan ke akunmu.
+          </p>
+        )}
       </div>
     );
   }

@@ -2,116 +2,139 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { Account } from "@/lib/auth/mock-auth";
+import type { Account } from "@/lib/auth/client";
 import { isRole, type Role } from "@/lib/auth/roles";
 
 /**
  * The signed-in user, on the client.
  *
- * The workspace assumes a session behind it, so the account menu needs a profile
- * to show. This is that profile — mock data standing in for `GET /api/account/me`
- * until the endpoint lands, adding what a profile display and the RBAC guard
- * need on top of the auth `Account`: an optional avatar and the account's role.
- * The shape the readers use does not move when the real session replaces the
- * body of this hook.
+ * One fetch of `GET /api/auth/session`, cached in a module-level store that
+ * every reader shares. A hook that fetched per component would put the account
+ * menu, the nav guard and the profile form on three separate round trips that
+ * can disagree with each other for a moment.
+ *
+ * `null` means signed out *or* not yet resolved — the same value the server
+ * render produces — so nothing here can mismatch on hydration. Callers that need
+ * to tell "loading" from "signed out" read `useAccountStatus`.
  */
 export interface Profile extends Account {
   /** A remote avatar (e.g. from Google), or null to fall back to initials. */
   avatarUrl?: string | null;
   /** Governs what the account may reach; the guard reads this. */
   role: Role;
+  /** What the server says this account may do, already decided. */
+  permissions: string[];
 }
 
-const BASE_PROFILE: Omit<Profile, "role"> = {
-  name: "Rara Prawira",
-  email: "rara@contoh.id",
-  avatarUrl: null,
-};
+export type AccountStatus = "loading" | "signed-in" | "signed-out";
 
-/** The default mock role, and where a switch is persisted so it survives reloads. */
-const DEFAULT_ROLE: Role = "admin";
-const ROLE_KEY = "framestudio:mock-role:v1";
+interface State {
+  status: AccountStatus;
+  profile: Profile | null;
+}
 
 /**
- * The mock is a tiny store so the role can be switched at runtime — the demo
- * that makes role-based navigation visible without editing code. Cached so
- * `useSyncExternalStore` sees a stable reference, and rebuilt only on a switch.
+ * Cached so `useSyncExternalStore` sees a stable reference between renders —
+ * returning a fresh object each call would loop.
  */
-let cached: Profile | null = null;
+let state: State = { status: "loading", profile: null };
+let inFlight: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
-function readRole(): Role {
-  try {
-    const stored = window.localStorage.getItem(ROLE_KEY);
-    if (isRole(stored)) return stored;
-  } catch {
-    // Unreadable storage: fall back to the default role.
-  }
-  return DEFAULT_ROLE;
+function publish(next: State): void {
+  state = next;
+  listeners.forEach((listener) => listener());
 }
 
-function clientSnapshot(): Profile {
-  if (!cached) cached = { ...BASE_PROFILE, role: readRole() };
-  return cached;
+interface SessionResponse {
+  account: { id: string; email: string } | null;
+  profile?: { displayName?: string | null; avatarUrl?: string | null } | null;
+  role: string | null;
+  permissions?: string[];
+}
+
+async function load(): Promise<void> {
+  try {
+    const response = await fetch("/api/auth/session", { cache: "no-store" });
+    if (!response.ok) {
+      publish({ status: "signed-out", profile: null });
+      return;
+    }
+
+    const data = (await response.json()) as SessionResponse;
+    if (!data.account) {
+      publish({ status: "signed-out", profile: null });
+      return;
+    }
+
+    publish({
+      status: "signed-in",
+      profile: {
+        id: data.account.id,
+        email: data.account.email,
+        name:
+          data.profile?.displayName?.trim() || data.account.email.split("@")[0],
+        avatarUrl: data.profile?.avatarUrl ?? null,
+        // An unknown role is not a reason to guess upward. `tamu` is the least
+        // privileged, and the server refuses anything above it anyway.
+        role: isRole(data.role) ? data.role : "tamu",
+        permissions: data.permissions ?? [],
+      },
+    });
+  } catch {
+    // Offline or the endpoint is down. Signed-out is the safe reading: it dims
+    // what needs an account rather than showing it and failing on use.
+    publish({ status: "signed-out", profile: null });
+  }
 }
 
 function subscribe(callback: () => void): () => void {
   listeners.add(callback);
-  return () => listeners.delete(callback);
+  // The first subscriber starts the fetch; the rest join the one already going.
+  inFlight ??= load().finally(() => {
+    inFlight = null;
+  });
+  return () => {
+    listeners.delete(callback);
+  };
 }
 
-function publish(next: Profile): void {
-  cached = next;
-  listeners.forEach((listener) => listener());
+function snapshot(): State {
+  return state;
 }
 
-/**
- * Switches the mock account's role and notifies every reader, so role-gated
- * navigation re-renders at once. Frontend-only: the real session is set by the
- * server at sign-in, not flipped in the client.
- */
-export function setMockRole(role: Role): void {
-  publish({ ...clientSnapshot(), role });
-  try {
-    window.localStorage.setItem(ROLE_KEY, role);
-  } catch {
-    // A blocked write only means the switch does not survive a reload; harmless.
-  }
+const SERVER_STATE: State = { status: "loading", profile: null };
+function serverSnapshot(): State {
+  return SERVER_STATE;
 }
 
 /**
- * Applies an edited profile to the store.
+ * Re-reads the session from the server.
  *
- * The profile form saves through this, so the top bar renames itself the moment
- * the save lands rather than at the next reload. Deliberately not persisted:
- * where an edited profile *lives* is the endpoint's job, and a copy parked in
- * this browser would be the wrong answer for the next device.
+ * For the moments a screen knows the account changed underneath it — a saved
+ * profile, a new avatar — so the top bar renames itself at once instead of at
+ * the next reload. The server is asked again rather than the store being patched
+ * locally, because the server is the one that knows.
  */
-export function setMockProfile(update: {
-  name?: string;
-  avatarUrl?: string | null;
-}): void {
-  publish({ ...clientSnapshot(), ...update });
+export async function refreshAccount(): Promise<void> {
+  await load();
 }
 
-/**
- * The current signed-in profile, or `null` during the server render.
- *
- * Read through `useSyncExternalStore` for the same reason the guest session is:
- * it renders `null` on the server and first paint, then the real profile once
- * mounted, so nothing that depends on client-only state mismatches on hydration.
- */
+/** The current signed-in profile, or `null` while loading and when signed out. */
 export function useAccount(): Profile | null {
-  return useSyncExternalStore(subscribe, clientSnapshot, () => null);
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot).profile;
+}
+
+/** Whether the session is still resolving, present, or absent. */
+export function useAccountStatus(): AccountStatus {
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot).status;
 }
 
 /**
  * The current account's role, or `null` before the session resolves.
  *
- * The read most role-conditional UI actually needs — a nav item or a menu entry
- * asks "what am I?", not for the whole profile — so it gets its own hook rather
- * than reaching through `useAccount().role` and re-rendering on unrelated profile
- * changes.
+ * The read most role-conditional UI actually needs — a nav item asks "what am
+ * I?", not for the whole profile.
  */
 export function useRole(): Role | null {
   return useAccount()?.role ?? null;

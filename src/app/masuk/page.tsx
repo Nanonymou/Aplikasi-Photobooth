@@ -33,16 +33,10 @@ export default function LoginPage() {
         </>
       }
     >
+      {/* The form above *is* the email-link flow now, so the link that used to
+          point at /masuk-tautan would only lead to a second copy of it. */}
       <LoginForm />
       <SocialLogin dividerLabel="atau masuk dengan" />
-      <div className="border-editor-border border-t pt-3 text-center">
-        <Link
-          href="/masuk-tautan"
-          className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-        >
-          Masuk dengan tautan email
-        </Link>
-      </div>
     </AuthShell>
   );
 }

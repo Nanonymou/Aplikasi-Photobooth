@@ -6,7 +6,7 @@ import { Info, Loader2, Mail, MailCheck, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthError, EMAIL, sendMagicLink } from "@/lib/auth/mock-auth";
+import { AuthError, EMAIL, sendMagicLink } from "@/lib/auth/client";
 
 /** Seconds before a fresh link may be sent again, so mail is not spammed. */
 const RESEND_COOLDOWN = 30;

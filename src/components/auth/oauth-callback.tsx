@@ -11,7 +11,7 @@ import {
   completeOAuth,
   POST_LOGIN_REDIRECT,
   providerLabel,
-} from "@/lib/auth/mock-auth";
+} from "@/lib/auth/client";
 
 /** How long the "signed in" tick shows before the redirect takes over. */
 const REDIRECT_DELAY = 900;
