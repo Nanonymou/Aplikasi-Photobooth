@@ -528,3 +528,166 @@ export async function listDesignPages(
     templateId: row.template_id,
   }));
 }
+
+export interface AddPageInput {
+  /** Insert after this page; omitted or unknown means at the end. */
+  after?: string | null;
+  /** Copy this page — objects and all — instead of starting blank. */
+  copyOf?: string | null;
+  name?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface AddedPage {
+  page: PageSummary;
+  /** The design's new version, which the editor's next autosave must quote. */
+  version: number;
+}
+
+/**
+ * The next free "Halaman N", named by where it sits rather than by how many
+ * exist — inserting between two pages should not produce a name that collides
+ * with the one after it. Mirrors `nextPageName` in the editor's store, because
+ * a page added from the strip and a page added through this endpoint should not
+ * be able to end up called different things.
+ */
+function nextPageName(taken: Set<string>, index: number): string {
+  let number = index + 1;
+  while (taken.has(`Halaman ${number}`)) number += 1;
+  return `Halaman ${number}`;
+}
+
+/**
+ * Adds a page to a design, inside the database.
+ *
+ * Copying is the reason this exists. A page's objects carry their photos inline,
+ * so duplicating one through the client means sending megabytes out and posting
+ * the same megabytes straight back — the same argument `duplicateDesign` makes,
+ * one level down. A blank page rides along because it is the same insert with an
+ * empty array.
+ *
+ * Building a page from a *template* is deliberately not here. That is
+ * `instantiateTemplate` in the editor — it mints object ids, fits slots to the
+ * page, and carries photos across from what was already there — and a second
+ * implementation of it in SQL would be a second answer to what a template means.
+ *
+ * The design's version is bumped, so an editor that was mid-edit finds out its
+ * document is stale rather than overwriting the new page with an autosave that
+ * never knew about it.
+ */
+export async function addDesignPage(
+  owners: string[],
+  designId: string,
+  input: AddPageInput = {},
+): Promise<AddedPage | null> {
+  if (owners.length === 0 || !isDesignId(designId)) return null;
+
+  const inserted = await transaction(async (client) => {
+    const { rows: designs } = await client.query<{ version: number }>(
+      `select version from designs
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null
+        for update`,
+      [designId, owners],
+    );
+    if (designs.length === 0) return null;
+
+    const { rows: pages } = await client.query<{
+      id: string;
+      name: string;
+      position: number;
+      width: number;
+      height: number;
+    }>(
+      `select id, name, position, width, height from design_pages
+        where design_id = $1 order by position`,
+      [designId],
+    );
+
+    const afterIndex = input.after
+      ? pages.findIndex((page) => page.id === input.after)
+      : pages.length - 1;
+    // An unknown `after` appends rather than failing: the page it named may have
+    // been deleted by another tab a moment ago, and "add a page" is not a request
+    // worth refusing over where exactly it lands.
+    const index = afterIndex === -1 ? pages.length - 1 : afterIndex;
+
+    const source = input.copyOf
+      ? pages.find((page) => page.id === input.copyOf)
+      : undefined;
+    if (input.copyOf && !source) return null;
+
+    // Sized like the page it follows, for the same reason the editor does it: a
+    // project full of photostrips rarely wants its next page to be a different
+    // shape.
+    const neighbour = source ?? pages[index] ?? pages[0];
+    const width = input.width ?? neighbour?.width ?? 1200;
+    const height = input.height ?? neighbour?.height ?? 1800;
+
+    const taken = new Set(pages.map((page) => page.name));
+    const name =
+      input.name?.trim() ||
+      (source ? uniqueCopyName(taken, source.name) : nextPageName(taken, index + 1));
+
+    const newId = createPageId();
+    const position = index + 1;
+
+    // Deferred until commit, so shifting everything down by one never trips the
+    // uniqueness of (design_id, position) halfway through.
+    await client.query(
+      `update design_pages set position = position + 1
+        where design_id = $1 and position >= $2`,
+      [designId, position],
+    );
+
+    if (source) {
+      await client.query(
+        `insert into design_pages
+           (design_id, id, position, name, template_id, width, height,
+            background_type, background, objects, effects)
+         select design_id, $3, $4, $5, template_id, $6, $7,
+                background_type, background, objects, effects
+           from design_pages
+          where design_id = $1 and id = $2`,
+        [designId, source.id, newId, position, name, width, height],
+      );
+    } else {
+      await client.query(
+        `insert into design_pages
+           (design_id, id, position, name, width, height,
+            background_type, background, objects, effects)
+         values ($1, $2, $3, $4, $5, $6, 'solid',
+                 '{"type":"solid","color":"#ffffff"}'::jsonb, '[]'::jsonb, '{}')`,
+        [designId, newId, position, name, width, height],
+      );
+    }
+
+    const { rows: updated } = await client.query<{ version: number }>(
+      "update designs set version = version + 1 where id = $1 returning version",
+      [designId],
+    );
+
+    return { id: newId, version: updated[0].version };
+  });
+
+  if (!inserted) return null;
+
+  const summaries = await listDesignPages(owners, designId);
+  const page = summaries?.find((candidate) => candidate.id === inserted.id);
+  return page ? { page, version: inserted.version } : null;
+}
+
+/** "Photostrip" → "Photostrip (salinan)", then "(salinan 2)" and so on. */
+function uniqueCopyName(taken: Set<string>, name: string): string {
+  const base = `${name} (salinan)`;
+  if (!taken.has(base)) return base;
+
+  let number = 2;
+  while (taken.has(`${name} (salinan ${number})`)) number += 1;
+  return `${name} (salinan ${number})`;
+}
+
+/** Page ids are the editor's own, not uuids — short, and only unique per design. */
+function createPageId(): string {
+  return `page_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
