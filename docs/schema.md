@@ -161,7 +161,8 @@ yang berisik.
 | Tabel | Isi |
 | --- | --- |
 | `published_designs` (0034) | Desain yang dipublikasikan ke galeri publik; salinan judul, kategori, ukuran. |
-| `design_likes` (0034) | Satu baris per orang per desain publik. |
+| `design_likes` (0034) | Satu baris per orang per desain publik — sinyal untuk pembuatnya. |
+| `design_saves` (0035) | Satu baris per orang per desain yang disimpan — catatan untuk dirinya sendiri. |
 | `designs` (0001) | Judul, pemilik, `version`, `deleted_at`. |
 | `design_pages` (0001, 0031) | Halaman: ukuran, latar, `objects` sebagai JSONB, dan `effects` per halaman. |
 | `photos` (0002) | Foto tamu: kunci storage, sumber (kamera/unggahan/contoh), kedaluwarsa. |
@@ -178,6 +179,11 @@ yang berisik.
 - **Salinan, bukan tampilan.** Judul, kategori, dan ukuran disalin saat
   dipublikasikan: mengganti nama berkas kerja tidak boleh diam-diam mengganti
   namanya di dinding orang lain.
+- **Suka dan simpan dua tabel, bukan satu bintang.** Suka itu sinyal untuk yang
+  membuatnya — angka publik di kartu. Simpan itu catatan untuk diri sendiri:
+  daftar pendek yang didatangi lagi, dan bukan urusan orang lain. Menyatukannya
+  berarti menyukai sesuatu sekaligus mengarsipkannya, dan membatalkan arsipnya
+  ikut menghapus sukanya.
 - **Suka dihitung, tidak disimpan.** `design_likes` satu baris per orang per
   desain, karena pertanyaan "saya sudah suka yang ini belum" ditanyakan di setiap
   kartu setiap kunjungan dan sebuah penghitung tidak bisa menjawabnya. Jumlahnya

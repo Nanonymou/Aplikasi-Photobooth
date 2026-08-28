@@ -35,6 +35,8 @@ export interface ShowcaseItem {
   remixes: number;
   /** Whether the caller has liked it. Null when nobody is identified. */
   liked: boolean | null;
+  /** Whether the caller has saved it. Private to them, unlike the like count. */
+  saved: boolean | null;
   publishedAt: string;
   remixOf: { id: string; slug: string; title: string; author: string } | null;
 }
@@ -52,6 +54,7 @@ interface ItemRow {
   likes: string;
   remixes: string;
   liked: boolean | null;
+  saved: boolean | null;
   published_at: Date;
   source_id: string | null;
   source_slug: string | null;
@@ -73,6 +76,7 @@ function toItem(row: ItemRow): ShowcaseItem {
     likes: Number(row.likes),
     remixes: Number(row.remixes),
     liked: row.liked,
+    saved: row.saved,
     publishedAt: row.published_at.toISOString(),
     remixOf:
       row.source_id && row.source_slug && row.source_title && row.source_author
@@ -102,6 +106,10 @@ const ITEM_SELECT = `
     select 1 from design_likes l
      where l.published_id = p.id and l.owner_id = $1::uuid
   ) end as liked,
+  case when $1::uuid is null then null else exists (
+    select 1 from design_saves v
+     where v.published_id = p.id and v.owner_id = $1::uuid
+  ) end as saved,
   o.id as source_id, o.slug as source_slug,
   o.title as source_title, o.author_name as source_author
 `;
@@ -353,4 +361,90 @@ export async function withdrawDesign(
     [slug, accountId],
   );
   return rows.length > 0;
+}
+
+export type Reaction = "like" | "save";
+
+const REACTION_TABLE: Record<Reaction, string> = {
+  like: "design_likes",
+  save: "design_saves",
+};
+
+export interface ReactionResult {
+  /** Whether it is on after this call. */
+  on: boolean;
+  /** The public like count, which a save never changes. */
+  likes: number;
+}
+
+/**
+ * Turns a like or a save on, or off again.
+ *
+ * A toggle rather than separate add and remove verbs: the button is one button,
+ * pressed twice by somebody who changed their mind, and two endpoints would need
+ * the client to know which one it currently is — which is exactly the thing it
+ * asked the server about a moment ago and may already be wrong about.
+ *
+ * `on conflict do nothing` and a delete that matches nothing are both fine
+ * answers. A double-tap on a slow connection sends two identical requests, and
+ * neither should be an error.
+ *
+ * Withdrawn designs still accept both. Somebody's saved shortlist should not
+ * quietly refuse to let them tidy it up because the maker took a design down.
+ */
+export async function toggleReaction(
+  kind: Reaction,
+  slug: string,
+  ownerId: string,
+  on: boolean,
+): Promise<ReactionResult | null> {
+  return transaction(async (client) => {
+    const { rows: found } = await client.query<{ id: string }>(
+      "select id from published_designs where slug = $1",
+      [slug],
+    );
+    const published = found[0];
+    if (!published) return null;
+
+    const table = REACTION_TABLE[kind];
+
+    if (on) {
+      await client.query(
+        `insert into ${table} (published_id, owner_id) values ($1, $2)
+         on conflict do nothing`,
+        [published.id, ownerId],
+      );
+    } else {
+      await client.query(
+        `delete from ${table} where published_id = $1 and owner_id = $2`,
+        [published.id, ownerId],
+      );
+    }
+
+    const { rows: counted } = await client.query<{ likes: string }>(
+      "select count(*) as likes from design_likes where published_id = $1",
+      [published.id],
+    );
+
+    return { on, likes: Number(counted[0].likes) };
+  });
+}
+
+/** The slugs this visitor has saved, newest first — their shortlist. */
+export async function listSaved(
+  ownerId: string,
+  viewer?: string | null,
+  limit = 60,
+): Promise<ShowcaseItem[]> {
+  const rows = await query<ItemRow>(
+    `select ${ITEM_SELECT}
+     ${ITEM_FROM}
+     join design_saves v on v.published_id = p.id and v.owner_id = $2
+      where p.unpublished_at is null
+      order by v.created_at desc
+      limit $3`,
+    [viewer ?? ownerId, ownerId, limit],
+  );
+
+  return rows.map(toItem);
 }
