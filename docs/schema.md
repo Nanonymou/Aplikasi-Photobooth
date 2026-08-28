@@ -163,6 +163,8 @@ yang berisik.
 | `published_designs` (0034) | Desain yang dipublikasikan ke galeri publik; salinan judul, kategori, ukuran. |
 | `design_likes` (0034) | Satu baris per orang per desain publik — sinyal untuk pembuatnya. |
 | `design_saves` (0035) | Satu baris per orang per desain yang disimpan — catatan untuk dirinya sendiri. |
+| `template_purchases` (0036) | Satu baris per upaya membeli template. Hanya baris `paid` yang memberi akses. |
+| `creator_payouts` (0036) | Satu baris per pembuat per bulan — uang yang benar-benar keluar untuknya. |
 | `designs` (0001) | Judul, pemilik, `version`, `deleted_at`. |
 | `design_pages` (0001, 0031) | Halaman: ukuran, latar, `objects` sebagai JSONB, dan `effects` per halaman. |
 | `photos` (0002) | Foto tamu: kunci storage, sumber (kamera/unggahan/contoh), kedaluwarsa. |
@@ -193,6 +195,34 @@ yang berisik.
 - **`designs.remix_of_id`, bukan di tabel publikasi.** Sebuah desain sudah jadi
   remix sejak seseorang mulai menyuntingnya — jauh sebelum ia memutuskan akan
   memublikasikannya, dan terlepas dari apakah ia pernah melakukannya.
+- **Harga adalah kolom di publikasi, bukan tabel "template dijual".** Nyaris
+  semua yang ada di dinding gratis; `price_idr = 0` adalah keadaan normalnya dan
+  sebuah listing hanyalah publikasi yang kebetulan berharga. Tabel terpisah
+  berarti setiap bacaan galeri jadi outer join demi kolom yang hampir selalu nol.
+- **`template_purchases` tidak menumpang `payments`.** `payments` (0029)
+  berbentuk langganan — `plan` dan `cycle` keduanya `not null`, dan CHECK-nya
+  menyatakan sebuah pembayaran adalah untuk salah satu dari tiga paket.
+  Melebarkannya agar juga berarti "sebuah template" berarti membuat kolom-kolom
+  itu nullable, yang artinya menghapus aturan yang membuatnya bisa dipercaya. Dua
+  jenis pembelian, dua tabel, pelajaran yang sama diterapkan di masing-masing:
+  `(provider, provider_ref)` unik karena setiap gateway mengirim ulang
+  notifikasinya, dan `paid` hanya sah bersama `paid_at`.
+- **Tiga angka disimpan, bukan dua disimpan satu dihitung.** Yang dibayar
+  pembeli, yang diambil platform, dan yang didapat pembuatnya — semuanya
+  tercatat, dijaga CHECK agar berjumlah pas. Potongan itu tarif yang akan
+  berubah, dan struk yang dihitung ulang dengan tarif hari ini bukan struk.
+  `seller_account_id` disalin saat pembelian karena alasan yang sama: uangnya
+  terutang pada siapa pun yang menjualnya hari itu.
+- **`published_id` memakai `on delete restrict`.** Mencabut publikasi memang
+  tidak pernah menghapus barisnya (`unpublished_at`), jadi jalur normalnya tidak
+  pernah menyentuh aturan ini — ia ada untuk jalur yang tidak normal, supaya
+  sebuah struk tidak bisa lenyap diam-diam dan meninggalkan orang yang sudah
+  membayar tanpa bukti apa pun.
+- **Pembayaran ke pembuat tabel sendiri, bukan status di penjualan.** Penjualan
+  terjadi saat ada yang membeli; pembayaran terjadi menurut jadwal, mencakup satu
+  periode, dan bisa gagal sendirian tanpa satu pun penjualannya jadi diragukan.
+  `(account_id, period)` unik supaya bayar dua kali untuk bulan yang sama mustahil,
+  bukan sekadar tertangkap saat diperiksa.
 | `photo_filters`, `visual_effects` (0024) | Katalog tampilan: perlakuan warna, dan lapisan di atas foto. |
 | `frame_textures` (0026) | Tekstur bingkai: rutinitas penggambar plus dua warnanya. |
 | `export_events` (0015) | Catatan bahwa sebuah ekspor terjadi — untuk laporan, bukan untuk berkasnya. |
