@@ -1,45 +1,19 @@
 import {
   Camera,
-  HardDrive,
   LayoutTemplate,
-  TrendingDown,
-  TrendingUp,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
-import { ADMIN_STATS, type AdminStat, type Trend } from "@/lib/admin/overview";
-import { cn } from "@/lib/utils";
+import { type AdminStat } from "@/lib/admin/overview";
 
 const ICONS: Record<AdminStat["id"], LucideIcon> = {
   users: Users,
   designs: LayoutTemplate,
   photos: Camera,
-  storage: HardDrive,
+  guests: UserRound,
 };
-
-const TREND_STYLE: Record<Trend, string> = {
-  up: "text-emerald-600 dark:text-emerald-400",
-  down: "text-destructive",
-  flat: "text-muted-foreground",
-};
-
-function Delta({ stat }: { stat: AdminStat }) {
-  if (!stat.delta || !stat.trend) return null;
-  const Icon = stat.trend === "down" ? TrendingDown : TrendingUp;
-
-  return (
-    <span
-      className={cn(
-        "flex items-center gap-1 text-xs font-medium",
-        TREND_STYLE[stat.trend],
-      )}
-    >
-      {stat.trend !== "flat" && <Icon className="size-3.5" />}
-      {stat.delta}
-    </span>
-  );
-}
 
 function StatCard({ stat }: { stat: AdminStat }) {
   const Icon = ICONS[stat.id];
@@ -53,12 +27,9 @@ function StatCard({ stat }: { stat: AdminStat }) {
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-2">
-        <span className="text-2xl font-semibold tracking-tight tabular-nums">
-          {stat.value}
-        </span>
-        <Delta stat={stat} />
-      </div>
+      <span className="text-2xl font-semibold tracking-tight tabular-nums">
+        {stat.value}
+      </span>
 
       {stat.note && (
         <span className="text-muted-foreground text-xs">{stat.note}</span>
@@ -68,10 +39,10 @@ function StatCard({ stat }: { stat: AdminStat }) {
 }
 
 /** The dashboard's headline metrics, four across on desktop. */
-export function StatGrid() {
+export function StatGrid({ stats }: { stats: AdminStat[] }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {ADMIN_STATS.map((stat) => (
+      {stats.map((stat) => (
         <StatCard key={stat.id} stat={stat} />
       ))}
     </div>

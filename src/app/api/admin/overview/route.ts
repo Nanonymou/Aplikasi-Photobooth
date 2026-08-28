@@ -1,47 +1,27 @@
 import { withPermission } from "@/lib/api/authorize";
 import { jsonError } from "@/lib/api/http";
-import { query } from "@/lib/db/client";
+import { readOverview } from "@/lib/db/admin-overview";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
 
-interface CountsRow {
-  users: string;
-  designs: string;
-  photos: string;
-  guest_sessions: string;
-}
-
 /**
- * The admin dashboard's headline numbers.
+ * The console's summary: headline counts, the role breakdown, and what changed.
  *
- * Guarded by `admin.console`, not by a role name: if the policy later grants an
- * auditor read access to the console, that is a row in `role_permissions`, not
- * an edit here.
+ * Guarded by `admin.console` rather than by a role list — the permission is the
+ * rule, and a route that named roles would be a second copy of it drifting from
+ * `role_permissions`.
  *
- * The counts come from one round trip. Four separate queries would be four
- * chances for the numbers to disagree with each other, on a page whose whole job
- * is to be a consistent snapshot.
+ * The page itself reads `readOverview` directly, being a server component; this
+ * endpoint is for anything that genuinely is somewhere else.
  */
 export const GET = withPermission("admin.console", async (viewer) => {
   try {
-    const rows = await query<CountsRow>(`
-      select
-        (select count(*) from user_profiles) as users,
-        (select count(*) from designs where deleted_at is null) as designs,
-        (select count(*) from photos) as photos,
-        (select count(*) from guest_sessions where claimed_at is null and expires_at > now()) as guest_sessions
-    `);
+    const overview = await readOverview();
 
-    const counts = rows[0];
     return Response.json(
       {
-        counts: {
-          users: Number(counts.users),
-          designs: Number(counts.designs),
-          photos: Number(counts.photos),
-          activeGuestSessions: Number(counts.guest_sessions),
-        },
+        ...overview,
         // Echoed so the console can show who it is reporting to.
         viewer: { email: viewer.profile.email, role: viewer.profile.role },
       },

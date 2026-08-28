@@ -1,4 +1,4 @@
-import { ROLE_COUNTS } from "@/lib/admin/overview";
+import type { RoleCount } from "@/lib/admin/overview";
 
 const numberFormat = new Intl.NumberFormat("id-ID");
 
@@ -8,11 +8,14 @@ const numberFormat = new Intl.NumberFormat("id-ID");
  * The RBAC feature is about roles, so the dashboard surfaces their spread right
  * away: a count per role, ordered from most privileged to least, with a bar
  * scaled to the largest group so the shape of the user base — a handful of
- * admins, a long tail of guests — is legible at a glance. Managing these is a
- * later task; this is the read-only summary that links there.
+ * admins, a long tail of guests — is legible at a glance.
+ *
+ * Every role is listed, including the ones nobody holds: a breakdown that omits
+ * its empty rows is one you cannot read a zero off, and "no operators yet" is
+ * exactly the sort of thing an admin opens this panel to find out.
  */
-export function RoleSummary() {
-  const max = Math.max(...ROLE_COUNTS.map((role) => role.count));
+export function RoleSummary({ roles }: { roles: RoleCount[] }) {
+  const max = Math.max(...roles.map((role) => role.count), 1);
 
   return (
     <section className="bg-card border-border flex flex-col rounded-xl border">
@@ -21,7 +24,7 @@ export function RoleSummary() {
       </div>
 
       <ul className="flex flex-col gap-3 p-4">
-        {ROLE_COUNTS.map((role) => (
+        {roles.map((role) => (
           <li key={role.id} className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium">{role.label}</span>
@@ -32,7 +35,7 @@ export function RoleSummary() {
             <div className="bg-muted h-1.5 overflow-hidden rounded-full">
               <div
                 className="bg-primary h-full rounded-full"
-                style={{ width: `${Math.max(4, (role.count / max) * 100)}%` }}
+                style={{ width: `${role.count === 0 ? 0 : Math.max(4, (role.count / max) * 100)}%` }}
               />
             </div>
           </li>
