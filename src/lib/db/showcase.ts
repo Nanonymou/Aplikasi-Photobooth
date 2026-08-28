@@ -463,6 +463,10 @@ export interface RemixResult {
   source: { slug: string; title: string; author: string };
 }
 
+export type RemixOutcome =
+  | { ok: true; remix: RemixResult }
+  | { ok: false; reason: "not-found" | "unlicensed"; price?: number };
+
 /**
  * Starts a new design from a published one.
  *
@@ -481,11 +485,17 @@ export interface RemixResult {
  * made one last week should not be told no because the original maker has since
  * tidied their gallery; the credit simply names a design that is no longer on
  * the wall.
+ *
+ * A priced one only remixes for somebody who has paid for it, or who made it.
+ * The licence is checked against every identity the caller holds, in the same
+ * statement that reads the source — a second query would leave a window between
+ * "you may" and "here it is".
  */
 export async function remixDesign(
   ownerId: string,
   slug: string,
-): Promise<RemixResult | null> {
+  owners: string[] = [ownerId],
+): Promise<RemixOutcome> {
   return transaction(async (client) => {
     const { rows: found } = await client.query<{
       id: string;
@@ -493,13 +503,31 @@ export async function remixDesign(
       title: string;
       author_name: string;
       slug: string;
+      price_idr: number;
+      account_id: string;
+      licensed: boolean;
     }>(
-      `select id, design_id, title, author_name, slug
+      `select id, design_id, title, author_name, slug, price_idr, account_id,
+              price_idr = 0
+                or account_id = any($2::uuid[])
+                or exists (
+                     select 1 from template_purchases t
+                      where t.published_id = published_designs.id
+                        and t.status = 'paid'
+                        and t.buyer_owner_id = any($2::uuid[])
+                   ) as licensed
          from published_designs where slug = $1`,
-      [slug],
+      [slug, owners],
     );
     const source = found[0];
-    if (!source) return null;
+    if (!source) return { ok: false, reason: "not-found" };
+
+    // Where the licence is enforced, rather than only described. A paid template
+    // is a thing somebody sells; remixing is the whole of what they sell, so a
+    // remix nobody paid for is the sale not happening.
+    if (!source.licensed) {
+      return { ok: false, reason: "unlicensed", price: source.price_idr };
+    }
 
     // The design behind the publication may be gone — publications cascade on
     // delete, so in practice this means a race with a deletion.
@@ -510,7 +538,7 @@ export async function remixDesign(
       [ownerId, source.design_id, `${source.title} (remix)`, source.id],
     );
     const copy = created[0];
-    if (!copy) return null;
+    if (!copy) return { ok: false, reason: "not-found" };
 
     await client.query(
       `insert into design_pages
@@ -524,12 +552,15 @@ export async function remixDesign(
     );
 
     return {
-      designId: copy.id,
-      title: `${source.title} (remix)`,
-      source: {
-        slug: source.slug,
-        title: source.title,
-        author: source.author_name,
+      ok: true,
+      remix: {
+        designId: copy.id,
+        title: `${source.title} (remix)`,
+        source: {
+          slug: source.slug,
+          title: source.title,
+          author: source.author_name,
+        },
       },
     };
   });

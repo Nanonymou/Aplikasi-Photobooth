@@ -207,6 +207,12 @@ yang berisik.
   jenis pembelian, dua tabel, pelajaran yang sama diterapkan di masing-masing:
   `(provider, provider_ref)` unik karena setiap gateway mengirim ulang
   notifikasinya, dan `paid` hanya sah bersama `paid_at`.
+- **Membeli butuh akun, meski `buyer_owner_id` sebuah owner id.** Lisensinya
+  dibaca terhadap semua identitas yang dipegang pembeli — itu sebabnya kolomnya
+  owner id — tapi pembeliannya diarsipkan di bawah akun. Draf yang hilang bersama
+  cookie yang dibersihkan merugikan seseorang satu sore; lisensi yang hilang
+  bersamanya merugikan sesuatu yang sudah dibayar, dan tidak ada alamat untuk
+  mengembalikannya. Struknya juga harus dikirim ke suatu tempat.
 - **Tiga angka disimpan, bukan dua disimpan satu dihitung.** Yang dibayar
   pembeli, yang diambil platform, dan yang didapat pembuatnya — semuanya
   tercatat, dijaga CHECK agar berjumlah pas. Potongan itu tarif yang akan

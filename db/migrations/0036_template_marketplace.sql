@@ -35,8 +35,11 @@ create table template_purchases (
   -- access to something they paid for would have no record behind it.
   published_id uuid not null references published_designs (id) on delete restrict,
 
-  -- Who bought it, as the owner id their browser already carries — buying is
-  -- allowed before an account, like everything else a guest does here.
+  -- Who bought it. An owner id, like everything else owned here, so a licence
+  -- reads back against every identity the buyer holds — but the endpoint files
+  -- purchases under an account and requires one: a draft lost with a cleared
+  -- cookie costs somebody an afternoon, a licence lost with it costs them
+  -- something they paid for, and there would be no address to send it back to.
   buyer_owner_id uuid not null,
 
   -- Who gets paid. Copied at purchase rather than read through the listing: the

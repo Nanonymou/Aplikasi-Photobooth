@@ -61,27 +61,38 @@ export function monthsIn(cycle: BillingCycle): number {
   return cycle === "yearly" ? 12 : 1;
 }
 
-/** Records a payment that has been started but not yet settled. */
+/**
+ * Records a payment that has been started but not yet settled.
+ *
+ * The id is minted here rather than by the default, so it can stand in as the
+ * provider's reference until the provider supplies its own. The column cannot be
+ * empty, and a fixed placeholder is not an option: `(provider, provider_ref)` is
+ * unique, so two people starting a checkout at once would collide on it and the
+ * second would be told their payment failed.
+ */
 export async function createPayment(input: {
   accountId: string;
   plan: Exclude<PlanId, "gratis">;
   cycle: BillingCycle;
   amountIdr: number;
   provider: string;
-  providerRef: string;
+  providerRef?: string;
 }): Promise<Payment> {
+  const id = crypto.randomUUID();
+
   const rows = await query<PaymentRow>(
     `insert into payments
-       (account_id, plan, cycle, amount_idr, provider, provider_ref)
-     values ($1, $2, $3, $4, $5, $6)
+       (id, account_id, plan, cycle, amount_idr, provider, provider_ref)
+     values ($1::uuid, $2, $3, $4, $5, $6, coalesce($7, $1::text))
      returning *`,
     [
+      id,
       input.accountId,
       input.plan,
       input.cycle,
       input.amountIdr,
       input.provider,
-      input.providerRef,
+      input.providerRef ?? null,
     ],
   );
 

@@ -2,8 +2,6 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import type { BillingCycle, PlanId } from "@/lib/billing/plans";
-
 /**
  * Taking money, behind one seam.
  *
@@ -22,8 +20,16 @@ import type { BillingCycle, PlanId } from "@/lib/billing/plans";
 export interface ChargeRequest {
   /** Our id for the payment, which the provider echoes back on its webhook. */
   reference: string;
-  plan: Exclude<PlanId, "gratis">;
-  cycle: BillingCycle;
+  /**
+   * What is being sold, in the two forms a gateway asks for: an id for its
+   * records and a name for the customer's.
+   *
+   * Not a plan and a cycle. A gateway takes money; whether that money is a
+   * month of Pro or somebody's photostrip template is this app's business, and
+   * a driver that knew the difference would have to be edited every time we
+   * sell something new.
+   */
+  item: { id: string; name: string };
   /** Whole rupiah for the entire invoice. */
   amountIdr: number;
   email: string;
@@ -127,8 +133,8 @@ function midtrans(serverKey: string, production: boolean): PaymentGateway {
             customer_details: { email: request.email },
             item_details: [
               {
-                id: `${request.plan}-${request.cycle}`,
-                name: `FrameStudio ${request.plan} (${request.cycle})`,
+                id: request.item.id,
+                name: request.item.name,
                 price: request.amountIdr,
                 quantity: 1,
               },

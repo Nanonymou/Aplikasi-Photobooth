@@ -10,6 +10,8 @@
  * waiting for somebody to notice it in a payout.
  */
 
+import { PLATFORM_CUT } from "@/lib/marketplace/cut";
+
 export interface SaleRow {
   id: string;
   /** The template that sold. */
@@ -42,8 +44,13 @@ export interface Payout {
   at: string;
 }
 
-/** The platform's share, stated once so every number here agrees on it. */
-export const PLATFORM_CUT = 0.15;
+/**
+ * The platform's share, re-exported rather than restated.
+ *
+ * The endpoint that splits a real payment reads the same constant; two copies of
+ * a rate is how a dashboard starts quoting a percentage the ledger does not use.
+ */
+export { PLATFORM_CUT };
 
 export const MONTHLY_REVENUE: { label: string; value: number }[] = [
   { label: "Mar", value: 420_000 },

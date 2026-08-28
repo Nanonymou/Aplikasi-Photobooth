@@ -81,16 +81,16 @@ export async function POST(request: Request): Promise<Response> {
       cycle: cycle as BillingCycle,
       amountIdr,
       provider: gateway.name,
-      // Replaced by the provider's own id once it answers; until then our
-      // reference stands in, because the column cannot be empty and a payment
-      // with no reference at all is a payment nobody can match.
-      providerRef: "pending",
+      // No reference: the row's own id stands in until the provider answers
+      // with theirs. See `createPayment`.
     });
 
     const charge = await gateway.charge({
       reference: payment.id,
-      plan: plan as Exclude<PlanId, "gratis">,
-      cycle: cycle as BillingCycle,
+      item: {
+        id: `${plan}-${cycle}`,
+        name: `FrameStudio ${plan} (${cycle})`,
+      },
       amountIdr,
       email: viewer.profile.email,
       returnUrl: `${siteUrl()}/langganan`,
