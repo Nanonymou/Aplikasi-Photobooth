@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import {
   Banknote,
   Clock,
@@ -10,14 +13,12 @@ import {
 
 import { RevenueChart } from "@/components/creator/revenue-chart";
 import {
-  PAYOUTS,
-  PLATFORM_CUT,
-  RECENT_SALES,
-  TEMPLATE_SALES,
+  fetchSales,
   percent,
+  periodeLabel,
   rupiah,
-  summarise,
   tanggal,
+  type CreatorSales,
   type PayoutStatus,
 } from "@/lib/creator/sales";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,8 @@ const PAYOUT_STYLE: Record<PayoutStatus, string> = {
   menunggu: "bg-muted text-muted-foreground",
   diproses: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   dibayar: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  // A failed transfer is money still owed, so it is loud rather than absent.
+  gagal: "bg-destructive/15 text-destructive",
 };
 
 /**
@@ -90,7 +93,61 @@ const PAYOUT_STYLE: Record<PayoutStatus, string> = {
  * and pays out less without saying why is a support ticket.
  */
 export function SalesDashboard() {
-  const summary = summarise();
+  const [data, setData] = useState<CreatorSales | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      try {
+        const sales = await fetchSales();
+        if (current) setData(sales);
+      } catch (cause) {
+        if (current) {
+          setFailed(
+            cause instanceof Error
+              ? cause.message
+              : "Riwayat penjualan gagal dimuat.",
+          );
+        }
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  if (failed) {
+    return (
+      <div className="border-destructive/40 text-destructive rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+        {failed}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="border-border text-muted-foreground rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+        Memuat penjualan…
+      </div>
+    );
+  }
+
+  const { summary, monthly, templates, recent, payouts, platformCut } = data;
+
+  // Nobody has sold anything yet. Six empty panels and a row of zeros is a
+  // worse answer than saying so, and it hides the one useful next step.
+  if (summary.soldAllTime === 0 && templates.length === 0) {
+    return (
+      <div className="border-border flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-16 text-center">
+        <p className="text-sm font-medium">Belum ada penjualan.</p>
+        <p className="text-muted-foreground max-w-sm text-sm text-pretty">
+          Publikasikan desain ke galeri publik lalu beri harga di halaman
+          template, dan penjualannya muncul di sini.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -106,25 +163,31 @@ export function SalesDashboard() {
           label="Total sepanjang masa"
           value={rupiah(summary.grossAllTime)}
           icon={Wallet}
-          note={`Bersih ${rupiah(summary.netAllTime)} setelah potongan ${Math.round(PLATFORM_CUT * 100)}%`}
+          note={`Bersih ${rupiah(summary.netAllTime)} setelah potongan ${Math.round(platformCut * 100)}%`}
         />
         <StatCard
           label="Template terjual"
           value={summary.soldAllTime.toLocaleString("id-ID")}
           icon={ShoppingBag}
-          note={`${TEMPLATE_SALES.length} template berbayar`}
+          note={`${templates.length} template berbayar`}
         />
         <StatCard
           label="Menunggu dicairkan"
           value={rupiah(summary.pendingPayout)}
           icon={Clock}
-          note={`Dijadwalkan ${tanggal(PAYOUTS[0].at)}`}
+          note={
+            payouts[0]
+              ? `Dijadwalkan ${tanggal(payouts[0].at)}`
+              : summary.unscheduled > 0
+                ? `${rupiah(summary.unscheduled)} belum dijadwalkan`
+                : "Belum ada yang dijadwalkan"
+          }
         />
       </div>
 
       <section className="bg-card border-border flex flex-col gap-3 rounded-xl border p-4">
         <h2 className="text-sm font-semibold">Pendapatan enam bulan terakhir</h2>
-        <RevenueChart />
+        <RevenueChart months={monthly} />
       </section>
 
       <section className="flex flex-col gap-3">
@@ -148,7 +211,7 @@ export function SalesDashboard() {
               </tr>
             </thead>
             <tbody>
-              {TEMPLATE_SALES.map((row) => (
+              {templates.map((row) => (
                 <tr key={row.id} className="border-border border-t">
                   <th scope="row" className="px-4 py-2.5 text-left font-medium">
                     {row.title}
@@ -173,7 +236,7 @@ export function SalesDashboard() {
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold">Transaksi terakhir</h2>
           <ul className="border-border divide-border divide-y rounded-xl border">
-            {RECENT_SALES.map((sale) => (
+            {recent.map((sale) => (
               <li
                 key={sale.id}
                 className="flex items-center justify-between gap-3 px-4 py-2.5"
@@ -198,15 +261,21 @@ export function SalesDashboard() {
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold">Pencairan</h2>
           <ul className="border-border divide-border divide-y rounded-xl border">
-            {PAYOUTS.map((payout) => (
+            {payouts.map((payout) => (
               <li
                 key={payout.id}
                 className="flex items-center justify-between gap-3 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{payout.period}</p>
+                  <p className="truncate text-sm font-medium">
+                    {periodeLabel(payout.period)}
+                  </p>
                   <p className="text-muted-foreground text-xs">
-                    {payout.status === "dibayar" ? "Dibayar" : "Dijadwalkan"}{" "}
+                    {payout.status === "dibayar"
+                      ? "Dibayar"
+                      : payout.status === "gagal"
+                        ? (payout.failureReason ?? "Gagal")
+                        : "Dijadwalkan"}{" "}
                     {tanggal(payout.at)}
                   </p>
                 </div>
@@ -228,7 +297,7 @@ export function SalesDashboard() {
           </ul>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Pencairan berjalan otomatis tiap tanggal 5 untuk penjualan bulan
-            sebelumnya. Potongan platform {Math.round(PLATFORM_CUT * 100)}% sudah
+            sebelumnya. Potongan platform {Math.round(platformCut * 100)}% sudah
             dihitung pada angka di atas.
           </p>
         </section>
