@@ -45,7 +45,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-const FIELDS = ["after", "copyOf", "name", "width", "height"];
+const FIELDS = ["after", "name", "width", "height"];
 
 /** Matches the column's own bounds, so a bad size is refused before the insert. */
 const MIN_EDGE = 16;
@@ -75,14 +75,14 @@ function optionalEdge(value: unknown, field: string): number | null | { error: s
 /**
  * Adds a page.
  *
- * `copyOf` is why this endpoint exists: a page's objects carry their photos
- * inline, so copying one through the browser means sending megabytes out and
- * posting the same megabytes straight back. Done here, the bytes never move.
- * Blank pages ride along because they are the same insert with an empty array.
+ * A blank page, sized like the one it follows. Copying an existing page has its
+ * own address — `POST .../pages/[pageId]/duplicate` — rather than a `copyOf`
+ * field here: it is a different act with a different answer, and a verb hidden
+ * in a request body is a verb nobody finds.
  *
- * A page built from a template is not this endpoint's job — that logic lives in
- * the editor, and a second copy of it here would be a second answer to what a
- * template means. The editor builds the page and autosaves the document.
+ * A page built from a template is not this endpoint's job either — that logic
+ * lives in the editor, and a second copy of it here would be a second answer to
+ * what a template means. The editor builds the page and autosaves the document.
  *
  * The answer carries the design's new version. An editor that adds a page this
  * way has to quote it on its next save, or its autosave would overwrite the page
@@ -117,8 +117,6 @@ export async function POST(
 
   const after = optionalId(value.after, "after");
   if (isRecord(after)) return jsonError(400, after.error as string);
-  const copyOf = optionalId(value.copyOf, "copyOf");
-  if (isRecord(copyOf)) return jsonError(400, copyOf.error as string);
   const width = optionalEdge(value.width, "width");
   if (isRecord(width)) return jsonError(400, width.error as string);
   const height = optionalEdge(value.height, "height");
@@ -135,14 +133,11 @@ export async function POST(
   try {
     const added = await addDesignPage(owners, id, {
       after: after as string | null,
-      copyOf: copyOf as string | null,
       name: (name as string | undefined) ?? null,
       width: width as number | null,
       height: height as number | null,
     });
-    // Null covers both "no such design" and "no such page to copy". Neither is
-    // worth telling apart to somebody guessing.
-    if (!added) return jsonError(404, "Desain atau halaman tidak ditemukan.");
+    if (!added) return jsonError(404, "Desain tidak ditemukan.");
 
     return Response.json(added, {
       status: 201,
