@@ -1,16 +1,19 @@
 "use client";
 
+import {
+  priceFor,
+  startCheckout,
+  useBilling,
+} from "@/lib/billing/client";
 import { useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  CURRENT_PLAN,
   formatRupiah,
   nextPlan,
-  startCheckout,
-  yearlySaving,
+  type PlanId,
   type BillingCycle,
   type Plan,
 } from "@/lib/billing/plans";
@@ -43,9 +46,21 @@ export function UpgradeButton({
   async function upgrade() {
     if (busy || recorded) return;
     setBusy(true);
-    await startCheckout(plan.id, cycle);
-    setBusy(false);
-    setRecorded(true);
+    try {
+      const started = await startCheckout(
+        plan.id as Exclude<PlanId, "gratis">,
+        cycle,
+      );
+      setRecorded(true);
+      // The gateway takes it from here; the plan moves in the webhook, not on
+      // this click.
+      window.location.assign(started.redirectUrl);
+    } catch {
+      // The button returns to its resting state; the page's own error surface
+      // is the subscription screen, not this small offer card.
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -79,10 +94,13 @@ export function UpgradeButton({
  * not be sold to; the space is better empty.
  */
 export function UpgradeOffer() {
-  const plan = nextPlan(CURRENT_PLAN);
-  if (!plan) return null;
+  const billing = useBilling();
+  const plan = nextPlan(billing?.subscription.plan ?? "gratis");
+  if (!billing || !plan) return null;
 
-  const saving = yearlySaving(plan);
+  const monthly = priceFor(billing.prices, plan.id, "monthly") ?? 0;
+  const yearly = priceFor(billing.prices, plan.id, "yearly") ?? 0;
+  const saving = (monthly - yearly) * 12;
 
   return (
     <section className="border-primary/30 from-primary/10 to-primary/0 flex flex-col gap-4 rounded-xl border bg-gradient-to-br p-4">
@@ -98,7 +116,7 @@ export function UpgradeOffer() {
 
         <div className="text-right">
           <p className="text-lg font-semibold tabular-nums">
-            {formatRupiah(plan.priceMonthly)}
+            {formatRupiah(monthly)}
           </p>
           <p className="text-muted-foreground text-xs">per bulan</p>
         </div>
@@ -117,7 +135,7 @@ export function UpgradeOffer() {
         <p className="text-muted-foreground text-xs">
           Ditagih tahunan jadi{" "}
           <span className="text-foreground font-medium tabular-nums">
-            {formatRupiah(plan.priceYearly)}
+            {formatRupiah(yearly)}
           </span>
           /bln — hemat{" "}
           <span className="text-foreground font-medium tabular-nums">

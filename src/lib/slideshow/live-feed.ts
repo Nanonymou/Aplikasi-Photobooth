@@ -1,34 +1,83 @@
-import { DEMO_SHOT_SOURCES } from "@/lib/camera/demo-shots";
+"use client";
 
 /**
- * The live slideshow feed.
+ * The live slideshow's feed.
  *
- * Stand-in for the stream of photos guests share at an event — what the organizer
- * projects on a big screen. Each entry is one shared frame with who it is from and
- * how long ago, reusing the sample images the camera demo already ships so there
- * is nothing new to load. The real feed (newest shares first, growing during the
- * event) replaces this constant without moving the screen.
+ * The stream of photos guests shared at this event, newest first, from
+ * `GET /api/slideshow/feed`. It was a constant reusing the camera demo's sample
+ * images, which meant the wall at a real event showed the same five stock frames
+ * all night.
+ *
+ * The image is the share link itself — `/s/<code>` serves the file and enforces
+ * the share's own expiry and revocation, so a photo a guest took down stops
+ * appearing on the wall without the slideshow needing to know why.
  */
 
 export interface SlideItem {
   id: string;
   src: string;
   guest: string;
-  /** Pre-formatted relative time, so there is no clock to hydrate. */
-  at: string;
+  /** ISO; the screen formats it against its own clock. */
+  createdAt: string;
 }
 
-function sample(index: number): string {
-  return DEMO_SHOT_SOURCES[index % DEMO_SHOT_SOURCES.length];
+interface ApiSlide {
+  id: string;
+  guest: string;
+  createdAt: string;
 }
 
-export const SLIDESHOW_ITEMS: SlideItem[] = [
-  { id: "s1", src: sample(0), guest: "Dewi & Rangga", at: "baru saja" },
-  { id: "s2", src: sample(1), guest: "Keluarga Besar", at: "1 menit lalu" },
-  { id: "s3", src: sample(2), guest: "Sahabat SMA", at: "2 menit lalu" },
-  { id: "s4", src: sample(0), guest: "Tim Kantor", at: "4 menit lalu" },
-  { id: "s5", src: sample(1), guest: "Geng Arisan", at: "6 menit lalu" },
-  { id: "s6", src: sample(2), guest: "Oma & Opa", at: "9 menit lalu" },
-  { id: "s7", src: sample(0), guest: "Pengiring Pengantin", at: "12 menit lalu" },
-  { id: "s8", src: sample(1), guest: "Teman Kuliah", at: "15 menit lalu" },
-];
+export interface SlideFeed {
+  slides: SlideItem[];
+  /**
+   * The server's clock at the moment it answered.
+   *
+   * Passed back on the next poll so "what is new since then" is measured by one
+   * clock. A wall left running for six hours against a laptop whose clock drifts
+   * would otherwise start missing photos, or repeating them.
+   */
+  serverTime: string;
+}
+
+export async function fetchSlides(since?: string): Promise<SlideFeed> {
+  const params = since ? `?since=${encodeURIComponent(since)}` : "";
+  const response = await fetch(`/api/slideshow/feed${params}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const data =
+      typeof payload === "object" && payload !== null
+        ? (payload as Record<string, unknown>)
+        : {};
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Foto gagal dimuat.",
+    );
+  }
+
+  const api = (await response.json()) as {
+    slides: ApiSlide[];
+    serverTime: string;
+  };
+
+  return {
+    serverTime: api.serverTime,
+    slides: api.slides.map((slide) => ({
+      id: slide.id,
+      src: `/s/${slide.id}`,
+      guest: slide.guest,
+      createdAt: slide.createdAt,
+    })),
+  };
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+
+/** "2 menit lalu", for the caption under a photo on the wall. */
+export function relativeTime(iso: string): string {
+  const elapsed = Date.now() - new Date(iso).getTime();
+  if (elapsed < MINUTE) return "baru saja";
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} menit lalu`;
+  return `${Math.floor(elapsed / HOUR)} jam lalu`;
+}

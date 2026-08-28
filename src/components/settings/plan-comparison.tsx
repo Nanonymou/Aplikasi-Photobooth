@@ -1,11 +1,12 @@
+"use client";
+
+import { priceFor, useBilling } from "@/lib/billing/client";
 import { Check, Minus } from "lucide-react";
 
 import {
-  CURRENT_PLAN,
   formatRupiah,
   PLAN_COMPARISON,
   PLANS,
-  priceFor,
 } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,12 @@ function Cell({ value }: { value: string | boolean }) {
  * one is theirs without going back to the card above.
  */
 export function PlanComparison() {
+  // Null while the plan is still loading; nothing is marked "current" until the
+  // server says which one is, rather than guessing at the free tier.
+  const billing = useBilling();
+  const currentPlan = billing?.subscription.plan ?? null;
+  const prices = billing?.prices ?? [];
+
   return (
     <section className="bg-card border-border overflow-hidden rounded-xl border">
       <div className="border-border border-b px-4 py-3">
@@ -68,8 +75,8 @@ export function PlanComparison() {
                 Fitur
               </th>
               {PLANS.map((plan) => {
-                const current = plan.id === CURRENT_PLAN;
-                const price = priceFor(plan, "monthly");
+                const current = plan.id === currentPlan;
+                const price = priceFor(prices, plan.id, "monthly") ?? 0;
 
                 return (
                   <th
@@ -106,7 +113,7 @@ export function PlanComparison() {
                     key={plan.id}
                     className={cn(
                       "px-4 py-2.5 text-center",
-                      plan.id === CURRENT_PLAN && "bg-primary/5",
+                      plan.id === currentPlan && "bg-primary/5",
                     )}
                   >
                     <Cell value={row.cells[plan.id]} />

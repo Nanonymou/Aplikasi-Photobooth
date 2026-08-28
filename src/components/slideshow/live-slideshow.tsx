@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { SLIDESHOW_ITEMS } from "@/lib/slideshow/live-feed";
+import {
+  fetchSlides,
+  relativeTime,
+  type SlideItem,
+} from "@/lib/slideshow/live-feed";
 import {
   PACE_OPTIONS,
   setPace,
@@ -43,26 +47,75 @@ const EXIT_TO = "/editor";
  * pace, fullscreen, exit — surface on movement and fade back out so the wall stays
  * clean. Arrow keys step, up/down change the pace, space toggles play. Gated to
  * organizers by the page around it.
+ *
+ * New photos arrive by polling rather than replacing the loop: an event's wall
+ * runs for hours, and a screen that reset to the first slide every time somebody
+ * shared would never finish showing anybody. `serverTime` from the last answer
+ * is what "since" means, so the two clocks that matter are the same one.
  */
+/** How often the wall asks for photos shared since its last look. */
+const POLL_MS = 10_000;
+
 export function LiveSlideshow({ eventName }: { eventName: string }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const items = SLIDESHOW_ITEMS;
 
+  const [items, setItems] = useState<SlideItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [wake, setWake] = useState(0);
   const [idleHidden, setIdleHidden] = useState(false);
   const pace = usePace();
 
+  // The feed, and then only what is newer than the last answer. Prepending keeps
+  // the wall's position: the viewer is somewhere in the middle of the loop, and
+  // a fresh photo should join it rather than restart it.
+  useEffect(() => {
+    let current = true;
+    let since: string | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function poll() {
+      try {
+        const feed = await fetchSlides(since);
+        if (!current) return;
+
+        if (feed.slides.length > 0) {
+          setItems((existing) =>
+            since ? [...feed.slides, ...existing] : feed.slides,
+          );
+        }
+        since = feed.serverTime;
+      } catch {
+        // A wall does not stop because one request failed; the next one is ten
+        // seconds away, and an error screen at an event helps nobody.
+      } finally {
+        if (current) {
+          setLoaded(true);
+          timer = setTimeout(() => void poll(), POLL_MS);
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, []);
+
   const current = items[index];
 
   const next = useCallback(
-    () => setIndex((i) => (i + 1) % items.length),
+    () => setIndex((i) => (items.length === 0 ? 0 : (i + 1) % items.length)),
     [items.length],
   );
   const prev = useCallback(
-    () => setIndex((i) => (i - 1 + items.length) % items.length),
+    () =>
+      setIndex((i) =>
+        items.length === 0 ? 0 : (i - 1 + items.length) % items.length,
+      ),
     [items.length],
   );
 
@@ -110,6 +163,21 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
   // Controls stay put whenever paused, so a stopped wall is still operable.
   const showControls = !idleHidden || !playing;
   const fade = reduceMotion ? 0 : 0.8;
+
+  // Nothing shared yet, or nothing left. A wall showing a blank frame reads as
+  // broken; saying what it is waiting for reads as ready.
+  if (!current) {
+    return (
+      <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-black text-center">
+        <p className="text-lg font-medium text-white">{eventName}</p>
+        <p className="text-sm text-white/60">
+          {loaded
+            ? "Menunggu foto pertama dibagikan."
+            : "Memuat foto acara…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <main
@@ -212,7 +280,9 @@ export function LiveSlideshow({ eventName }: { eventName: string }) {
           <p className="truncate text-lg font-semibold text-white">
             {current.guest}
           </p>
-          <p className="text-sm text-white/60">{current.at}</p>
+          <p className="text-sm text-white/60">
+            {relativeTime(current.createdAt)}
+          </p>
         </div>
 
         <div className="flex items-center gap-1.5">

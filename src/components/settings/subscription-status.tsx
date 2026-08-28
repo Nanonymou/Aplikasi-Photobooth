@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useBilling } from "@/lib/billing/client";
 import { ArrowUpRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
-  CURRENT_PLAN,
-  CURRENT_USAGE,
   formatRupiah,
   planById,
   planRank,
   PLANS,
-  priceFor,
 } from "@/lib/billing/plans";
 
 /**
@@ -29,11 +27,17 @@ import {
  * and the checkout flow.
  */
 export function SubscriptionStatus() {
-  const plan = planById(CURRENT_PLAN);
-  const { designsUsed, designsLimit } = CURRENT_USAGE;
+  const billing = useBilling();
+  if (!billing) return null;
 
-  const limit = plan.limits.designs;
-  const price = priceFor(plan, "monthly");
+  const plan = planById(billing.subscription.plan);
+  const designsUsed = billing.usage.designs;
+  const designsLimit = billing.limits.designs;
+
+  const limit = billing.limits.designs;
+  // What this account is actually being charged, not the catalogue's number:
+  // an old customer kept at an old price is the whole reason the two differ.
+  const price = billing.subscription.priceIdr;
   const canUpgrade = planRank(plan.id) < PLANS.length - 1;
 
   return (
@@ -55,7 +59,7 @@ export function SubscriptionStatus() {
         </div>
       </div>
 
-      {limit === null ? (
+      {limit === null || designsLimit === null ? (
         <p className="text-muted-foreground text-sm">
           Kamu sudah menyimpan{" "}
           <span className="text-foreground font-medium tabular-nums">

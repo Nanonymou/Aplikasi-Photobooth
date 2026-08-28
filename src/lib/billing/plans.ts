@@ -1,11 +1,13 @@
 /**
- * Subscription plans.
+ * Subscription plans: the tiers and what each promises.
  *
- * Stand-in for `GET /api/billing/plans` plus the account's current plan — the
- * tiers a regular user chooses between and where they sit today. Prices are in
- * rupiah per month; the yearly figure is the effective monthly price when billed
- * for a year. `startCheckout` imitates the upgrade call so the flow is real
- * before payments exist.
+ * The copy and the machine-checkable limits. Prices are *not* here — they live
+ * in `plan_prices` and arrive with `GET /api/billing/subscription`, because a
+ * constant cannot express a price that changed last month. The two deprecated
+ * fields below are what remains of that mistake.
+ *
+ * Starting a payment is `startCheckout` in `billing/client.ts`, which calls the
+ * endpoint that reads the price server-side.
  */
 
 export type PlanId = "gratis" | "pro" | "studio";
@@ -90,15 +92,6 @@ export const PLANS: Plan[] = [
   },
 ];
 
-/** The account's current plan; a free user with room to upgrade. */
-export const CURRENT_PLAN: PlanId = "gratis";
-
-/** Usage against the current plan's limits, for the status card. */
-export const CURRENT_USAGE = {
-  designsUsed: 3,
-  designsLimit: 5,
-};
-
 /** The plan by id, falling back to the free tier for anything unrecognised. */
 export function planById(id: PlanId): Plan {
   return PLANS.find((plan) => plan.id === id) ?? PLANS[0];
@@ -126,30 +119,11 @@ export function nextPlan(id: PlanId): Plan | null {
  * number the choice is actually about — "Rp10.000 lebih murah per bulan" is the
  * same fact made to sound smaller.
  */
-export function yearlySaving(plan: Plan): number {
-  return (plan.priceMonthly - plan.priceYearly) * 12;
-}
-
-export function priceFor(plan: Plan, cycle: BillingCycle): number {
-  return cycle === "yearly" ? plan.priceYearly : plan.priceMonthly;
-}
-
 const rupiah = new Intl.NumberFormat("id-ID");
 
 /** "Rp0" / "Rp49.000" — whole rupiah, no decimals. */
 export function formatRupiah(amount: number): string {
   return `Rp${rupiah.format(amount)}`;
-}
-
-const CHECKOUT_LATENCY_MS = 700;
-
-export async function startCheckout(
-  plan: PlanId,
-  cycle: BillingCycle,
-): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, CHECKOUT_LATENCY_MS));
-  void plan;
-  void cycle;
 }
 
 /**

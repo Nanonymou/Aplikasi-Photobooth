@@ -17,23 +17,39 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
 import {
-  CURRENT_PLAN,
-  CURRENT_USAGE,
   formatRupiah,
   planRank,
   PLANS,
-  priceFor,
-  startCheckout,
   type BillingCycle,
+  type PlanId,
   type Plan,
 } from "@/lib/billing/plans";
+import {
+  priceFor,
+  refreshBilling,
+  startCheckout,
+  useBilling,
+  type PlanPrice,
+} from "@/lib/billing/client";
 import { cn } from "@/lib/utils";
 
 function CurrentPlanCard({ cycle }: { cycle: BillingCycle }) {
-  const plan = PLANS.find((p) => p.id === CURRENT_PLAN)!;
-  const price = priceFor(plan, cycle);
-  const { designsUsed, designsLimit } = CURRENT_USAGE;
-  const pct = Math.min(100, (designsUsed / designsLimit) * 100);
+  const billing = useBilling();
+  if (!billing) return null;
+
+  const plan = PLANS.find((p) => p.id === billing.subscription.plan)!;
+  // The agreed price for this account, not the catalogue's: keeping an old
+  // customer at an old price is the whole reason those two can differ.
+  const price =
+    cycle === billing.subscription.cycle
+      ? billing.subscription.priceIdr
+      : (priceFor(billing.prices, plan.id, cycle) ?? 0);
+  const designsUsed = billing.usage.designs;
+  const designsLimit = billing.limits.designs;
+  const pct =
+    designsLimit === null
+      ? 0
+      : Math.min(100, (designsUsed / designsLimit) * 100);
 
   return (
     <section className="bg-card border-border flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -51,7 +67,7 @@ function CurrentPlanCard({ cycle }: { cycle: BillingCycle }) {
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Desain terpakai</span>
           <span className="tabular-nums">
-            {designsUsed} / {designsLimit}
+            {designsUsed} / {designsLimit ?? "∞"}
           </span>
         </div>
         <div className="bg-muted h-1.5 overflow-hidden rounded-full">
@@ -68,15 +84,19 @@ function CurrentPlanCard({ cycle }: { cycle: BillingCycle }) {
 function PlanCard({
   plan,
   cycle,
+  currentPlan,
+  prices,
   onUpgrade,
 }: {
   plan: Plan;
   cycle: BillingCycle;
+  currentPlan: PlanId;
+  prices: PlanPrice[];
   onUpgrade: (plan: Plan) => void;
 }) {
-  const isCurrent = plan.id === CURRENT_PLAN;
-  const isUpgrade = planRank(plan.id) > planRank(CURRENT_PLAN);
-  const price = priceFor(plan, cycle);
+  const isCurrent = plan.id === currentPlan;
+  const isUpgrade = planRank(plan.id) > planRank(currentPlan);
+  const price = priceFor(prices, plan.id, cycle) ?? 0;
 
   return (
     <div
@@ -147,17 +167,39 @@ function PlanCard({
  * whole flow is exercised without taking anyone's money.
  */
 export function Subscription() {
+  const billing = useBilling();
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [upgrade, setUpgrade] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
+  /**
+   * Starts the payment and hands the browser to the gateway.
+   *
+   * Nothing about the plan changes here. The account moves when the gateway
+   * says the money arrived, and only in the webhook — a screen that promoted
+   * on the click would be promoting for anyone who closed the tab.
+   */
   async function checkout() {
     if (!upgrade || busy) return;
     setBusy(true);
-    await startCheckout(upgrade.id, cycle);
-    setBusy(false);
-    setDone(upgrade.name);
+    setFailed(null);
+    try {
+      const started = await startCheckout(
+        upgrade.id as Exclude<PlanId, "gratis">,
+        cycle,
+      );
+      await refreshBilling();
+      setDone(upgrade.name);
+      window.location.assign(started.redirectUrl);
+    } catch (cause) {
+      setFailed(
+        cause instanceof Error ? cause.message : "Pembayaran gagal dimulai.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   function closeUpgrade() {
@@ -186,12 +228,20 @@ export function Subscription() {
         </ToggleGroup>
       </div>
 
+      {failed && (
+        <p className="text-destructive rounded-lg border border-dashed px-3 py-2 text-center text-xs">
+          {failed}
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {PLANS.map((plan) => (
           <PlanCard
             key={plan.id}
             plan={plan}
             cycle={cycle}
+            currentPlan={billing?.subscription.plan ?? "gratis"}
+            prices={billing?.prices ?? []}
             onUpgrade={setUpgrade}
           />
         ))}
@@ -226,7 +276,10 @@ export function Subscription() {
               <DialogHeader>
                 <DialogTitle>Tingkatkan ke {upgrade.name}</DialogTitle>
                 <DialogDescription>
-                  {formatRupiah(priceFor(upgrade, cycle))}/bln, ditagih{" "}
+                  {formatRupiah(
+                    priceFor(billing?.prices ?? [], upgrade.id, cycle) ?? 0,
+                  )}
+                  /bln, ditagih{" "}
                   {cycle === "yearly" ? "tahunan" : "bulanan"}.
                 </DialogDescription>
               </DialogHeader>
