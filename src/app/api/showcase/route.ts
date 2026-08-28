@@ -19,6 +19,22 @@ const MAX_LIMIT = 100;
 const MAX_TAGS = 8;
 
 /**
+ * The name to put on a public page.
+ *
+ * Never the whole email address. This line goes on a wall a stranger arrives at
+ * from a shared link, and publishing "rara@contoh.id" under somebody's design is
+ * handing out an address they never agreed to share — the part before the @ is
+ * what they would have written themselves.
+ */
+function publicName(displayName?: string | null, email?: string | null): string {
+  const chosen = displayName?.trim();
+  if (chosen) return chosen;
+
+  const local = email?.split("@")[0]?.trim();
+  return local || "Anonim";
+}
+
+/**
  * The wall.
  *
  * Public, like the page it feeds: this is what a stranger arriving from a shared
@@ -144,7 +160,7 @@ export async function POST(request: Request): Promise<Response> {
       designId,
       owners,
       accountId,
-      authorName: me.profile?.displayName ?? me.profile?.email ?? "Anonim",
+      authorName: publicName(me.profile?.displayName, me.profile?.email),
       title,
       category: category as ShowcaseCategory,
       tags,

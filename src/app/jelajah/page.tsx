@@ -6,13 +6,9 @@ import { AppHeader } from "@/components/layout/app-header";
 import { ShowcaseFilters } from "@/components/showcase/showcase-filters";
 import { ShowcaseResults } from "@/components/showcase/showcase-results";
 import { Button } from "@/components/ui/button";
-import {
-  browseShowcase,
-  categoryCounts,
-  parseCategory,
-  parseSort,
-  SHOWCASE_ITEMS,
-} from "@/lib/showcase/feed";
+import { getOwnerId } from "@/lib/api/owner";
+import { listSaved, listShowcase } from "@/lib/db/showcase";
+import { parseCategory, parseSort } from "@/lib/showcase/feed";
 
 export const metadata: Metadata = {
   title: "Jelajah Karya — FrameStudio AI",
@@ -33,6 +29,15 @@ export const metadata: Metadata = {
  * button undoes a choice, and the page still works before any JavaScript
  * arrives. An unrecognised value falls back rather than erroring: this is a URL
  * strangers type and edit.
+ *
+ * The wall is read from the database directly rather than through this app's own
+ * HTTP endpoint. A server component fetching its own API is a round trip out to
+ * the network and back into the same process; the endpoint stays for the clients
+ * that genuinely are elsewhere.
+ *
+ * The visitor's owner id goes with the query so each card can say whether *they*
+ * have liked it — a question a counter cannot answer, and one a signed-out
+ * visitor is still entitled to have answered, since they can like things too.
  */
 export default async function ShowcasePage({
   searchParams,
@@ -42,8 +47,19 @@ export default async function ShowcasePage({
   const query = await searchParams;
   const category = parseCategory(query.kategori);
   const sort = parseSort(query.urut);
-  const items = browseShowcase(SHOWCASE_ITEMS, { category, sort });
   const savedOnly = query.simpan === "1";
+
+  const viewer = await getOwnerId();
+  const page = await listShowcase({ category, sort, viewer });
+
+  // The saved shelf is a different question — "what did I keep?" — so it is a
+  // different read rather than a filter over the wall, which would only ever
+  // see the page that happened to arrive.
+  const items = savedOnly
+    ? viewer
+      ? await listSaved(viewer)
+      : []
+    : page.items;
   return (
     <div className="bg-background flex min-h-dvh flex-col">
       <AppHeader title="Jelajah karya" />
@@ -71,8 +87,8 @@ export default async function ShowcasePage({
           category={category}
           sort={sort}
           savedOnly={savedOnly}
-          counts={categoryCounts(SHOWCASE_ITEMS)}
-          total={SHOWCASE_ITEMS.length}
+          counts={page.counts}
+          total={page.total}
         />
 
         <ShowcaseResults

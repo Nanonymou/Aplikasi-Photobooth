@@ -5,7 +5,8 @@ import { EndSessionButton } from "@/components/session/end-session";
 import { GuestSessionBanner } from "@/components/session/guest-session-banner";
 import { RemixCreditBanner } from "@/components/session/remix-credit";
 import { SaveToAccountButton } from "@/components/session/save-to-account";
-import { showcaseItem } from "@/lib/showcase/feed";
+import { getOwnerId } from "@/lib/api/owner";
+import { getShowcaseItem } from "@/lib/db/showcase";
 
 export const metadata: Metadata = {
   title: "Sesi tamu — FrameStudio AI",
@@ -33,9 +34,15 @@ export default async function GuestSessionPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const remix = (await searchParams).remix;
-  const source = showcaseItem(typeof remix === "string" ? remix : "");
+  // The credit names a published design by its slug. Read here rather than
+  // taken from the query string: a credit anybody could type would be a credit
+  // anybody could claim.
+  const source =
+    typeof remix === "string" && remix
+      ? await getShowcaseItem(remix, await getOwnerId())
+      : null;
   const credit = source
-    ? { id: source.id, title: source.title, author: source.author }
+    ? { id: source.slug, title: source.title, author: source.author }
     : null;
 
   return (

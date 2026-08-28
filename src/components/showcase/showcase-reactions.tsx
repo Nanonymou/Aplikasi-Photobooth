@@ -5,10 +5,10 @@ import { Bookmark, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCount, type ShowcaseItem } from "@/lib/showcase/feed";
 import {
+  seedReaction,
   toggleLike,
   toggleSave,
-  useLiked,
-  useSaved,
+  useReaction,
 } from "@/lib/showcase/reactions";
 import { cn } from "@/lib/utils";
 
@@ -21,24 +21,29 @@ import { cn } from "@/lib/utils";
  * room to say the words.
  */
 export function ShowcaseReactions({ item }: { item: ShowcaseItem }) {
-  const liked = useLiked(item.id);
-  const saved = useSaved(item.id);
+  seedReaction(item.slug, {
+    liked: item.liked,
+    saved: item.saved,
+    likes: item.likes,
+  });
+
+  const { liked, saved, likes } = useReaction(item.slug);
 
   return (
     <div className="grid grid-cols-2 gap-2">
       <Button
         variant="outline"
-        onClick={() => toggleLike(item.id)}
+        onClick={() => toggleLike(item.slug)}
         aria-pressed={liked}
         className={cn(liked && "border-rose-500/60 text-rose-500")}
       >
         <Heart className={cn(liked && "fill-current")} />
-        {formatCount(item.likes + (liked ? 1 : 0))}
+        {formatCount(likes)}
       </Button>
 
       <Button
         variant="outline"
-        onClick={() => toggleSave(item.id)}
+        onClick={() => toggleSave(item.slug)}
         aria-pressed={saved}
         className={cn(saved && "border-primary/60 text-primary")}
       >

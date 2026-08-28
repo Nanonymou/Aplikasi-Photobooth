@@ -1,17 +1,14 @@
-"use client";
-
 import { ShowcaseGrid } from "@/components/showcase/showcase-grid";
-import { useSavedIds } from "@/lib/showcase/reactions";
 import type { ShowcaseItem } from "@/lib/showcase/feed";
 
 /**
- * The wall, plus the one narrowing the server cannot do.
+ * The wall, and the count over it.
  *
- * Category and ordering are decided on the server from the URL, because they are
- * the same for everybody. What this visitor has saved is not: it lives in their
- * browser, so the "tersimpan" view is applied here, after hydration. Which also
- * means the count belongs here — a heading that said "12 karya" over a list of
- * three saved ones would be counting the wrong list.
+ * Everything that narrows this list — category, ordering, and the saved shelf —
+ * is decided on the server, because only the server can see past the page it
+ * returned. Filtering here as well was how the "tersimpan" view came to show
+ * whatever subset of one page happened to be saved, and the count over it was
+ * counting that subset rather than the shelf.
  */
 export function ShowcaseResults({
   items,
@@ -22,17 +19,14 @@ export function ShowcaseResults({
   savedOnly: boolean;
   category: string | null;
 }) {
-  const saved = useSavedIds();
-  const shown = savedOnly ? items.filter((item) => saved.has(item.id)) : items;
-
   return (
     <>
       <p className="text-muted-foreground text-xs tabular-nums" aria-live="polite">
-        {shown.length} karya
+        {items.length} karya
       </p>
 
       <ShowcaseGrid
-        items={shown}
+        items={items}
         empty={
           savedOnly && category
             ? "Belum ada simpanan di kategori ini."

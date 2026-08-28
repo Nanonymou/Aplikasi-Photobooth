@@ -5,13 +5,15 @@ import { Bookmark, GitBranch, Heart, Images, Wand2 } from "lucide-react";
 
 import { initials } from "@/lib/auth/initials";
 import {
+  seedReaction,
   toggleLike,
   toggleSave,
-  useLiked,
-  useSaved,
+  useReaction,
 } from "@/lib/showcase/reactions";
 import {
   formatCount,
+  hueFor,
+  relativeTime,
   shapeLabel,
   type ShowcaseItem,
 } from "@/lib/showcase/feed";
@@ -37,12 +39,18 @@ import { cn } from "@/lib/utils";
  * things inside it is a card a keyboard cannot use.
  */
 export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
-  // The count moves the moment it is pressed rather than after a round trip —
-  // which is what a real like does too, it just reconciles afterwards. The
-  // stored feed count plus this visitor's own vote is the whole arithmetic.
-  const liked = useLiked(item.id);
-  const saved = useSaved(item.id);
-  const likes = item.likes + (liked ? 1 : 0);
+  // What the server said about this card, handed to the store before the first
+  // read of it. The store then owns it: the count moves the moment the heart is
+  // pressed rather than after a round trip — which is what a real like does too,
+  // it just reconciles afterwards.
+  seedReaction(item.slug, {
+    liked: item.liked,
+    saved: item.saved,
+    likes: item.likes,
+  });
+
+  const { liked, saved, likes } = useReaction(item.slug);
+  const hue = hueFor(item.id);
 
   return (
     <article className="bg-card border-border hover:border-primary/50 mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-xl border transition-colors">
@@ -50,12 +58,12 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
           scanning and the page is for deciding; nobody remixes a template they
           have only seen at thumbnail size, and the Remix button waits there. */}
       <Link
-        href={`/jelajah/${item.id}`}
+        href={`/jelajah/${item.slug}`}
         aria-label={`Lihat ${item.title} oleh ${item.author}`}
         className="focus-visible:ring-ring/50 group/preview relative flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         style={{
           aspectRatio: `${item.width} / ${item.height}`,
-          background: `linear-gradient(135deg, hsl(${item.hue} 70% 55% / 0.35), hsl(${(item.hue + 50) % 360} 70% 50% / 0.12))`,
+          background: `linear-gradient(135deg, hsl(${hue} 70% 55% / 0.35), hsl(${(hue + 50) % 360} 70% 50% / 0.12))`,
         }}
       >
         <Images className="text-foreground/25 size-8" />
@@ -80,8 +88,8 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
             aria-hidden="true"
             className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium"
             style={{
-              backgroundColor: `hsl(${item.hue} 60% 50% / 0.18)`,
-              color: `hsl(${item.hue} 70% 45%)`,
+              backgroundColor: `hsl(${hue} 60% 50% / 0.18)`,
+              color: `hsl(${hue} 70% 45%)`,
             }}
           >
             {initials(item.author)}
@@ -89,7 +97,7 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
           <div className="min-w-0">
             <h3 className="truncate text-sm font-medium">{item.title}</h3>
             <p className="text-muted-foreground truncate text-xs">
-              {item.author} · {item.at}
+              {item.author} · {relativeTime(item.publishedAt)}
             </p>
             {/* Credit where the design came from, on the card rather than only
                 on a detail page: this line is the reason the person underneath
@@ -123,7 +131,7 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
                 therefore neither. */}
             <button
               type="button"
-              onClick={() => toggleLike(item.id)}
+              onClick={() => toggleLike(item.slug)}
               aria-pressed={liked}
               aria-label={liked ? `Batal suka ${item.title}` : `Suka ${item.title}`}
               className={cn(
@@ -137,7 +145,7 @@ export function ShowcaseCard({ item }: { item: ShowcaseItem }) {
 
             <button
               type="button"
-              onClick={() => toggleSave(item.id)}
+              onClick={() => toggleSave(item.slug)}
               aria-pressed={saved}
               aria-label={
                 saved ? `Hapus ${item.title} dari simpanan` : `Simpan ${item.title}`

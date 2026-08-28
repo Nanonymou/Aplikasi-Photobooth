@@ -5,120 +5,137 @@ import { useSyncExternalStore } from "react";
 /**
  * What this visitor has liked and saved.
  *
- * Two different gestures that a single "star" would collapse: a like is a
- * signal to the person who made it, a save is a note to yourself. So they are
- * kept apart, and the wall can be narrowed to the saved ones while likes stay a
- * count on a card.
+ * Two different gestures that a single "star" would collapse: a like is a signal
+ * to the person who made it, a save is a note to yourself. So they are kept
+ * apart, and the wall can be narrowed to the saved ones while likes stay a count
+ * on a card.
  *
- * Both live in this browser. That is a stand-in for the account-scoped table
- * behind them, but it is the honest stand-in rather than component state: a
- * like that vanishes on reload is a decoration, and a saved design that vanishes
- * on reload is a promise broken by the one feature whose whole job is to
- * remember. When the endpoints exist, only the reading and writing move.
+ * Both live on the server now, keyed by the owner id the browser already
+ * carries, which is what makes them survive a cleared cache and follow somebody
+ * onto their phone when they sign in. This module is the optimistic layer over
+ * that: the heart fills the instant it is pressed, the write goes out, and a
+ * refusal puts it back — because a like that waits 200ms to acknowledge a tap
+ * feels broken, and one that stays filled after the write failed is a lie.
+ *
+ * The seed comes from the server with each card (`liked`, `saved`), so a reload
+ * shows the truth rather than whatever this store happened to remember.
  */
 
-const KEYS = {
-  liked: "framestudio.showcase.liked",
-  saved: "framestudio.showcase.saved",
-} as const;
+type Kind = "like" | "save";
 
-type Kind = keyof typeof KEYS;
+interface Entry {
+  liked: boolean;
+  saved: boolean;
+  likes: number;
+}
 
+/**
+ * Cached by slug so `useSyncExternalStore` sees a stable reference — a fresh
+ * object per render is a fresh identity every time, and re-renders forever.
+ */
+const entries = new Map<string, Entry>();
 const listeners = new Set<() => void>();
-
-// Cached because `useSyncExternalStore` compares snapshots by identity: a fresh
-// Set on every render would be a fresh object every time, and re-render forever.
-const cache: Record<Kind, Set<string> | null> = { liked: null, saved: null };
-
-function read(kind: Kind): Set<string> {
-  try {
-    const raw = localStorage.getItem(KEYS[kind]);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : []);
-  } catch {
-    // A private window, blocked site data, or a value somebody hand-edited into
-    // nonsense. None of them is a reason to fail to render a wall of pictures.
-    return new Set();
-  }
-}
-
-function snapshot(kind: Kind): Set<string> {
-  cache[kind] ??= read(kind);
-  return cache[kind];
-}
 
 function announce() {
   for (const listener of listeners) listener();
 }
 
-function onStorage(event: StorageEvent) {
-  if (event.key === KEYS.liked) cache.liked = null;
-  else if (event.key === KEYS.saved) cache.saved = null;
-  else return;
-
-  announce();
-}
-
-function subscribe(onChange: () => void) {
-  if (listeners.size === 0) window.addEventListener("storage", onStorage);
-  listeners.add(onChange);
-
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
   return () => {
-    listeners.delete(onChange);
-    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
+    listeners.delete(listener);
   };
 }
 
-const EMPTY: ReadonlySet<string> = new Set();
-
-/** Nothing is liked or saved on the server; hydration fills it in. */
-function serverSnapshot(): ReadonlySet<string> {
-  return EMPTY;
+/**
+ * Adopts what the server said about a card.
+ *
+ * Called as each card renders. It does not overwrite an entry this browser has
+ * already touched: the optimistic value is newer than the page's data, and
+ * letting the seed win would visibly un-press a button somebody just pressed.
+ */
+export function seedReaction(
+  slug: string,
+  seed: { liked: boolean | null; saved: boolean | null; likes: number },
+): void {
+  if (entries.has(slug)) return;
+  entries.set(slug, {
+    liked: seed.liked ?? false,
+    saved: seed.saved ?? false,
+    likes: seed.likes,
+  });
 }
 
-function toggle(kind: Kind, id: string) {
-  const next = new Set(snapshot(kind));
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
+function entry(slug: string): Entry | undefined {
+  return entries.get(slug);
+}
 
-  cache[kind] = next;
-  try {
-    localStorage.setItem(KEYS[kind], JSON.stringify([...next]));
-  } catch {
-    // The gesture still lands for this visit; only the memory of it is lost.
-  }
+async function put(slug: string, kind: Kind, on: boolean): Promise<number> {
+  const path = kind === "like" ? "like" : "save";
+  const response = await fetch(`/api/showcase/${slug}/${path}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ on }),
+  });
+  if (!response.ok) throw new Error("gagal");
+  const data = (await response.json()) as { on: boolean; likes: number };
+  return data.likes;
+}
+
+/**
+ * Flips a like or a save, and puts it back if the server refuses.
+ *
+ * The count moves with it. A heart that fills while the number beside it stays
+ * put is the kind of half-update people notice immediately.
+ */
+async function toggle(slug: string, kind: Kind): Promise<void> {
+  const current = entry(slug);
+  if (!current) return;
+
+  const field = kind === "like" ? "liked" : "saved";
+  const next = !current[field];
+  const before = { ...current };
+
+  entries.set(slug, {
+    ...current,
+    [field]: next,
+    likes:
+      kind === "like" ? current.likes + (next ? 1 : -1) : current.likes,
+  });
   announce();
+
+  try {
+    const likes = await put(slug, kind, next);
+    const latest = entries.get(slug);
+    if (latest) entries.set(slug, { ...latest, likes });
+  } catch {
+    entries.set(slug, before);
+  } finally {
+    announce();
+  }
 }
 
-export function toggleLike(id: string): void {
-  toggle("liked", id);
+export function toggleLike(slug: string): void {
+  void toggle(slug, "like");
 }
 
-export function toggleSave(id: string): void {
-  toggle("saved", id);
+export function toggleSave(slug: string): void {
+  void toggle(slug, "save");
 }
 
-export function useLiked(id: string): boolean {
+const NOTHING: Entry = { liked: false, saved: false, likes: 0 };
+
+function snapshotFor(slug: string): Entry {
+  return entries.get(slug) ?? NOTHING;
+}
+
+/** This visitor's state for one card: liked, saved, and the live like count. */
+export function useReaction(slug: string): Entry {
   return useSyncExternalStore(
     subscribe,
-    () => snapshot("liked").has(id),
-    () => false,
-  );
-}
-
-export function useSaved(id: string): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => snapshot("saved").has(id),
-    () => false,
-  );
-}
-
-/** Every saved id, for the "tersimpan" view. */
-export function useSavedIds(): ReadonlySet<string> {
-  return useSyncExternalStore(
-    subscribe,
-    () => snapshot("saved"),
-    serverSnapshot,
+    () => snapshotFor(slug),
+    // The server render knows nothing about this browser, and rendering the
+    // seed here instead would flash the wrong state on hydration.
+    () => NOTHING,
   );
 }

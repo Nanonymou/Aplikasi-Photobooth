@@ -8,31 +8,21 @@ import { ShowcaseReactions } from "@/components/showcase/showcase-reactions";
 import { ShowcaseGrid } from "@/components/showcase/showcase-grid";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/auth/initials";
+import { getOwnerId } from "@/lib/api/owner";
+import { getShowcaseItem, listShowcase } from "@/lib/db/showcase";
 import {
   CATEGORIES,
   formatCount,
+  hueFor,
   shapeLabel,
-  showcaseItem,
-  SHOWCASE_ITEMS,
 } from "@/lib/showcase/feed";
-
-/**
- * Every published design, known at build time.
- *
- * The feed is a compiled constant at this stage, so there is nothing to look up
- * per request. When it comes from the database these become the popular ones,
- * and the rest render on demand — the page does not change either way.
- */
-export function generateStaticParams() {
-  return SHOWCASE_ITEMS.map((item) => ({ id: item.id }));
-}
 
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const item = showcaseItem((await params).id);
+  const item = await getShowcaseItem((await params).slug);
   if (!item) return { title: "Karya tidak ditemukan — FrameStudio AI" };
 
   return {
@@ -56,22 +46,32 @@ function categoryLabel(id: string): string {
  * Public, like the wall it came from: this is the URL that gets pasted into a
  * group chat, and a sign-in wall on it would be a wall in front of the only page
  * that recruits anybody.
+ *
+ * A withdrawn design still renders. Everybody holding a link that used to work
+ * deserves "the maker took this down" rather than a 404, which is the difference
+ * between an explanation and a shrug.
  */
 export default async function ShowcaseDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const item = showcaseItem((await params).id);
+  const { slug } = await params;
+  const viewer = await getOwnerId();
+
+  const item = await getShowcaseItem(slug, viewer);
   if (!item) notFound();
 
-  // Same occasion, minus itself. A row of "more like this" is the only honest
-  // recommendation a mock feed can make, and it is also the useful one: somebody
-  // looking at a wedding card is usually shopping for a wedding.
-  const related = SHOWCASE_ITEMS.filter(
-    (candidate) =>
-      candidate.category === item.category && candidate.id !== item.id,
-  ).slice(0, 4);
+  // Same occasion, minus itself. Somebody looking at a wedding card is usually
+  // shopping for a wedding, which makes this the one recommendation worth making
+  // without pretending to know more about them than that.
+  const { items: siblings } = await listShowcase({
+    category: item.category,
+    limit: 5,
+    viewer,
+  });
+  const related = siblings.filter((c) => c.slug !== item.slug).slice(0, 4);
+  const hue = hueFor(item.id);
 
   return (
     <div className="bg-background flex min-h-dvh flex-col">
@@ -91,7 +91,7 @@ export default async function ShowcaseDetailPage({
             style={{
               aspectRatio: `${item.width} / ${item.height}`,
               maxHeight: "70dvh",
-              background: `linear-gradient(135deg, hsl(${item.hue} 70% 55% / 0.35), hsl(${(item.hue + 50) % 360} 70% 50% / 0.12))`,
+              background: `linear-gradient(135deg, hsl(${hue} 70% 55% / 0.35), hsl(${(hue + 50) % 360} 70% 50% / 0.12))`,
             }}
           >
             <Images className="text-foreground/25 size-10" />
@@ -107,13 +107,13 @@ export default async function ShowcaseDetailPage({
                   aria-hidden="true"
                   className="flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium"
                   style={{
-                    backgroundColor: `hsl(${item.hue} 60% 50% / 0.18)`,
-                    color: `hsl(${item.hue} 70% 45%)`,
+                    backgroundColor: `hsl(${hue} 60% 50% / 0.18)`,
+                    color: `hsl(${hue} 70% 45%)`,
                   }}
                 >
                   {initials(item.author)}
                 </span>
-                {item.author} · {item.at}
+                {item.author}
               </div>
             </div>
 
@@ -123,7 +123,7 @@ export default async function ShowcaseDetailPage({
                 <span>
                   Remix dari{" "}
                   <Link
-                    href={`/jelajah/${item.remixOf.id}`}
+                    href={`/jelajah/${item.remixOf.slug}`}
                     className="text-foreground underline-offset-4 hover:underline"
                   >
                     {item.remixOf.title}
@@ -134,7 +134,7 @@ export default async function ShowcaseDetailPage({
             )}
 
             <Button asChild size="lg" className="w-full">
-              <Link href={`/tamu?remix=${item.id}`}>
+              <Link href={`/tamu?remix=${item.slug}`}>
                 <Wand2 />
                 Remix desain ini
               </Link>
