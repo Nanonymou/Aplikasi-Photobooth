@@ -691,3 +691,73 @@ function uniqueCopyName(taken: Set<string>, name: string): string {
 function createPageId(): string {
   return `page_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
+
+export interface RemovedPage {
+  /** The page that is now open in the editor's place — the deleted one's neighbour. */
+  nextPageId: string;
+  version: number;
+}
+
+/**
+ * Removes a page from a design.
+ *
+ * Refuses the last one. A project with no pages is a document that cannot be
+ * opened, rendered, or exported — the editor already declines it client-side,
+ * and an endpoint that allowed it would let one stray request leave somebody
+ * with a design they can never see again.
+ *
+ * Answers with the neighbour that should take its place, chosen the way a reader
+ * expects: the page after it, or the one before when the last page went. Working
+ * that out here rather than leaving it to the caller means the strip and the
+ * endpoint cannot disagree about where you end up.
+ *
+ * Positions are closed up so they stay a clean sequence. The unique constraint
+ * on (design_id, position) is deferrable, so the gap and the shift can both
+ * happen inside one transaction without tripping over each other.
+ */
+export async function removeDesignPage(
+  owners: string[],
+  designId: string,
+  pageId: string,
+): Promise<RemovedPage | "not-found" | "last-page"> {
+  if (owners.length === 0 || !isDesignId(designId)) return "not-found";
+
+  return transaction(async (client) => {
+    const { rows: designs } = await client.query<{ id: string }>(
+      `select id from designs
+        where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null
+        for update`,
+      [designId, owners],
+    );
+    if (designs.length === 0) return "not-found";
+
+    const { rows: pages } = await client.query<{ id: string; position: number }>(
+      "select id, position from design_pages where design_id = $1 order by position",
+      [designId],
+    );
+
+    const index = pages.findIndex((page) => page.id === pageId);
+    if (index === -1) return "not-found";
+    if (pages.length <= 1) return "last-page";
+
+    await client.query(
+      "delete from design_pages where design_id = $1 and id = $2",
+      [designId, pageId],
+    );
+    await client.query(
+      `update design_pages set position = position - 1
+        where design_id = $1 and position > $2`,
+      [designId, pages[index].position],
+    );
+
+    const { rows: updated } = await client.query<{ version: number }>(
+      "update designs set version = version + 1 where id = $1 returning version",
+      [designId],
+    );
+
+    return {
+      nextPageId: (pages[index + 1] ?? pages[index - 1]).id,
+      version: updated[0].version,
+    };
+  });
+}
