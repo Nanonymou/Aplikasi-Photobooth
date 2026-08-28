@@ -30,6 +30,11 @@ type State =
  * redirects to the workspace rather than making the user press anything — the
  * consent tap was the intent. Only a bad or denied hand-off stops to explain,
  * with the one useful next step: back to the sign-in screen to retry.
+ *
+ * Nothing reaches this page today: the provider exchange is not installed, so
+ * the sign-in screens show their SSO buttons switched off and the endpoint here
+ * refuses. The page stays because it is the address a provider redirects to, and
+ * it already reports a refusal as the error it is.
  */
 export function OAuthCallback() {
   const router = useRouter();

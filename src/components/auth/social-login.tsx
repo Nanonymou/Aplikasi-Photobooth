@@ -1,16 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-
 import { AppleIcon, GoogleIcon } from "@/components/auth/provider-icons";
 import { Button } from "@/components/ui/button";
-import {
-  oauthAuthorizeUrl,
-  SSO_PROVIDERS,
-  type SsoProvider,
-} from "@/lib/auth/client";
+import { SSO_PROVIDERS, type SsoProvider } from "@/lib/auth/client";
 
 const ICONS: Record<SsoProvider, typeof GoogleIcon> = {
   google: GoogleIcon,
@@ -20,27 +12,22 @@ const ICONS: Record<SsoProvider, typeof GoogleIcon> = {
 /**
  * "Continue with Google / Apple" — the SSO half of the auth screens.
  *
- * The whole appeal of social sign-in is skipping the form, so this sits beside
- * the email fields as a full alternative, not an afterthought: two provider
- * buttons under a plain divider. A click hands off to the provider (mocked: to
- * our own callback) and the button stays busy through the navigation, so both
- * are locked — you cannot start a second round trip mid-flight. Everything after
- * the redirect belongs to the callback page, not here.
+ * Shown, and switched off, because neither is true on its own. The provider's
+ * token exchange is not installed here, so there is nothing behind these buttons
+ * that could prove an address belongs to the person typing it; the endpoint they
+ * would call refuses for exactly that reason. Hiding them would leave the sign-in
+ * screen looking finished while quietly dropping an option people came for, and
+ * letting them navigate would hand the user an error page one click later. So
+ * they say what is true: the option exists, it is not on yet, use the email link.
+ *
+ * Re-enabling is a small edit once the exchange lands — restore the click that
+ * sends the browser to the provider, and drop the note.
  */
 export function SocialLogin({
   dividerLabel = "atau lanjutkan dengan",
 }: {
   dividerLabel?: string;
 }) {
-  const router = useRouter();
-  const [pending, setPending] = useState<SsoProvider | null>(null);
-
-  function connect(provider: SsoProvider) {
-    if (pending) return;
-    setPending(provider);
-    router.push(oauthAuthorizeUrl(provider));
-  }
-
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
@@ -56,16 +43,21 @@ export function SocialLogin({
             <Button
               key={id}
               variant="outline"
-              onClick={() => connect(id)}
-              disabled={pending !== null}
+              disabled
+              title={`Masuk dengan ${label} belum aktif`}
               className="w-full"
             >
-              {pending === id ? <Loader2 className="animate-spin" /> : <Icon />}
+              <Icon />
               Masuk dengan {label}
             </Button>
           );
         })}
       </div>
+
+      <p className="text-muted-foreground text-center text-[11px] leading-relaxed">
+        Masuk lewat Google &amp; Apple belum aktif di instalasi ini. Pakai tautan
+        masuk lewat email di atas.
+      </p>
     </div>
   );
 }

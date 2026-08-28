@@ -135,26 +135,18 @@ export function providerLabel(provider: string | null): string | null {
   return SSO_PROVIDERS.find((p) => p.id === provider)?.label ?? null;
 }
 
-/**
- * Where the SSO button sends the browser to begin auth.
- *
- * Still an in-app hop. The provider's own consent screen and token exchange are
- * Supabase's to perform (see `supabase/config.toml`); until that is configured
- * the round trip runs against our own callback, which is a real endpoint that
- * creates a real session — the part that is missing is the provider proving the
- * email, not the session behind it.
- */
-export function oauthAuthorizeUrl(provider: SsoProvider): string {
-  const query = new URLSearchParams({ provider, code: "demo" });
-  return `${OAUTH_CALLBACK_PATH}?${query.toString()}`;
-}
 
-/** Completes the OAuth round trip from the callback. */
+/**
+ * Completes the OAuth round trip from the callback.
+ *
+ * The address is never carried here: the server takes it from the provider or
+ * refuses. A caller who could name their own email would be a caller who could
+ * sign in as anyone.
+ */
 export async function completeOAuth(params: {
   provider: string | null;
   code: string | null;
   error: string | null;
-  email?: string;
 }): Promise<SignedIn> {
   if (params.error) throw new AuthError("Masuk dibatalkan atau izin ditolak.");
 
@@ -166,13 +158,7 @@ export async function completeOAuth(params: {
 
   const result = await call<{ profile: ProfileShape; claimed: Claimed | null }>(
     "/api/auth/oauth/callback",
-    {
-      provider: params.provider,
-      // Until the provider hands us a verified profile, the address is the one
-      // the caller carries. The endpoint checks its shape and the provider name;
-      // what it cannot do yet is prove the address belongs to them.
-      email: params.email ?? `${params.provider}@contoh.id`,
-    },
+    { provider: params.provider, code: params.code },
   );
   return { account: toAccount(result.profile), claimed: result.claimed };
 }

@@ -1,79 +1,34 @@
-import { isJsonObject, jsonError, readJsonBody } from "@/lib/api/http";
-import { RegistrationClosedError, signIn } from "@/lib/api/sign-in";
-import type { AuthProvider } from "@/lib/db/user-profiles";
+import { jsonError } from "@/lib/api/http";
 
 // `pg` opens TCP sockets, which the edge runtime cannot do.
 export const runtime = "nodejs";
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Only the social providers land here; email sign-in has its own route. */
-const PROVIDERS = new Set<AuthProvider>(["google", "apple"]);
-
-function optionalString(value: unknown, max: number): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed === "" || trimmed.length > max ? null : trimmed;
-}
-
 /**
- * Completes a social sign-in and syncs the profile.
+ * Where a social sign-in would be completed — and, until it can be, refused.
  *
- * The browser comes back from Google or Apple, and this is where that becomes a
- * session: the identity is recorded against a profile, the account cookie is
- * set, and any guest work follows the user into their account — all through the
- * same `signIn` the email route uses, so the two cannot drift.
+ * This route used to take the email out of the request body and sign that
+ * account in. There was nothing else to it: no provider, no token exchange, no
+ * proof. So `POST {"provider":"google","email":"<any address>"}` returned a
+ * session cookie for that account, and naming the administrator's address made
+ * the caller an administrator. Measured against this codebase, unauthenticated,
+ * in one request.
  *
- * The provider's own token exchange is not here yet: Supabase performs it and
- * hands back a verified profile (see supabase/config.toml). Until that is wired,
- * this route accepts the profile shape that exchange produces. What it will not
- * do is trust the shape blindly — the provider must be one we actually offer,
- * and the email must look like an email, because everything downstream keys off
- * it.
+ * The email is the whole identity here, so the only safe version of this
+ * endpoint is one where the email comes from the provider rather than the
+ * caller. That exchange is Supabase's to perform (see supabase/config.toml) and
+ * it is not installed — no client, no keys, no verification anywhere in this
+ * repository — so there is no configuration that could make this request
+ * trustworthy today, and it is refused outright rather than gated behind a flag
+ * somebody could set by mistake.
  *
- * Note what is deliberately absent: no `role` is read from the body. A caller
- * who could name their own role would be a caller who could make themselves an
- * admin; roles are granted in this app, never asserted by a sign-in.
+ * To bring it back: perform the code-for-profile exchange with the provider,
+ * and call `signIn` from `@/lib/api/sign-in` with the verified address. Nothing
+ * else in the sign-in path needs to change — the email route already uses it,
+ * and roles are granted in this app, never asserted by a sign-in.
  */
-export async function POST(request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  if (!body.ok) return body.response;
-  if (!isJsonObject(body.value)) return jsonError(400, "Body bukan objek JSON.");
-
-  const provider = body.value.provider;
-  if (
-    typeof provider !== "string" ||
-    !PROVIDERS.has(provider as AuthProvider)
-  ) {
-    return jsonError(400, "Penyedia masuk tidak dikenali.");
-  }
-
-  const email = body.value.email;
-  if (typeof email !== "string" || !EMAIL.test(email.trim())) {
-    return jsonError(400, "Email dari penyedia tidak valid.");
-  }
-
-  const avatar = optionalString(body.value.avatarUrl, 2048);
-
-  try {
-    const { profile, claimed } = await signIn({
-      email: email.trim(),
-      provider: provider as AuthProvider,
-      displayName: optionalString(body.value.displayName, 120),
-      // The column only accepts https; dropping anything else here keeps a
-      // provider's odd payload from turning a sign-in into a 500.
-      avatarUrl: avatar?.startsWith("https://") ? avatar : null,
-    });
-
-    return Response.json({ profile, claimed });
-  } catch (error) {
-    // Not a failure to be logged as one: the installation closed the door, and
-    // the person holding a valid link deserves to be told that rather than
-    // shown a 500.
-    if (error instanceof RegistrationClosedError) {
-      return jsonError(403, "Pendaftaran akun baru sedang ditutup. Hubungi penyelenggara.");
-    }
-    console.error("POST /api/auth/oauth/callback failed", error);
-    return jsonError(500, "Masuk lewat penyedia gagal diselesaikan.");
-  }
+export function POST(): Response {
+  return jsonError(
+    503,
+    "Masuk dengan Google atau Apple belum aktif di instalasi ini. Gunakan tautan masuk lewat email.",
+  );
 }
