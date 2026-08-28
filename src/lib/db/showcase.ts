@@ -448,3 +448,82 @@ export async function listSaved(
 
   return rows.map(toItem);
 }
+
+export interface RemixResult {
+  designId: string;
+  title: string;
+  /** What it was started from, for the credit the editor shows. */
+  source: { slug: string; title: string; author: string };
+}
+
+/**
+ * Starts a new design from a published one.
+ *
+ * The copy is made inside the database, like `duplicateDesign`: a design is
+ * megabytes of inline photos, and shipping them out to the browser only to have
+ * them posted straight back is the most expensive possible way to say "again".
+ *
+ * The photos come with it, and that is deliberate rather than an oversight. A
+ * template published to the showcase *is* its example photos — a strip with
+ * three empty grey rectangles teaches nobody what it looks like — and the
+ * remixer replaces them as their first act. What does not come with it is
+ * anything about who owns it: the copy belongs to the remixer from the moment it
+ * exists.
+ *
+ * A withdrawn design still remixes. Somebody following a link from a friend who
+ * made one last week should not be told no because the original maker has since
+ * tidied their gallery; the credit simply names a design that is no longer on
+ * the wall.
+ */
+export async function remixDesign(
+  ownerId: string,
+  slug: string,
+): Promise<RemixResult | null> {
+  return transaction(async (client) => {
+    const { rows: found } = await client.query<{
+      id: string;
+      design_id: string;
+      title: string;
+      author_name: string;
+      slug: string;
+    }>(
+      `select id, design_id, title, author_name, slug
+         from published_designs where slug = $1`,
+      [slug],
+    );
+    const source = found[0];
+    if (!source) return null;
+
+    // The design behind the publication may be gone — publications cascade on
+    // delete, so in practice this means a race with a deletion.
+    const { rows: created } = await client.query<{ id: string }>(
+      `insert into designs (owner_id, title, remix_of_id)
+       select $1, $3, $4 from designs where id = $2 and deleted_at is null
+       returning id`,
+      [ownerId, source.design_id, `${source.title} (remix)`, source.id],
+    );
+    const copy = created[0];
+    if (!copy) return null;
+
+    await client.query(
+      `insert into design_pages
+         (design_id, id, position, name, template_id, width, height,
+          background_type, background, objects, effects)
+       select $2, id, position, name, template_id, width, height,
+              background_type, background, objects, effects
+         from design_pages
+        where design_id = $1`,
+      [source.design_id, copy.id],
+    );
+
+    return {
+      designId: copy.id,
+      title: `${source.title} (remix)`,
+      source: {
+        slug: source.slug,
+        title: source.title,
+        author: source.author_name,
+      },
+    };
+  });
+}
