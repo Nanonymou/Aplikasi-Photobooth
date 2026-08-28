@@ -213,9 +213,27 @@ export async function saveDesign(
   });
 }
 
+/** Who a design was started from, when it was started from somebody's work. */
+export interface RemixCredit {
+  slug: string;
+  title: string;
+  author: string;
+  /** Whether that publication is still on the wall. */
+  live: boolean;
+}
+
 export interface LoadedDesign {
   project: EditorProject;
   version: number;
+  /**
+   * The credit this design carries, read from the row rather than from the
+   * browser.
+   *
+   * The editor showed it from localStorage while there was no server to ask,
+   * which meant the credit lived on one machine and vanished when somebody
+   * opened their work somewhere else. It belongs to the design.
+   */
+  remixOf: RemixCredit | null;
 }
 
 /** One row per design, enough to draw a card without loading the artwork. */
@@ -310,9 +328,32 @@ export async function loadDesign(
     [designId],
   );
 
+  // Left join: a design with no credit is the common case, and a credit whose
+  // publication has since been withdrawn still has a name worth showing.
+  const credit = await query<{
+    slug: string;
+    title: string;
+    author_name: string;
+    unpublished_at: Date | null;
+  }>(
+    `select p.slug, p.title, p.author_name, p.unpublished_at
+       from designs d
+       join published_designs p on p.id = d.remix_of_id
+      where d.id = $1`,
+    [designId],
+  );
+
   return {
     project: rowsToProject({ design, pages }),
     version: design.version,
+    remixOf: credit[0]
+      ? {
+          slug: credit[0].slug,
+          title: credit[0].title,
+          author: credit[0].author_name,
+          live: credit[0].unpublished_at === null,
+        }
+      : null,
   };
 }
 

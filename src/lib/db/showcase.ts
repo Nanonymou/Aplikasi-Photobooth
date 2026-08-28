@@ -246,8 +246,6 @@ export interface PublishInput {
   tags: string[];
   width: number;
   height: number;
-  /** The publication this design was started from, if any. */
-  remixOfId?: string | null;
 }
 
 export type PublishResult =
@@ -282,12 +280,21 @@ export async function publishDesign(
   input: PublishInput,
 ): Promise<PublishResult> {
   return transaction(async (client) => {
-    const { rows: owned } = await client.query<{ id: string }>(
-      `select id from designs
+    const { rows: owned } = await client.query<{
+      id: string;
+      remix_of_id: string | null;
+    }>(
+      `select id, remix_of_id from designs
         where id = $1 and owner_id = any($2::uuid[]) and deleted_at is null`,
       [input.designId, input.owners],
     );
     if (owned.length === 0) return { ok: false, reason: "not-your-design" };
+
+    // The credit is the design's, not something the publisher types in. Reading
+    // it here is what carries "remix dari X" from the editor onto the wall — and
+    // taking it from the request instead would let anybody claim to have
+    // remixed anything, or drop a credit they would rather not mention.
+    const remixOfId = owned[0].remix_of_id;
 
     const { rows: existing } = await client.query<{ id: string }>(
       "select id from published_designs where design_id = $1",
@@ -328,7 +335,7 @@ export async function publishDesign(
           input.tags,
           input.width,
           input.height,
-          input.remixOfId ?? null,
+          remixOfId,
         ],
       );
     }
