@@ -431,3 +431,274 @@ export async function settleTemplatePurchase(input: {
     };
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* What a creator has earned                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** One month of takings. `YYYY-MM`; the label is the screen's business. */
+export interface MonthlyRevenue {
+  month: string;
+  grossIdr: number;
+  netIdr: number;
+  sold: number;
+}
+
+/** One template's lifetime performance. */
+export interface TemplateRevenue {
+  id: string;
+  slug: string;
+  title: string;
+  /** What it costs today, which is not what every sale was made at. */
+  priceIdr: number;
+  sold: number;
+  /** What buyers actually paid, summed. */
+  grossIdr: number;
+  netIdr: number;
+}
+
+export interface SaleRecord {
+  id: string;
+  slug: string;
+  title: string;
+  amountIdr: number;
+  netIdr: number;
+  /** Who bought it, by the name they chose. Never their email. */
+  buyer: string;
+  paidAt: string;
+}
+
+export type PayoutStatus = "menunggu" | "diproses" | "dibayar" | "gagal";
+
+export interface PayoutRecord {
+  id: string;
+  /** The month it covers, as its first day. */
+  period: string;
+  amountIdr: number;
+  status: PayoutStatus;
+  scheduledFor: string;
+  paidAt: string | null;
+  failureReason: string | null;
+}
+
+export interface SalesSummary {
+  grossIdr: number;
+  netIdr: number;
+  sold: number;
+  /** Gross this calendar month, and the month before, for the comparison. */
+  thisMonthIdr: number;
+  lastMonthIdr: number;
+  /** In payouts that have not been paid yet — including ones that failed. */
+  pendingPayoutIdr: number;
+  /** Earned in months no payout covers yet. */
+  unscheduledIdr: number;
+}
+
+export interface CreatorSales {
+  summary: SalesSummary;
+  monthly: MonthlyRevenue[];
+  templates: TemplateRevenue[];
+  recent: SaleRecord[];
+  payouts: PayoutRecord[];
+}
+
+/** How many months of history the chart shows, this one included. */
+const REVENUE_MONTHS = 6;
+
+/**
+ * Everything the creator dashboard reports on, in one read.
+ *
+ * One call rather than five, because the screen shows them together and five
+ * endpoints would mean five chances for the page to render a total that
+ * disagrees with the rows beneath it.
+ *
+ * Only `paid` purchases count anywhere here. A pending row is somebody who
+ * opened a payment page, and money that has not arrived has no business in a
+ * figure a creator plans around.
+ *
+ * The totals are summed from the receipts rather than from the listings' current
+ * prices, which is the whole point of storing the amount on the purchase: a
+ * template repriced last week did not retroactively change what it earned.
+ */
+export async function getCreatorSales(
+  accountId: string,
+  recentLimit = 20,
+): Promise<CreatorSales> {
+  const [totals, unscheduled, monthly, templates, recent, payouts] = await Promise.all([
+    query<{ gross: string; net: string; sold: string }>(
+      `select coalesce(sum(amount_idr), 0) as gross,
+              coalesce(sum(net_idr), 0) as net,
+              count(*) as sold
+         from template_purchases
+        where seller_account_id = $1 and status = 'paid'`,
+      [accountId],
+    ),
+
+    // Earned in a month no payout covers — over all of history, not just the
+    // months the chart happens to show. Payouts are drawn up after a month
+    // ends, so this is normally the recent ones; when it is an old one it is a
+    // creator who has been owed money for a year, and that is precisely the
+    // figure that must not quietly fall off the bottom of the window.
+    query<{ net: string }>(
+      `select coalesce(sum(t.net_idr), 0) as net
+         from template_purchases t
+        where t.seller_account_id = $1
+          and t.status = 'paid'
+          and not exists (
+                select 1 from creator_payouts c
+                 where c.account_id = $1
+                   and c.period = date_trunc('month', t.paid_at)::date
+              )`,
+      [accountId],
+    ),
+
+    // `generate_series` and a left join, so a month with no sales comes back as
+    // a zero rather than as a gap. A chart that silently skips the quiet months
+    // draws a line with the wrong shape.
+    query<{ month: string; gross: string; net: string; sold: string }>(
+      `select to_char(m, 'YYYY-MM') as month,
+              coalesce(sum(t.amount_idr), 0) as gross,
+              coalesce(sum(t.net_idr), 0) as net,
+              count(t.id) as sold
+         from generate_series(
+                date_trunc('month', now()) - make_interval(months => $2::int - 1),
+                date_trunc('month', now()),
+                interval '1 month'
+              ) as m
+         left join template_purchases t
+                on t.seller_account_id = $1
+               and t.status = 'paid'
+               and t.paid_at >= m
+               and t.paid_at < m + interval '1 month'
+        group by m
+        order by m`,
+      [accountId, REVENUE_MONTHS],
+    ),
+
+    query<{
+      id: string;
+      slug: string;
+      title: string;
+      price_idr: number;
+      sold: string;
+      gross: string;
+      net: string;
+    }>(
+      `select p.id, p.slug, p.title, p.price_idr,
+              count(t.id) as sold,
+              coalesce(sum(t.amount_idr), 0) as gross,
+              coalesce(sum(t.net_idr), 0) as net
+         from published_designs p
+         join template_purchases t
+           on t.published_id = p.id and t.status = 'paid'
+        where p.account_id = $1
+        group by p.id
+        order by gross desc`,
+      [accountId],
+    ),
+
+    // The buyer by the name they chose, and nothing more. A seller is entitled
+    // to know a sale happened; handing them the address of everybody who bought
+    // from them is a mailing list nobody agreed to be on.
+    query<{
+      id: string;
+      slug: string;
+      title: string;
+      amount_idr: number;
+      net_idr: number;
+      buyer: string | null;
+      paid_at: Date;
+    }>(
+      `select t.id, p.slug, p.title, t.amount_idr, t.net_idr,
+              u.display_name as buyer, t.paid_at
+         from template_purchases t
+         join published_designs p on p.id = t.published_id
+         left join user_profiles u on u.id = t.buyer_owner_id
+        where t.seller_account_id = $1 and t.status = 'paid'
+        order by t.paid_at desc
+        limit $2`,
+      [accountId, recentLimit],
+    ),
+
+    query<{
+      id: string;
+      period: Date;
+      amount_idr: number;
+      status: PayoutStatus;
+      scheduled_for: Date;
+      paid_at: Date | null;
+      failure_reason: string | null;
+    }>(
+      `select id, period, amount_idr, status, scheduled_for, paid_at, failure_reason
+         from creator_payouts
+        where account_id = $1
+        order by period desc`,
+      [accountId],
+    ),
+  ]);
+
+  const months: MonthlyRevenue[] = monthly.map((row) => ({
+    month: row.month,
+    grossIdr: Number(row.gross),
+    netIdr: Number(row.net),
+    sold: Number(row.sold),
+  }));
+
+  const payoutRecords: PayoutRecord[] = payouts.map((row) => ({
+    id: row.id,
+    period: isoDate(row.period),
+    amountIdr: row.amount_idr,
+    status: row.status,
+    scheduledFor: isoDate(row.scheduled_for),
+    paidAt: row.paid_at?.toISOString() ?? null,
+    failureReason: row.failure_reason,
+  }));
+
+  // A failed payout is still money owed. It is the transfer that failed, not the
+  // sale, and a dashboard that drops it the moment it goes wrong is a dashboard
+  // that quietly forgets the one payout somebody needs to ask about.
+  const pendingPayoutIdr = payoutRecords
+    .filter((payout) => payout.status !== "dibayar")
+    .reduce((total, payout) => total + payout.amountIdr, 0);
+
+  const totalsRow = totals[0];
+
+  return {
+    summary: {
+      grossIdr: Number(totalsRow.gross),
+      netIdr: Number(totalsRow.net),
+      sold: Number(totalsRow.sold),
+      thisMonthIdr: months[months.length - 1]?.grossIdr ?? 0,
+      lastMonthIdr: months[months.length - 2]?.grossIdr ?? 0,
+      pendingPayoutIdr,
+      unscheduledIdr: Number(unscheduled[0].net),
+    },
+    monthly: months,
+    templates: templates.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      priceIdr: row.price_idr,
+      sold: Number(row.sold),
+      grossIdr: Number(row.gross),
+      netIdr: Number(row.net),
+    })),
+    recent: recent.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      amountIdr: row.amount_idr,
+      netIdr: row.net_idr,
+      // Somebody who never set a name is "Pembeli", not a blank cell and not
+      // their email address.
+      buyer: row.buyer?.trim() || "Pembeli",
+      paidAt: row.paid_at.toISOString(),
+    })),
+    payouts: payoutRecords,
+  };
+}
+
+/** A `date` column as `YYYY-MM-DD`, without a timezone it never had. */
+function isoDate(value: Date): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
