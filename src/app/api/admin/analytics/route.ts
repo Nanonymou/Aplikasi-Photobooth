@@ -38,8 +38,11 @@ interface Kpi {
   id: MetricId;
   label: string;
   total: number;
-  /** Second half of the window against the first, as a signed percentage. */
-  delta: number;
+  /**
+   * Second half of the window against the first, as a signed percentage.
+   * Null when the first half was empty: growth from nothing is not a ratio.
+   */
+  delta: number | null;
   trend: Trend;
   /** The same metric over the window before this one, when one was asked for. */
   previous?: number;
@@ -88,15 +91,17 @@ function sum(points: Point[]): number {
  * rows for a number the card renders as one arrow. Half against half answers
  * the same question — "is this rising?" — from data already in hand.
  */
-function change(points: Point[]): { delta: number; trend: Trend } {
+function change(points: Point[]): { delta: number | null; trend: Trend } {
   const mid = Math.floor(points.length / 2);
   const first = sum(points.slice(0, mid));
   const second = sum(points.slice(mid));
 
-  // No baseline: growth from nothing is not a percentage. Anything appearing
-  // where there was nothing is reported as up, and nothing as flat.
+  // No baseline: growth from nothing is not a percentage. `null` says that,
+  // where the 0 this used to send was read as "no change" and printed as
+  // "+0%" beside an arrow pointing up — two claims, both wrong, contradicting
+  // each other on the same card.
   if (first === 0) {
-    return { delta: 0, trend: second > 0 ? "up" : "flat" };
+    return { delta: null, trend: second > 0 ? "up" : "flat" };
   }
 
   const delta = Math.round(((second - first) / first) * 1000) / 10;

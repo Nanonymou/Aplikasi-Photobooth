@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -13,7 +14,7 @@ import { BarChart } from "@/components/admin/bar-chart";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  analyticsForDays,
+  type AnalyticsData,
   daysInRange,
   MAX_RANGE_DAYS,
   MIN_RANGE_DAYS,
@@ -23,6 +24,7 @@ import {
   type Period,
   type Trend,
 } from "@/lib/admin/analytics";
+import { fetchAnalytics, rangeForDays } from "@/lib/admin/analytics-client";
 import { cn } from "@/lib/utils";
 
 const TREND_STYLE: Record<Trend, string> = {
@@ -217,17 +219,48 @@ export function AnalyticsDashboard() {
     }
   }
 
-  const data = useMemo(() => analyticsForDays(days), [days]);
+  // The window the report is actually for, as two plain strings. A preset ends
+  // today; a custom range names its own ends, and while it is half-typed the
+  // last good one stays. Strings rather than an object because the object would
+  // be rebuilt every render and re-fetch forever as an effect dependency.
+  const custom = mode === "custom" && customDays !== null;
+  const preset = rangeForDays(days);
+  const windowFrom = custom ? from : preset.from;
+  const windowTo = custom ? to : preset.to;
+
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      try {
+        const report = await fetchAnalytics({ from: windowFrom, to: windowTo });
+        if (!current) return;
+        setData(report);
+        setFailed(null);
+      } catch (cause) {
+        if (!current) return;
+        setFailed(
+          cause instanceof Error ? cause.message : "Analitik gagal dimuat.",
+        );
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [windowFrom, windowTo]);
+
   const peak = useMemo(
-    () => Math.max(...data.sessions.map((point) => point.value)),
+    () => Math.max(...(data?.sessions.map((point) => point.value) ?? [0])),
     [data],
   );
   const totalUsers = useMemo(
-    () => data.newUsers.reduce((sum, point) => sum + point.value, 0),
+    () => data?.newUsers.reduce((sum, point) => sum + point.value, 0) ?? 0,
     [data],
   );
   const totalDownloads = useMemo(
-    () => data.downloads.reduce((sum, point) => sum + point.value, 0),
+    () => data?.downloads.reduce((sum, point) => sum + point.value, 0) ?? 0,
     [data],
   );
 
@@ -295,6 +328,50 @@ export function AnalyticsDashboard() {
         </div>
       </div>
 
+      {failed ? (
+        <div className="border-destructive/40 text-destructive rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+          {failed}
+        </div>
+      ) : !data ? (
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed px-4 py-16 text-center text-sm">
+          Memuat analitik…
+        </div>
+      ) : (
+        <Report
+          data={data}
+          peak={peak}
+          totalUsers={totalUsers}
+          totalDownloads={totalDownloads}
+          span={span}
+        />
+      )}
+
+    </div>
+  );
+}
+
+/**
+ * The report itself, once there is one.
+ *
+ * Split out so the surrounding controls — the presets, the custom range — stay
+ * on screen while a window is being typed, rather than the whole page blanking
+ * between reads.
+ */
+function Report({
+  data,
+  peak,
+  totalUsers,
+  totalDownloads,
+  span,
+}: {
+  data: AnalyticsData;
+  peak: number;
+  totalUsers: number;
+  totalDownloads: number;
+  span: { start: string; end: string };
+}) {
+  return (
+    <>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {data.kpis.map((kpi) => (
           <KpiCard key={kpi.id} kpi={kpi} />
@@ -332,6 +409,6 @@ export function AnalyticsDashboard() {
         <BreakdownList title="Format unduhan" items={data.formats} />
         <BreakdownList title="Sumber kunjungan" items={data.sources} />
       </div>
-    </div>
+    </>
   );
 }

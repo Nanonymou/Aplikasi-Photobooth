@@ -1,11 +1,12 @@
 /**
- * Admin analytics.
+ * Admin analytics: the vocabulary.
  *
- * Stand-in for `GET /api/admin/analytics?period=…` — headline KPIs, a daily
- * series for the chart, and two breakdowns. The numbers are generated from the
- * day index by a fixed formula rather than random, so a server render and its
- * hydration agree exactly and the shapes stay stable between reads. When the real
- * endpoint lands it returns this same shape.
+ * Types, the preset windows, and the rule for what counts as a usable range.
+ * Shared by the endpoint and the screen, so "30 hari" means one thing — and
+ * deliberately free of `"use client"`, because a route handler importing a
+ * client module gets a shim where the constants should be.
+ *
+ * The fetching lives in `analytics-client.ts`.
  */
 
 export type Period = "7d" | "30d" | "90d";
@@ -54,51 +55,6 @@ export interface AnalyticsData {
   sources: Breakdown[];
 }
 
-const numberFormat = new Intl.NumberFormat("id-ID");
-
-/** Deterministic daily series: a trend plus two gentle waves, floored at zero. */
-function series(
-  days: number,
-  base: number,
-  amp: number,
-  trend: number,
-): Point[] {
-  return Array.from({ length: days }, (_, index) => ({
-    index,
-    value: Math.max(
-      0,
-      Math.round(
-        base +
-          trend * index +
-          amp * Math.sin(index * 0.6) +
-          amp * 0.45 * Math.sin(index * 0.23 + 1),
-      ),
-    ),
-  }));
-}
-
-function sum(points: Point[]): number {
-  return points.reduce((total, point) => total + point.value, 0);
-}
-
-/** Growth of the window's second half over its first, as a signed percentage. */
-function halfOverHalf(points: Point[]): { delta: string; trend: Trend } {
-  const mid = Math.floor(points.length / 2);
-  const first = sum(points.slice(0, mid));
-  const second = sum(points.slice(mid));
-  const pct = first === 0 ? 0 : ((second - first) / first) * 100;
-  const rounded = Math.round(pct * 10) / 10;
-  return {
-    delta: `${rounded >= 0 ? "+" : ""}${rounded.toLocaleString("id-ID")}%`,
-    trend: rounded > 0 ? "up" : rounded < 0 ? "down" : "flat",
-  };
-}
-
-function kpi(id: string, label: string, points: Point[]): Kpi {
-  const { delta, trend } = halfOverHalf(points);
-  return { id, label, value: numberFormat.format(sum(points)), delta, trend };
-}
-
 /** Bounds a custom range is held to: enough points to plot, not so many to crawl. */
 export const MIN_RANGE_DAYS = 2;
 export const MAX_RANGE_DAYS = 365;
@@ -114,65 +70,3 @@ export function daysInRange(from: string, to: string): number | null {
   return days;
 }
 
-export function analyticsFor(period: Period): AnalyticsData {
-  const { days } = PERIODS.find((p) => p.id === period) ?? PERIODS[1];
-  return analyticsForDays(days);
-}
-
-/**
- * The same report for an arbitrary window.
- *
- * Presets are just named day counts, so the report is generated from the count
- * itself and a custom range needs no second code path — only a different number.
- */
-export function analyticsForDays(days: number): AnalyticsData {
-  const sessions = series(days, 120, 45, 2.1);
-  const designs = series(days, 70, 28, 1.4);
-  const exportsSeries = series(days, 40, 18, 0.9);
-  const newUsers = series(days, 18, 9, 0.6);
-
-  // Breakdowns scale with the window so they read as "this period".
-  const scale = days / 30;
-  const template = (name: string, base: number): Breakdown => {
-    const count = Math.round(base * scale);
-    return { label: name, value: count, display: numberFormat.format(count) };
-  };
-
-  const source = (label: string, pct: number): Breakdown => ({
-    label,
-    value: pct,
-    display: `${pct}%`,
-  });
-
-  return {
-    days,
-    kpis: [
-      kpi("sessions", "Sesi foto", sessions),
-      kpi("designs", "Desain dibuat", designs),
-      kpi("exports", "Ekspor", exportsSeries),
-      kpi("users", "Pengguna baru", newUsers),
-    ],
-    sessions,
-    newUsers,
-    downloads: exportsSeries,
-    formats: [
-      source("PNG", 48),
-      source("JPEG", 31),
-      source("PDF", 14),
-      source("WEBP", 7),
-    ],
-    topTemplates: [
-      template("Lebaran 2026", 1240),
-      template("Wisuda Klasik", 880),
-      template("Pernikahan Elegan", 610),
-      template("Ulang Tahun Ceria", 430),
-      template("Tahun Baru Neon", 260),
-    ],
-    sources: [
-      source("Tamu langsung", 46),
-      source("Tautan bagikan", 27),
-      source("QR booth", 18),
-      source("Undangan", 9),
-    ],
-  };
-}
