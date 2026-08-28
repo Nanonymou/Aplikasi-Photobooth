@@ -160,11 +160,33 @@ yang berisik.
 
 | Tabel | Isi |
 | --- | --- |
+| `published_designs` (0034) | Desain yang dipublikasikan ke galeri publik; salinan judul, kategori, ukuran. |
+| `design_likes` (0034) | Satu baris per orang per desain publik. |
 | `designs` (0001) | Judul, pemilik, `version`, `deleted_at`. |
 | `design_pages` (0001, 0031) | Halaman: ukuran, latar, `objects` sebagai JSONB, dan `effects` per halaman. |
 | `photos` (0002) | Foto tamu: kunci storage, sumber (kamera/unggahan/contoh), kedaluwarsa. |
 | `shares` (0008, 0019) | Tautan bagikan: kode, berkas, kedaluwarsa, dan desain asalnya. |
 | `render_files` (0009) | Hasil ekspor yang dititipkan sebentar. |
+
+- **Publikasi adalah baris, bukan boolean.** Memublikasikan desain itu perbuatan
+  terpisah dengan akibat terpisah — alamat yang bisa dibuka orang asing, nama
+  pembuat yang tertempel di depan umum, dan orang lain yang memulai karyanya dari
+  situ — jadi ia baris sendiri. Itu juga memberi ruang bagi dua umur yang
+  berbeda: mencabut publikasi harus bisa tanpa menghapus desainnya, menghapus
+  desain harus ikut mencabut publikasinya, dan kredit yang dibawa sebuah remix
+  harus hidup lebih lama dari keduanya.
+- **Salinan, bukan tampilan.** Judul, kategori, dan ukuran disalin saat
+  dipublikasikan: mengganti nama berkas kerja tidak boleh diam-diam mengganti
+  namanya di dinding orang lain.
+- **Suka dihitung, tidak disimpan.** `design_likes` satu baris per orang per
+  desain, karena pertanyaan "saya sudah suka yang ini belum" ditanyakan di setiap
+  kartu setiap kunjungan dan sebuah penghitung tidak bisa menjawabnya. Jumlahnya
+  `count(*)`, yang selalu benar; total yang didenormalisasi adalah angka yang
+  menyimpang lalu harus dijelaskan. Sama untuk jumlah remix, yang dihitung dari
+  `designs.remix_of_id`.
+- **`designs.remix_of_id`, bukan di tabel publikasi.** Sebuah desain sudah jadi
+  remix sejak seseorang mulai menyuntingnya — jauh sebelum ia memutuskan akan
+  memublikasikannya, dan terlepas dari apakah ia pernah melakukannya.
 | `photo_filters`, `visual_effects` (0024) | Katalog tampilan: perlakuan warna, dan lapisan di atas foto. |
 | `frame_textures` (0026) | Tekstur bingkai: rutinitas penggambar plus dua warnanya. |
 | `export_events` (0015) | Catatan bahwa sebuah ekspor terjadi — untuk laporan, bukan untuk berkasnya. |
